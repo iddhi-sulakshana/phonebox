@@ -5,6 +5,7 @@
 //! does not know in `extra` and writes them back (a deliberate departure: the C# agent drops them).
 
 pub mod normalize;
+pub mod public;
 pub mod read;
 pub mod store;
 pub mod write;
@@ -15,6 +16,27 @@ use serde_json::{Map, Value};
 
 /// Fields this model does not know, kept as read and written back after the known ones.
 pub type Extra = Map<String, Value>;
+
+thread_local! {
+    /// Set while the phone's view is serialized (`ToPublic` uses the web defaults: nulls written, no unknown fields).
+    static PUBLIC: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn skip_none<T>(v: &Option<T>) -> bool {
+    v.is_none() && !PUBLIC.with(std::cell::Cell::get)
+}
+
+fn skip_extra(m: &Extra) -> bool {
+    m.is_empty() || PUBLIC.with(std::cell::Cell::get)
+}
+
+/// Runs `f` with the phone's serialization rules (see [`PUBLIC`]).
+pub(crate) fn with_public<R>(f: impl FnOnce() -> R) -> R {
+    let before = PUBLIC.with(|p| p.replace(true));
+    let result = f();
+    PUBLIC.with(|p| p.set(before));
+    result
+}
 
 /// The update source of this fork. The C# agent's default, `ersinkoc/phonebox`, is rewritten to it on load.
 pub const FORK_REPO: &str = "iddhi-sulakshana/phonebox";
@@ -35,9 +57,9 @@ macro_rules! defaults {
 pub struct AgentConfig {
     pub codex_bar: CodexBarConfig,
     pub controls: ControlDeckConfig,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub device_serial: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub adb_path: Option<String>,
     pub weather: WeatherConfig,
     pub ping: PingConfig,
@@ -60,7 +82,7 @@ pub struct AgentConfig {
     pub obs: ObsConfig,
     pub discord: DiscordConfig,
     pub console: ConsoleConfig,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(AgentConfig {
@@ -160,7 +182,7 @@ pub struct CodexBarConfig {
     pub rotate: bool,
     pub page_size: i32,
     pub rotate_interval: i32,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(CodexBarConfig {
@@ -178,19 +200,19 @@ pub struct ControlDeckConfig {
     pub allow_online_radio_logos: bool,
     pub actions: Vec<DeckAction>,
     pub profiles: Vec<DeckProfile>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub spotify_token: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub spotify_device: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub mixer_executable: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub mixer_library: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub spotify_client_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub spotify_refresh_token: Option<String>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(ControlDeckConfig {
@@ -214,15 +236,15 @@ pub struct DeckAction {
     pub label: String,
     pub kind: String,
     pub target: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub argument: Option<String>,
     pub value: i32,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub device: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub icon: Option<String>,
     pub enabled: bool,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(DeckAction {
@@ -244,12 +266,12 @@ pub struct DeckProfile {
     pub label: String,
     pub levels: Vec<DeckLevel>,
     pub actions: Vec<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub output: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub input: Option<String>,
     pub defaults: IndexMap<String, String>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(DeckProfile {
@@ -266,13 +288,13 @@ defaults!(DeckProfile {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct DeckLevel {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub kind: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub id: Option<String>,
     pub volume: i32,
     pub muted: bool,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(DeckLevel {
@@ -298,7 +320,7 @@ pub struct WeatherConfig {
         serialize_with = "ser_weather_model"
     )]
     pub model: String,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(WeatherConfig {
@@ -386,10 +408,10 @@ fn de_icon<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PingConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub host: Option<String>,
     pub adapters: Vec<String>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 /// `PingMonitor.DefaultHost`.
@@ -406,7 +428,7 @@ pub struct NightConfig {
     pub start: String,
     pub end: String,
     pub brightness: f64,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(NightConfig {
@@ -424,7 +446,7 @@ pub const LANGUAGES: [&str; 14] = [
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct DisplayConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub appearance: Option<AppearanceConfig>,
     pub language: String,
     pub show_seconds: bool,
@@ -448,13 +470,13 @@ pub struct DisplayConfig {
     pub home_screen: bool,
     pub keep_awake: bool,
     pub follow_computer_lock: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub home_page: Option<String>,
     pub switch_countdown_sec: i32,
     pub touch_grace_sec: i32,
     pub min_dwell_sec: i32,
     pub hold_max_min: i32,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(DisplayConfig {
@@ -491,25 +513,25 @@ defaults!(DisplayConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AppearanceConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub style: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub font: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub font_scale: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub radius: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub gap: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub padding: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub page_padding: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub border: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub shadow: Option<bool>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(AppearanceConfig {
@@ -557,11 +579,11 @@ impl AppearanceConfig {
 pub struct LanConfig {
     pub enabled: bool,
     pub port: i32,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub token: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub webhook_token: Option<String>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(LanConfig {
@@ -576,7 +598,7 @@ defaults!(LanConfig {
 pub struct UpdateConfig {
     pub auto: bool,
     pub repo: String,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(UpdateConfig {
@@ -592,7 +614,7 @@ pub struct ClaudeConfig {
     pub share_conversation: bool,
     pub only_when_away: bool,
     pub share_session_titles: bool,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(ClaudeConfig {
@@ -607,7 +629,7 @@ defaults!(ClaudeConfig {
 #[serde(rename_all = "camelCase", default)]
 pub struct CursorConfig {
     pub sessions: bool,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(CursorConfig { sessions: false });
@@ -615,24 +637,24 @@ defaults!(CursorConfig { sessions: false });
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PageConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub appearance: Option<AppearanceConfig>,
     pub id: String,
     pub title: String,
     #[serde(deserialize_with = "de_icon", serialize_with = "write::ser_icon")]
     pub icon: String,
     pub enabled: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub idle_sec: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub widgets: Option<Vec<WidgetConfig>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub template: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub r#type: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub options: Option<Map<String, Value>>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(PageConfig {
@@ -651,7 +673,7 @@ defaults!(PageConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct WidgetConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub appearance: Option<AppearanceConfig>,
     pub id: String,
     pub r#type: String,
@@ -659,9 +681,9 @@ pub struct WidgetConfig {
     pub y: i32,
     pub w: i32,
     pub h: i32,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub options: Option<Map<String, Value>>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(WidgetConfig {
@@ -704,38 +726,38 @@ pub struct RuleConfig {
     pub name: String,
     pub enabled: bool,
     pub when: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub r#match: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub value: Option<f64>,
     pub then: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub page: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub text: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub level: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub key: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub push_value: Option<String>,
     pub while_active: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub shortcut: Option<String>,
     pub priority: i32,
     pub for_sec: i32,
     pub cooldown_min: i32,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub days: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub during: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub countdown_sec: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub op: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub arg: Option<String>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(RuleConfig {
@@ -793,13 +815,13 @@ pub struct ChargeConfig {
     pub min: i32,
     pub max: i32,
     pub method: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub entity: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub on_shortcut: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub off_shortcut: Option<String>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(ChargeConfig {
@@ -817,9 +839,9 @@ defaults!(ChargeConfig {
 pub struct ObsConfig {
     pub enabled: bool,
     pub url: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub password: Option<String>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(ObsConfig {
@@ -832,11 +854,11 @@ defaults!(ObsConfig {
 #[serde(rename_all = "camelCase", default)]
 pub struct DiscordConfig {
     pub enabled: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub client_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub client_secret: Option<String>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(DiscordConfig {
@@ -848,11 +870,11 @@ defaults!(DiscordConfig {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct HomeAssistantConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub url: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub token: Option<String>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(HomeAssistantConfig {
@@ -865,9 +887,9 @@ defaults!(HomeAssistantConfig {
 pub struct PhoneConfig {
     pub id: String,
     pub name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub pages: Option<Vec<String>>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(PhoneConfig {
@@ -881,7 +903,7 @@ defaults!(PhoneConfig {
 pub struct FeedSource {
     pub name: String,
     pub url: String,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(FeedSource {
@@ -894,9 +916,9 @@ defaults!(FeedSource {
 pub struct CalendarSource {
     pub name: String,
     pub url: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub color: Option<String>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(CalendarSource {
@@ -914,20 +936,20 @@ pub struct Shortcut {
     pub icon: String,
     pub color: String,
     pub cmd: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub args: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub cwd: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub steps: Option<Vec<String>>,
     pub toggle: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub state_key: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub off_cmd: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub off_args: Option<String>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(Shortcut {
@@ -950,7 +972,7 @@ defaults!(Shortcut {
 pub struct PhotoFrameConfig {
     pub folder: String,
     pub subfolders: bool,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(PhotoFrameConfig {
@@ -968,7 +990,7 @@ pub const CAMERA_MAX_FPS: i32 = 10;
 pub struct CameraConfig {
     pub ffmpeg: String,
     pub sources: Vec<CameraSource>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(CameraConfig {
@@ -984,7 +1006,7 @@ pub struct CameraSource {
     pub url: String,
     pub transport: String,
     pub fps: i32,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(CameraSource {
@@ -999,7 +1021,7 @@ defaults!(CameraSource {
 #[serde(rename_all = "camelCase", default)]
 pub struct ConsoleConfig {
     pub profiles: Vec<ConsoleProfile>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(ConsoleConfig { profiles: vec![] });
@@ -1011,13 +1033,13 @@ pub struct ConsoleProfile {
     pub label: String,
     pub apps: String,
     pub keys: Vec<ConsoleKey>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub dial_left: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub dial_right: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "skip_none")]
     pub dial_press: Option<String>,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(ConsoleProfile {
@@ -1057,7 +1079,7 @@ impl ConsoleProfile {
 pub struct ConsoleKey {
     pub label: String,
     pub keys: String,
-    #[serde(flatten)]
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
 defaults!(ConsoleKey {

@@ -1,6 +1,6 @@
 {
   "deviceSerial": "parity-none",
-  "updates": { "auto": false },
+  "updates": { "auto": false, "repo": "iddhi-sulakshana/phonebox" },
   "lan": {
     "enabled": false,
     "token": "parityPhoneKey0000000000000000000000000000A",

@@ -8,7 +8,7 @@ use std::time::Duration;
 use phonebox::agent_endpoint::AgentEndpoint;
 use phonebox::config::store::ConfigStore;
 use phonebox::server::{AppState, build_router};
-use phonebox::{app_paths, log, push_store::PushStore, single_instance};
+use phonebox::{app_paths, app_restart, log, push_store::PushStore, single_instance};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -59,18 +59,34 @@ fn main() -> ExitCode {
         push: push.clone(),
         timings: Default::default(),
         phone: Default::default(),
+        adb: phonebox::adb::AdbReverse::idle(),
+        shutdown: Default::default(),
     };
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
     let result = runtime.block_on(serve(state, config_path));
     push.dispose();
     log::dispose();
-    match result {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("{e}");
-            ExitCode::FAILURE
+    drop(_instance); // the next instance takes over the lock
+    if let Err(e) = result {
+        eprintln!("{e}");
+        return ExitCode::FAILURE;
+    }
+    if app_restart::requested() {
+        // launchd / systemd start a new instance themselves; otherwise hand over to a fresh copy of this program
+        if app_restart::service_managed(
+            |k| std::env::var(k).ok(),
+            std::process::id(),
+            app_restart::parent_name,
+        ) {
+            return ExitCode::from(app_restart::SERVICE_RESTART_CODE);
+        }
+        if let Ok(exe) = std::env::current_exe() {
+            let _ = std::process::Command::new(&exe)
+                .args(app_restart::restart_args(&args))
+                .spawn();
         }
     }
+    ExitCode::SUCCESS
 }
 
 async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Result<()> {
@@ -84,8 +100,14 @@ async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Res
             config_path.display()
         ),
     );
+    let stop = state.shutdown.clone();
     axum::serve(listener, build_router(state))
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(async move {
+            tokio::select! {
+                _ = shutdown_signal() => {}
+                _ = stop.notified() => {}
+            }
+        })
         .await
 }
 

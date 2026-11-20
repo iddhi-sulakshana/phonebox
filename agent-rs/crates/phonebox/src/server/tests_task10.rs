@@ -1,0 +1,237 @@
+//! Task 10: settings page, panel files, settings / config / info / latency / restart routes.
+
+use axum::body::to_bytes;
+use axum::http::StatusCode;
+
+use super::build_router;
+use super::guard::tests::{send, test_state};
+use crate::config::store::CONFLICT;
+
+const LOCAL: (&str, &str) = ("host", "127.0.0.1:8765");
+
+async fn body(r: axum::http::Response<axum::body::Body>) -> Vec<u8> {
+    to_bytes(r.into_body(), usize::MAX).await.unwrap().to_vec()
+}
+async fn json(r: axum::http::Response<axum::body::Body>) -> serde_json::Value {
+    serde_json::from_slice(&body(r).await).unwrap()
+}
+
+async fn put_settings(
+    app: &axum::Router,
+    text: &str,
+    version: Option<&str>,
+) -> axum::http::Response<axum::body::Body> {
+    use tower::ServiceExt;
+    let mut req = axum::http::Request::builder()
+        .method("PUT")
+        .uri("/api/settings")
+        .header("host", "127.0.0.1:8765")
+        .header("content-type", "application/json");
+    if let Some(v) = version {
+        req = req.header("x-config-version", v);
+    }
+    app.clone()
+        .oneshot(req.body(axum::body::Body::from(text.to_string())).unwrap())
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn stale_save_conflicts_and_headerless_save_succeeds() {
+    let (_d, state) = test_state();
+    let app = build_router(state.clone());
+    let v = state.cfg.version_text();
+    let text = crate::config::write::to_dotnet_json(&state.cfg.get());
+    assert_eq!(put_settings(&app, &text, Some(&v)).await.status(), 200);
+    let r = put_settings(&app, &text, Some(&v)).await; // v is stale now
+    assert_eq!(r.status(), StatusCode::CONFLICT);
+    assert_eq!(json(r).await["error"], CONFLICT);
+    let ok = put_settings(&app, &text, None).await;
+    assert_eq!(ok.status(), 200);
+    assert_eq!(json(ok).await["version"], state.cfg.version_text());
+}
+
+#[tokio::test]
+async fn settings_put_requires_json_content_type() {
+    use tower::ServiceExt;
+    let (_d, state) = test_state();
+    let app = build_router(state);
+    let req = axum::http::Request::builder()
+        .method("PUT")
+        .uri("/api/settings")
+        .header("host", "127.0.0.1:8765")
+        .header("content-type", "text/plain");
+    assert_eq!(
+        app.oneshot(req.body(axum::body::Body::from("{}")).unwrap())
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::UNSUPPORTED_MEDIA_TYPE
+    );
+}
+
+#[tokio::test]
+async fn settings_get_sends_the_settings_and_their_version() {
+    let (_d, state) = test_state();
+    let app = build_router(state.clone());
+    let r = send(&app, "GET", "/api/settings", &[LOCAL]).await;
+    assert_eq!(
+        r.headers()["x-config-version"],
+        state.cfg.version_text().as_str()
+    );
+    assert_eq!(
+        r.headers()["content-type"],
+        "application/json; charset=utf-8"
+    );
+    assert_eq!(json(r).await["weather"]["city"], "Tallinn");
+}
+
+#[tokio::test]
+async fn wifi_port_and_shared_keys_are_refused() {
+    let (_d, state) = test_state();
+    let app = build_router(state);
+    let r = put_settings(&app, r#"{"lan":{"enabled":true,"port":8765}}"#, None).await;
+    assert_eq!(r.status(), 400);
+    assert_eq!(
+        json(r).await["error"],
+        "Wi-Fi port cannot be the same as the local port (8765)"
+    );
+    let r = put_settings(
+        &app,
+        r#"{"lan":{"token":"same-key","webhookToken":"same-key"}}"#,
+        None,
+    )
+    .await;
+    assert_eq!(r.status(), 400);
+    assert_eq!(
+        json(r).await["error"],
+        "The Wi-Fi key and the webhook key must be different: make a new key for one of them"
+    );
+    assert_eq!(
+        put_settings(&app, r#"{"lan":{"enabled":false,"port":8765}}"#, None)
+            .await
+            .status(),
+        200
+    );
+}
+
+#[tokio::test]
+async fn phone_config_hides_commands_and_carries_the_version_as_text() {
+    let (_d, state) = test_state();
+    state.cfg.save(r#"{"shortcuts":[{"id":"s","label":"S","cmd":"secret.exe","args":"--token abc"}],"display":{"language":"tr"}}"#, None).unwrap();
+    let app = build_router(state.clone());
+    let r = send(&app, "GET", "/api/config", &[LOCAL]).await;
+    let v = json(r).await;
+    assert_eq!(v["version"], state.cfg.version_text());
+    let text = v.to_string();
+    assert!(!text.contains("secret") && !text.contains("--token"));
+    assert_eq!(v["config"]["display"]["language"], "tr");
+    assert!(
+        v["config"]["display"]["homePage"].is_null()
+            && v["config"]["display"].get("homePage").is_some(),
+        "nulls are written"
+    );
+}
+
+#[tokio::test]
+async fn panel_files_are_the_embedded_bytes() {
+    let (_d, state) = test_state();
+    let app = build_router(state);
+    let r = send(&app, "GET", "/panel/main.js", &[LOCAL]).await;
+    assert_eq!(
+        r.headers()["content-type"],
+        "text/javascript; charset=utf-8"
+    );
+    assert_eq!(
+        body(r).await,
+        include_bytes!("../../../../../android/app/src/main/assets/www/main.js")
+    );
+    let w = send(&app, "GET", "/panel/widgets/basic.js", &[LOCAL]).await;
+    assert_eq!(w.status(), 200);
+    let index = send(&app, "GET", "/panel/", &[LOCAL]).await;
+    assert_eq!(index.headers()["content-type"], "text/html; charset=utf-8");
+    let redirect = send(&app, "GET", "/panel?x=1", &[LOCAL]).await;
+    assert_eq!(redirect.status(), StatusCode::FOUND);
+    assert_eq!(redirect.headers()["location"], "/panel/?x=1");
+    for bad in [
+        "/panel/nope.js",
+        "/panel/..%2Fsettings.html",
+        "/panel/a/b.js",
+    ] {
+        assert_eq!(
+            send(&app, "GET", bad, &[LOCAL]).await.status(),
+            404,
+            "{bad}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn settings_page_and_icon() {
+    let (_d, state) = test_state();
+    let app = build_router(state);
+    let page = send(&app, "GET", "/", &[LOCAL]).await;
+    assert_eq!(page.headers()["content-type"], "text/html; charset=utf-8");
+    assert_eq!(
+        body(page).await,
+        include_bytes!("../../../../../agent/PhoneBox.Agent/settings.html")
+    );
+    let icon = send(&app, "GET", "/favicon.ico", &[LOCAL]).await;
+    assert_eq!(icon.headers()["content-type"], "image/x-icon");
+}
+
+#[tokio::test]
+async fn info_reports_the_agent() {
+    let (_d, state) = test_state();
+    let app = build_router(state.clone());
+    let v = json(send(&app, "GET", "/api/info", &[LOCAL]).await).await;
+    assert_eq!(v["version"], crate::app_paths::version());
+    assert_eq!(v["os"], crate::app_paths::os());
+    assert_eq!(v["configPath"], state.cfg.path().display().to_string());
+    assert_eq!(v["connected"], false);
+    assert!(v["via"].is_null() && v["devices"].is_array() && v["appMissing"].is_array());
+    for key in ["adb", "usbProblem", "webviewProblem", "logPath"] {
+        assert!(v.get(key).is_some(), "{key}");
+    }
+}
+
+#[tokio::test]
+async fn latency_lists_timed_routes_and_restart_asks_to_stop() {
+    let (_d, state) = test_state();
+    let app = build_router(state.clone());
+    send(&app, "GET", "/api/info", &[LOCAL]).await;
+    let rows = json(send(&app, "GET", "/api/latency", &[LOCAL]).await).await;
+    assert_eq!(rows[0]["route"], "GET /api/info");
+    assert!(rows[0].get("p50Ms").is_some());
+    assert!(!crate::app_restart::requested());
+    assert_eq!(
+        send(&app, "POST", "/api/restart", &[LOCAL]).await.status(),
+        200
+    );
+    assert!(crate::app_restart::requested());
+}
+
+#[tokio::test]
+async fn json_answers_are_utf8_with_dotnet_numbers() {
+    let (_d, state) = test_state();
+    state
+        .cfg
+        .save(r#"{"night":{"brightness":1}}"#, None)
+        .unwrap();
+    let app = build_router(state);
+    for path in ["/api/info", "/api/latency", "/api/config", "/api/settings"] {
+        let r = send(&app, "GET", path, &[LOCAL]).await;
+        assert_eq!(
+            r.headers()["content-type"],
+            "application/json; charset=utf-8",
+            "{path}"
+        );
+    }
+    // ASP.NET writes the double 1.0 as 1 (JavaScript sees the same number; the parity check sees the same type)
+    let config =
+        String::from_utf8(body(send(&app, "GET", "/api/config", &[LOCAL]).await).await).unwrap();
+    assert!(
+        config.contains(r#""brightness":1,"#) || config.contains(r#""brightness":1}"#),
+        "{config}"
+    );
+}

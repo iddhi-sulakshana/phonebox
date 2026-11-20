@@ -38,6 +38,11 @@ PHASE_BY_METHOD: dict[str, int] = {
     "LanTests.TheWebhookKeyOpensOnlyWebhooks": 4,
     "LanTests.TokensAreComparedExactly": 4,
     "LanTests.VirtualAdaptersAreSkippedUnlessTheyCarryTheDefaultRoute": 2,
+    # AppRestartTests.cs also holds SessionEndingTests (Windows session end, with the tray in a later plan)
+    "AppRestartTests.TheSetupLoginItemAndSystemdAreServiceManagers": 1,
+    "AppRestartTests.ATerminalOrTheTrayIsNot": 1,
+    "AppRestartTests.AProcessThatOnlyInheritedTheUnitIsNot": 1,
+    "AppRestartTests.TheRestartCodeIsAFailure": 1,
     # StateSignal.MediaChanged compares media snapshots: it comes with the media monitor
     "StateSignalTests.AMediaChangeThatMattersPokesButTheTickingPositionDoesNot": 3,
 }

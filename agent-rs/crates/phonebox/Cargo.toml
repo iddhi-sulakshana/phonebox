@@ -11,6 +11,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+rust-embed = { version = "8", features = ["debug-embed"] }
 axum = "0.8"
 base64 = "0.22"
 getrandom = "0.3"

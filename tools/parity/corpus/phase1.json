@@ -3,6 +3,7 @@
     "name": "info",
     "path": "/api/info",
     "ignore": [
+      "/version",
       "/configPath",
       "/logPath"
     ]
@@ -53,7 +54,7 @@
   },
   {
     "name": "panel widget",
-    "path": "/panel/widgets/clock.js",
+    "path": "/panel/widgets/basic.js",
     "compare": "bytes"
   },
   {
@@ -84,6 +85,7 @@
       "Origin": "http://127.0.0.1:{port}"
     },
     "ignore": [
+      "/version",
       "/configPath",
       "/logPath"
     ]
@@ -95,6 +97,7 @@
       "Host": "localhost:{port}"
     },
     "ignore": [
+      "/version",
       "/configPath",
       "/logPath"
     ]
@@ -156,7 +159,7 @@
     "headers": {
       "Content-Type": "application/json"
     },
-    "body": "{\"deviceSerial\": \"parity-none\", \"updates\": {\"auto\": false}, \"lan\": {\"token\": \"parityPhoneKey0000000000000000000000000000A\", \"webhookToken\": \"parityWebhookKey000000000000000000000000000\"}, \"weather\": {\"city\": \"Kandy\", \"lat\": 7.2906, \"lon\": 80.6337}, \"night\": {\"brightness\": 1}}",
+    "body": "{\"deviceSerial\": \"parity-none\", \"updates\": {\"auto\": false, \"repo\": \"iddhi-sulakshana/phonebox\"}, \"lan\": {\"token\": \"parityPhoneKey0000000000000000000000000000A\", \"webhookToken\": \"parityWebhookKey000000000000000000000000000\"}, \"weather\": {\"city\": \"Kandy\", \"lat\": 7.2906, \"lon\": 80.6337}, \"night\": {\"brightness\": 1}}",
     "ignore": [
       "/version"
     ],

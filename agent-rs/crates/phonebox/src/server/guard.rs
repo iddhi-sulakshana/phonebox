@@ -143,6 +143,8 @@ pub(crate) mod tests {
             push,
             timings: Default::default(),
             phone: Default::default(),
+            adb: crate::adb::AdbReverse::idle(),
+            shutdown: Default::default(),
         };
         (dir, state)
     }

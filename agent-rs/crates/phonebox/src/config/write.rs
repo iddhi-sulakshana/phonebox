@@ -21,17 +21,33 @@ pub fn to_dotnet_json_value<T: serde::Serialize + ?Sized>(value: &T) -> String {
     String::from_utf8(out).expect("UTF-8")
 }
 
-/// `Utf8JsonWriter` with `WriteIndented` and `JavaScriptEncoder.UnsafeRelaxedJsonEscaping`.
+/// The same value without indentation, as an ASP.NET JSON answer writes it (doubles in .NET's shortest form too).
+pub fn to_dotnet_json_compact<T: serde::Serialize + ?Sized>(value: &T) -> String {
+    let mut out = Vec::with_capacity(4 * 1024);
+    let formatter = DotnetFormatter {
+        compact: true,
+        ..Default::default()
+    };
+    let mut ser = serde_json::Serializer::with_formatter(&mut out, formatter);
+    value.serialize(&mut ser).expect("JSON serialize");
+    String::from_utf8(out).expect("UTF-8")
+}
+
+/// `Utf8JsonWriter` with `WriteIndented` (unless `compact`) and `JavaScriptEncoder.UnsafeRelaxedJsonEscaping`.
 #[derive(Default)]
 struct DotnetFormatter {
     indent: usize,
     has_value: bool,
+    compact: bool,
 }
 
 const NEWLINE: &[u8] = if cfg!(windows) { b"\r\n" } else { b"\n" };
 
 impl DotnetFormatter {
     fn newline_indent<W: ?Sized + io::Write>(&self, w: &mut W) -> io::Result<()> {
+        if self.compact {
+            return Ok(());
+        }
         w.write_all(NEWLINE)?;
         for _ in 0..self.indent {
             w.write_all(b"  ")?;
@@ -90,7 +106,7 @@ impl Formatter for DotnetFormatter {
         self.newline_indent(w)
     }
     fn begin_object_value<W: ?Sized + io::Write>(&mut self, w: &mut W) -> io::Result<()> {
-        w.write_all(b": ")
+        w.write_all(if self.compact { b":" } else { b": " })
     }
     fn end_object_value<W: ?Sized + io::Write>(&mut self, _w: &mut W) -> io::Result<()> {
         self.has_value = true;
