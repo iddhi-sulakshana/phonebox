@@ -32,7 +32,13 @@ PHASE_BY_FILE = {
     "AdbUnreachablePhoneTests": 1,
 }
 # Files that mix phases: the phase of single methods ("Class.Method"); the rest of such a file stays unassigned.
-PHASE_BY_METHOD: dict[str, int] = {}
+PHASE_BY_METHOD: dict[str, int] = {
+    # ConfigTests.cs also holds the Wi-Fi checks (phase 4) and the network adapter filter (phase 2)
+    "LanTests.OnlyThePhoneApiIsReachableOverWifi": 4,
+    "LanTests.TheWebhookKeyOpensOnlyWebhooks": 4,
+    "LanTests.TokensAreComparedExactly": 4,
+    "LanTests.VirtualAdaptersAreSkippedUnlessTheyCarryTheDefaultRoute": 2,
+}
 
 CLASS_RE = re.compile(r"\b(?:class|record)\s+([A-Z][A-Za-z0-9_]*)")
 ATTR_RE = re.compile(r"^\s*\[(Fact|Theory)\b")

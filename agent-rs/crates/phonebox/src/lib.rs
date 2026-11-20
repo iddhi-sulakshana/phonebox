@@ -5,7 +5,11 @@
 
 pub mod agent_endpoint;
 pub mod app_paths;
+pub mod catalog;
+pub mod config;
 pub mod file_logger;
+pub mod icon_text;
+pub mod stack_widgets;
 
 #[cfg(test)]
 mod tests {

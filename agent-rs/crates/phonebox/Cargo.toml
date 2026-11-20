@@ -11,6 +11,11 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+base64 = "0.22"
+getrandom = "0.3"
+indexmap = { version = "2", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order", "raw_value"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [dev-dependencies]
