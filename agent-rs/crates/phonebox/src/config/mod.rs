@@ -6,7 +6,7 @@
 
 pub mod normalize;
 pub mod read;
-
+pub mod store;
 pub mod write;
 
 use indexmap::IndexMap;

@@ -1,6 +1,142 @@
 //! Writing `config.json` as the C# agent does (`ConfigStore.WriteOpts`).
 
+use std::io;
+
 use serde::Serializer;
+use serde_json::ser::{CharEscape, Formatter};
+
+use super::AgentConfig;
+
+/// The settings as `config.json` text, as `JsonSerializer.Serialize(cfg, ConfigStore.WriteOpts)` writes it: two-space
+/// indent, the platform's line ending, camelCase, nulls left out, non-ASCII text as is, doubles in .NET's shortest form.
+pub fn to_dotnet_json(cfg: &AgentConfig) -> String {
+    to_dotnet_json_value(cfg)
+}
+
+/// Any serializable value written as `WriteOpts` writes it (see [`to_dotnet_json`]).
+pub fn to_dotnet_json_value<T: serde::Serialize + ?Sized>(value: &T) -> String {
+    let mut out = Vec::with_capacity(16 * 1024);
+    let mut ser = serde_json::Serializer::with_formatter(&mut out, DotnetFormatter::default());
+    value.serialize(&mut ser).expect("settings serialize");
+    String::from_utf8(out).expect("UTF-8")
+}
+
+/// `Utf8JsonWriter` with `WriteIndented` and `JavaScriptEncoder.UnsafeRelaxedJsonEscaping`.
+#[derive(Default)]
+struct DotnetFormatter {
+    indent: usize,
+    has_value: bool,
+}
+
+const NEWLINE: &[u8] = if cfg!(windows) { b"\r\n" } else { b"\n" };
+
+impl DotnetFormatter {
+    fn newline_indent<W: ?Sized + io::Write>(&self, w: &mut W) -> io::Result<()> {
+        w.write_all(NEWLINE)?;
+        for _ in 0..self.indent {
+            w.write_all(b"  ")?;
+        }
+        Ok(())
+    }
+}
+
+impl Formatter for DotnetFormatter {
+    fn begin_array<W: ?Sized + io::Write>(&mut self, w: &mut W) -> io::Result<()> {
+        self.indent += 1;
+        self.has_value = false;
+        w.write_all(b"[")
+    }
+    fn end_array<W: ?Sized + io::Write>(&mut self, w: &mut W) -> io::Result<()> {
+        self.indent -= 1;
+        if self.has_value {
+            self.newline_indent(w)?;
+        }
+        w.write_all(b"]")
+    }
+    fn begin_array_value<W: ?Sized + io::Write>(
+        &mut self,
+        w: &mut W,
+        first: bool,
+    ) -> io::Result<()> {
+        if !first {
+            w.write_all(b",")?;
+        }
+        self.newline_indent(w)
+    }
+    fn end_array_value<W: ?Sized + io::Write>(&mut self, _w: &mut W) -> io::Result<()> {
+        self.has_value = true;
+        Ok(())
+    }
+    fn begin_object<W: ?Sized + io::Write>(&mut self, w: &mut W) -> io::Result<()> {
+        self.indent += 1;
+        self.has_value = false;
+        w.write_all(b"{")
+    }
+    fn end_object<W: ?Sized + io::Write>(&mut self, w: &mut W) -> io::Result<()> {
+        self.indent -= 1;
+        if self.has_value {
+            self.newline_indent(w)?;
+        }
+        w.write_all(b"}")
+    }
+    fn begin_object_key<W: ?Sized + io::Write>(
+        &mut self,
+        w: &mut W,
+        first: bool,
+    ) -> io::Result<()> {
+        if !first {
+            w.write_all(b",")?;
+        }
+        self.newline_indent(w)
+    }
+    fn begin_object_value<W: ?Sized + io::Write>(&mut self, w: &mut W) -> io::Result<()> {
+        w.write_all(b": ")
+    }
+    fn end_object_value<W: ?Sized + io::Write>(&mut self, _w: &mut W) -> io::Result<()> {
+        self.has_value = true;
+        Ok(())
+    }
+    fn write_f64<W: ?Sized + io::Write>(&mut self, w: &mut W, value: f64) -> io::Result<()> {
+        w.write_all(format_double(value).as_bytes())
+    }
+    fn write_f32<W: ?Sized + io::Write>(&mut self, w: &mut W, value: f32) -> io::Result<()> {
+        w.write_all(format_double(value as f64).as_bytes())
+    }
+    fn write_string_fragment<W: ?Sized + io::Write>(
+        &mut self,
+        w: &mut W,
+        fragment: &str,
+    ) -> io::Result<()> {
+        // serde_json escapes only C0 controls, quotes and backslashes; .NET's relaxed encoder also escapes DEL, the C1
+        // controls and the line / paragraph separators
+        let mut start = 0;
+        for (i, ch) in fragment.char_indices() {
+            if matches!(ch, '\u{7f}'..='\u{9f}' | '\u{2028}' | '\u{2029}') {
+                w.write_all(&fragment.as_bytes()[start..i])?;
+                write!(w, "\\u{:04X}", ch as u32)?;
+                start = i + ch.len_utf8();
+            }
+        }
+        w.write_all(&fragment.as_bytes()[start..])
+    }
+    fn write_char_escape<W: ?Sized + io::Write>(
+        &mut self,
+        w: &mut W,
+        escape: CharEscape,
+    ) -> io::Result<()> {
+        match escape {
+            CharEscape::Quote => w.write_all(b"\\\""),
+            CharEscape::ReverseSolidus => w.write_all(b"\\\\"),
+            CharEscape::Solidus => w.write_all(b"/"),
+            CharEscape::Backspace => w.write_all(b"\\b"),
+            CharEscape::FormFeed => w.write_all(b"\\f"),
+            CharEscape::LineFeed => w.write_all(b"\\n"),
+            CharEscape::CarriageReturn => w.write_all(b"\\r"),
+            CharEscape::Tab => w.write_all(b"\\t"),
+            CharEscape::AsciiControl(b) => write!(w, "\\u{:04X}", b),
+        }
+    }
+}
 
 /// `IconJsonConverter.Write`: icons are written with `JavaScriptEncoder.Default`, which escapes every character outside
 /// Basic Latin and the HTML-sensitive ones as `\uXXXX` (upper-case hex, UTF-16 units).
@@ -113,5 +249,53 @@ mod format_tests {
             "\"a\\u003Cb\\u003E\\u0026\\u0027\\u002B\\u0060\\u0022\\\\\""
         );
         assert_eq!(escape_js_default("x"), "\"x\"");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn writes_doubles_like_dotnet() {
+        let mut cfg = AgentConfig::default();
+        cfg.night.brightness = 1.0;
+        cfg.weather.lat = 6.9271;
+        let text = to_dotnet_json(&cfg);
+        assert!(
+            text.contains("\"brightness\": 1,")
+                || text.contains("\"brightness\": 1\n")
+                || text.contains("\"brightness\": 1\r\n")
+        );
+        assert!(text.contains("\"lat\": 6.9271"));
+    }
+
+    #[test]
+    fn writes_like_the_csharp_writer() {
+        let mut cfg = AgentConfig::default();
+        cfg.shortcuts.push(crate::config::Shortcut {
+            id: "t".into(),
+            label: "Café\u{7f}".into(),
+            icon: "\u{2328}\u{fe0f}".into(),
+            cmd: "a\"b\\c\n".into(),
+            ..Default::default()
+        });
+        let text = to_dotnet_json(&cfg);
+        let nl = if cfg!(windows) { "\r\n" } else { "\n" };
+        assert!(text.starts_with(&format!(
+            "{{{nl}  \"codexBar\": {{{nl}    \"providers\": [{nl}      \"claude\","
+        )));
+        assert!(
+            text.contains("\"label\": \"Café\\u007F\""),
+            "non-ASCII as is, DEL escaped"
+        );
+        assert!(
+            text.contains("\"icon\": \"\\u2328\\uFE0F\""),
+            "icons escaped"
+        );
+        assert!(text.contains("\"cmd\": \"a\\\"b\\\\c\\n\""));
+        assert!(text.contains("\"pages\": []"));
+        assert!(!text.contains("deviceSerial"), "nulls are left out");
+        assert!(!text.ends_with('\n'));
     }
 }
