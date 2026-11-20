@@ -137,15 +137,12 @@ pub(crate) mod tests {
             dir.path().join("config.json"),
         ));
         let push = crate::push_store::PushStore::new(&dir.path().join("data.json"));
-        let state = AppState {
+        let state = AppState::new(
             cfg,
-            endpoint: crate::agent_endpoint::AgentEndpoint::default(),
+            crate::agent_endpoint::AgentEndpoint::default(),
             push,
-            timings: Default::default(),
-            phone: Default::default(),
-            adb: crate::adb::AdbReverse::idle(),
-            shutdown: Default::default(),
-        };
+            std::sync::Arc::new(crate::state::StateSources::phase1()),
+        );
         (dir, state)
     }
 

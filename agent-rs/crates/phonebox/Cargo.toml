@@ -18,8 +18,12 @@ getrandom = "0.3"
 indexmap = { version = "2", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
+futures-util = { version = "0.3", default-features = false }
 serde_json = { version = "1", features = ["preserve_order", "raw_value"] }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [dev-dependencies]
 http-body-util = "0.1"

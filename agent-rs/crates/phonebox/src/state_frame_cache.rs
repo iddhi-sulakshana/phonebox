@@ -52,7 +52,8 @@ impl StateFrameCache {
                 text.clone()
             }
             _ => {
-                let text: Arc<str> = format!("event: state\ndata: {}\n\n", (self.build)()).into();
+                let json = crate::config::write::to_dotnet_json_compact(&(self.build)());
+                let text: Arc<str> = format!("event: state\ndata: {json}\n\n").into();
                 *f = Frame {
                     text: Some(text.clone()),
                     built_at: now,

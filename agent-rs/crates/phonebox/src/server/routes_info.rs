@@ -50,6 +50,6 @@ async fn info(State(s): State<AppState>) -> Response {
 /// Restart requested from the settings page (e.g. Wi-Fi turned on): stop; `main` hands over to a fresh instance.
 async fn restart(State(s): State<AppState>) -> StatusCode {
     crate::app_restart::request();
-    s.shutdown.notify_one();
+    s.stop.stop();
     StatusCode::OK
 }

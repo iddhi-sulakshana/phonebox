@@ -178,5 +178,37 @@
     "ignore": [
       "/version"
     ]
+  },
+  {
+    "name": "state",
+    "path": "/api/state",
+    "headers": {
+      "X-PhoneBox-App": "0.9.22"
+    },
+    "ignore": [
+      "/ts",
+      "/cfgVersion",
+      "/host",
+      "/pushVersion",
+      "/pc",
+      "/ping"
+    ]
+  },
+  {
+    "name": "state with events",
+    "path": "/api/state?ev=0",
+    "ignore": [
+      "/ts",
+      "/cfgVersion",
+      "/host",
+      "/pushVersion",
+      "/pc",
+      "/ping"
+    ]
+  },
+  {
+    "name": "state: bad ev",
+    "path": "/api/state?ev=abc",
+    "compare": "status"
   }
 ]

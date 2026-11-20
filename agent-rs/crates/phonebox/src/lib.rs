@@ -19,6 +19,7 @@ pub mod request_timings;
 pub mod server;
 pub mod single_instance;
 pub mod stack_widgets;
+pub mod state;
 pub mod state_frame_cache;
 pub mod state_signal;
 pub mod webview_doctor;

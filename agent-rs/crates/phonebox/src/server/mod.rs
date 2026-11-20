@@ -3,6 +3,7 @@
 pub mod guard;
 pub mod routes_info;
 pub mod routes_settings;
+pub mod routes_state;
 pub mod static_files;
 #[cfg(test)]
 mod tests_task10;
@@ -21,6 +22,7 @@ pub fn build_router(state: AppState) -> axum::Router {
         .merge(static_files::routes())
         .merge(routes_settings::routes())
         .merge(routes_info::routes())
+        .merge(routes_state::routes())
         // Kestrel's default request body limit: a settings page with many pages still fits
         .layer(axum::extract::DefaultBodyLimit::max(30_000_000));
     guard::apply(routes, state)
@@ -54,8 +56,66 @@ pub struct AppState {
     pub timings: Arc<RequestTimings>,
     pub phone: Arc<PhoneSeenState>,
     pub adb: Arc<crate::adb::AdbReverse>,
-    /// Notified to stop the server (restart requested).
-    pub shutdown: Arc<tokio::sync::Notify>,
+    pub stop: Stop,
+    /// The monitors behind `/api/state` and the live stream.
+    pub sources: Arc<crate::state::StateSources>,
+    /// The live stream's "state" frame, built once for all streams that wake on the same second.
+    pub frames: Arc<crate::state_frame_cache::StateFrameCache>,
+}
+
+impl AppState {
+    pub fn new(
+        cfg: Arc<ConfigStore>,
+        endpoint: AgentEndpoint,
+        push: Arc<PushStore>,
+        sources: Arc<crate::state::StateSources>,
+    ) -> AppState {
+        let frames = {
+            let (sources, cfg, push) = (sources.clone(), cfg.clone(), push.clone());
+            let build = move || crate::state::build_state(&sources, &cfg, &push, None);
+            Arc::new(crate::state_frame_cache::StateFrameCache::new(
+                Box::new(build),
+                100,
+                None,
+            ))
+        };
+        AppState {
+            cfg,
+            endpoint,
+            push,
+            timings: Default::default(),
+            phone: Default::default(),
+            adb: crate::adb::AdbReverse::idle(),
+            stop: Stop::default(),
+            sources,
+            frames,
+        }
+    }
+}
+
+/// The agent is stopping (Ctrl+C, SIGTERM, or a restart from the settings page). Live streams end on it, so the
+/// server's graceful shutdown can finish while a phone is connected.
+#[derive(Clone)]
+pub struct Stop(Arc<tokio::sync::watch::Sender<bool>>);
+
+impl Default for Stop {
+    fn default() -> Self {
+        Stop(Arc::new(tokio::sync::watch::channel(false).0))
+    }
+}
+
+impl Stop {
+    pub fn stop(&self) {
+        self.0.send_replace(true);
+    }
+    pub fn is_stopped(&self) -> bool {
+        *self.0.borrow()
+    }
+    /// Returns once [`Stop::stop`] was called (at once if it already was).
+    pub async fn stopped(&self) {
+        let mut rx = self.0.subscribe();
+        let _ = rx.wait_for(|stopped| *stopped).await;
+    }
 }
 
 pub fn now_ms() -> i64 {

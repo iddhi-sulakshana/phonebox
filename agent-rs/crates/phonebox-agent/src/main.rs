@@ -53,15 +53,12 @@ fn main() -> ExitCode {
     let _ = log::init(&app_paths::log_path());
 
     let push = PushStore::new(&app_paths::config_dir().join("data.json"));
-    let state = AppState {
+    let state = AppState::new(
         cfg,
         endpoint,
-        push: push.clone(),
-        timings: Default::default(),
-        phone: Default::default(),
-        adb: phonebox::adb::AdbReverse::idle(),
-        shutdown: Default::default(),
-    };
+        push.clone(),
+        Arc::new(phonebox::state::StateSources::phase1()),
+    );
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
     let result = runtime.block_on(serve(state, config_path));
     push.dispose();
@@ -100,14 +97,17 @@ async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Res
             config_path.display()
         ),
     );
-    let stop = state.shutdown.clone();
+    // Ctrl+C / SIGTERM stop the agent like a restart request does: live streams end, then the server drains
+    let stop = state.stop.clone();
+    tokio::spawn({
+        let stop = stop.clone();
+        async move {
+            shutdown_signal().await;
+            stop.stop();
+        }
+    });
     axum::serve(listener, build_router(state))
-        .with_graceful_shutdown(async move {
-            tokio::select! {
-                _ = shutdown_signal() => {}
-                _ = stop.notified() => {}
-            }
-        })
+        .with_graceful_shutdown(async move { stop.stopped().await })
         .await
 }
 
