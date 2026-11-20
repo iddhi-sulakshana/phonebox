@@ -49,7 +49,15 @@ impl StateSources {
             ping: part("ping"),
             rules: part("rules"),
             rules_paused: part("rulesPaused"),
-            privacy: part("privacy"),
+            // macOS: the C# PrivacyMonitor cannot detect mic and camera use without extra permissions and always
+            // says "unknown"; that is its whole macOS behavior, so it is final here
+            privacy: if cfg!(target_os = "macos") {
+                Box::new(Fixed(
+                    json!({"mic": null, "camera": null, "micApps": [], "cameraApps": []}),
+                ))
+            } else {
+                part("privacy")
+            },
             obs: part("obs"),
             toggles: part("toggles"),
             work: part("work"),
