@@ -67,7 +67,7 @@ impl PushStore {
         let data_path = std::path::absolute(data_path).unwrap_or_else(|_| data_path.to_path_buf());
         let mut items = IndexMap::new();
         if data_path.exists() {
-            match std::fs::read_to_string(&data_path)
+            match crate::app_paths::read_all_text(&data_path)
                 .map_err(|e| e.to_string())
                 .and_then(|t| serde_json::from_str::<Value>(&t).map_err(|e| e.to_string()))
             {

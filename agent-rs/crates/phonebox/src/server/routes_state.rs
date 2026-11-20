@@ -74,6 +74,15 @@ fn sse(name: &str, json: &str) -> Bytes {
     Bytes::from(format!("event: {name}\ndata: {json}\n\n"))
 }
 
+/// Queues a frame; false when the client went away or the agent stops (a client that stopped reading leaves the queue
+/// full: the stop must not wait for it).
+async fn send(tx: &mpsc::Sender<Bytes>, s: &AppState, frame: Bytes) -> bool {
+    tokio::select! {
+        sent = tx.send(frame) => sent.is_ok(),
+        _ = s.stop.stopped() => false,
+    }
+}
+
 /// The stream's loop (`Program.cs` `/api/stream`); ends when the client goes away or the agent stops.
 async fn run_stream(s: AppState, is_phone: bool, via: &str, tx: mpsc::Sender<Bytes>) {
     let mut emitted = s.push.subscribe();
@@ -83,11 +92,7 @@ async fn run_stream(s: AppState, is_phone: bool, via: &str, tx: mpsc::Sender<Byt
     let (mut next, mut last_state, mut tick, mut poked) = (0i64, 0i64, 0u64, false);
     'stream: while !s.stop.is_stopped() {
         for e in s.push.since(seq) {
-            if tx
-                .send(sse("event", &to_dotnet_json_compact(&e)))
-                .await
-                .is_err()
-            {
+            if !send(&tx, &s, sse("event", &to_dotnet_json_compact(&e))).await {
                 break 'stream;
             }
             seq = e.seq;
@@ -101,11 +106,7 @@ async fn run_stream(s: AppState, is_phone: bool, via: &str, tx: mpsc::Sender<Byt
                 s.phone.last_seen.store(now, Ordering::SeqCst);
             }
             let frame = s.frames.get(s.push.seq(), state_signal::version());
-            if tx
-                .send(Bytes::copy_from_slice(frame.as_bytes()))
-                .await
-                .is_err()
-            {
+            if !send(&tx, &s, Bytes::copy_from_slice(frame.as_bytes())).await {
                 break;
             }
             last_state = now;
@@ -114,7 +115,7 @@ async fn run_stream(s: AppState, is_phone: bool, via: &str, tx: mpsc::Sender<Byt
             if tick % 2 == 0 {
                 let work = to_dotnet_json_compact(&s.sources.work.snapshot());
                 if work != last_work {
-                    if tx.send(sse("work", &work)).await.is_err() {
+                    if !send(&tx, &s, sse("work", &work)).await {
                         break;
                     }
                     last_work = work;
@@ -268,5 +269,41 @@ mod tests {
         assert_eq!(v["events"][0]["data"], serde_json::Value::Null);
         let r = send(&app, "GET", "/api/state?ev=abc", &[LOCAL]).await;
         assert_eq!(r.status(), 400);
+    }
+
+    /// Review #10: a client that opened the stream and stopped reading (its socket buffers full) cannot keep the agent
+    /// from stopping: open connections get a grace period, then the server lets go (ASP.NET: 30 s by default).
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_client_that_stops_reading_cannot_hold_up_a_stop() {
+        use tokio::io::AsyncWriteExt;
+        let (_d, state) = test_state();
+        let (push, stop) = (state.push.clone(), state.stop.clone());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(crate::server::serve(
+            listener,
+            state,
+            Duration::from_millis(500),
+        ));
+        let mut client = tokio::net::TcpStream::connect(addr).await.unwrap();
+        client
+            .write_all(b"GET /api/stream HTTP/1.1\r\nHost: 127.0.0.1:8765\r\n\r\n")
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        // the client never reads: big events fill its socket buffers, then the stream's queue
+        let big = serde_json::json!("x".repeat(1024 * 1024));
+        for _ in 0..48 {
+            push.emit("notify", Some(big.clone()));
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        stop.stop();
+        let stopped = tokio::time::timeout(Duration::from_secs(5), server).await;
+        assert!(
+            stopped.is_ok(),
+            "the server was still waiting for the client 5 s after the stop"
+        );
+        drop(client);
     }
 }

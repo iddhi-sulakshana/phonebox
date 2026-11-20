@@ -153,12 +153,19 @@ pub(crate) mod tests {
         apply(routes, state)
     }
 
-    pub(crate) async fn send(
-        app: &Router,
+    pub(crate) async fn send<S>(
+        app: &S,
         method: &str,
         path: &str,
         headers: &[(&str, &str)],
-    ) -> Response<Body> {
+    ) -> Response<Body>
+    where
+        S: tower::Service<
+                Request<Body>,
+                Response = Response<Body>,
+                Error = std::convert::Infallible,
+            > + Clone,
+    {
         let mut req = Request::builder().method(method).uri(path);
         for (k, v) in headers {
             req = req.header(*k, *v);

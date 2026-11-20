@@ -35,6 +35,56 @@ pub fn local_dir() -> PathBuf {
 }
 
 /// The user's profile folder (`Environment.SpecialFolder.UserProfile`): `HOME` on macOS/Linux, `USERPROFILE` on Windows.
+/// `File.ReadAllText`: the encoding a byte order mark names (UTF-8, UTF-16 LE/BE, UTF-32 LE/BE), else UTF-8; bytes that
+/// do not decode become U+FFFD instead of failing the read, and the mark itself is dropped.
+pub fn read_all_text(path: &Path) -> std::io::Result<String> {
+    Ok(decode_text(&std::fs::read(path)?))
+}
+
+pub fn decode_text(b: &[u8]) -> String {
+    fn utf16(bytes: &[u8], le: bool) -> String {
+        let (units, rest) = bytes.as_chunks::<2>();
+        let decode = |c: &[u8; 2]| {
+            if le {
+                u16::from_le_bytes(*c)
+            } else {
+                u16::from_be_bytes(*c)
+            }
+        };
+        let mut text = String::from_utf16_lossy(&units.iter().map(decode).collect::<Vec<_>>());
+        if !rest.is_empty() {
+            text.push('\u{fffd}');
+        }
+        text
+    }
+    fn utf32(bytes: &[u8], le: bool) -> String {
+        let (units, rest) = bytes.as_chunks::<4>();
+        let decode = |c: &[u8; 4]| {
+            if le {
+                u32::from_le_bytes(*c)
+            } else {
+                u32::from_be_bytes(*c)
+            }
+        };
+        let mut text: String = units
+            .iter()
+            .map(|c| char::from_u32(decode(c)).unwrap_or('\u{fffd}'))
+            .collect();
+        if !rest.is_empty() {
+            text.push('\u{fffd}');
+        }
+        text
+    }
+    match b {
+        [0xEF, 0xBB, 0xBF, rest @ ..] => String::from_utf8_lossy(rest).into_owned(),
+        [0xFF, 0xFE, 0, 0, rest @ ..] => utf32(rest, true),
+        [0xFF, 0xFE, rest @ ..] => utf16(rest, true),
+        [0xFE, 0xFF, rest @ ..] => utf16(rest, false),
+        [0, 0, 0xFE, 0xFF, rest @ ..] => utf32(rest, false),
+        _ => String::from_utf8_lossy(b).into_owned(),
+    }
+}
+
 pub fn home() -> PathBuf {
     let var = if cfg!(windows) { "USERPROFILE" } else { "HOME" };
     std::env::var_os(var)

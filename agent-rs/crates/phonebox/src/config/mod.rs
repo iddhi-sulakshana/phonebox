@@ -1266,6 +1266,57 @@ pub(crate) const KNOWN_FIELDS: &[&str] = &[
 /// Free-form dictionaries: their keys are data, read as written.
 pub(crate) const OPAQUE_FIELDS: &[&str] = &["options", "defaults"];
 
+/// Properties whose C# type is a bool, int or double (no null), with that type's .NET name for the error message.
+/// Each name has the same type in every C# config class.
+pub(crate) const VALUE_FIELDS: &[(&str, &str)] = &[
+    ("artTint", "System.Boolean"),
+    ("auto", "System.Boolean"),
+    ("autoBrightness", "System.Boolean"),
+    ("brightness", "System.Double"),
+    ("controlsTop", "System.Boolean"),
+    ("cooldownMin", "System.Int32"),
+    ("enabled", "System.Boolean"),
+    ("finishToast", "System.Boolean"),
+    ("followComputerLock", "System.Boolean"),
+    ("forSec", "System.Int32"),
+    ("h", "System.Int32"),
+    ("holdMaxMin", "System.Int32"),
+    ("homeScreen", "System.Boolean"),
+    ("idleDimMin", "System.Int32"),
+    ("idleReturnSec", "System.Int32"),
+    ("keepAwake", "System.Boolean"),
+    ("lat", "System.Double"),
+    ("lon", "System.Double"),
+    ("max", "System.Int32"),
+    ("min", "System.Int32"),
+    ("minDwellSec", "System.Int32"),
+    ("nightWhenDark", "System.Boolean"),
+    ("onlyWhenAway", "System.Boolean"),
+    ("pageSize", "System.Int32"),
+    ("phoneApprovals", "System.Boolean"),
+    ("pin", "System.Boolean"),
+    ("pixelShift", "System.Boolean"),
+    ("port", "System.Int32"),
+    ("priority", "System.Int32"),
+    ("proximityWake", "System.Boolean"),
+    ("rotate", "System.Boolean"),
+    ("rotateInterval", "System.Int32"),
+    ("sessions", "System.Boolean"),
+    ("shareConversation", "System.Boolean"),
+    ("shareSessionTitles", "System.Boolean"),
+    ("showSeconds", "System.Boolean"),
+    ("switchCountdownSec", "System.Int32"),
+    ("timeoutSec", "System.Int32"),
+    ("toggle", "System.Boolean"),
+    ("touchGraceSec", "System.Int32"),
+    ("vibrate", "System.Boolean"),
+    ("volumeKeys", "System.Boolean"),
+    ("w", "System.Int32"),
+    ("whileActive", "System.Boolean"),
+    ("x", "System.Int32"),
+    ("y", "System.Int32"),
+];
+
 #[cfg(test)]
 mod tests {
     use super::normalize::normalize;

@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use phonebox::agent_endpoint::AgentEndpoint;
 use phonebox::config::store::ConfigStore;
-use phonebox::server::{AppState, build_router};
+use phonebox::server::AppState;
 use phonebox::{app_paths, app_restart, log, push_store::PushStore, single_instance};
 
 fn main() -> ExitCode {
@@ -100,16 +100,11 @@ async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Res
     );
     // Ctrl+C / SIGTERM stop the agent like a restart request does: live streams end, then the server drains
     let stop = state.stop.clone();
-    tokio::spawn({
-        let stop = stop.clone();
-        async move {
-            shutdown_signal().await;
-            stop.stop();
-        }
+    tokio::spawn(async move {
+        shutdown_signal().await;
+        stop.stop();
     });
-    axum::serve(listener, build_router(state))
-        .with_graceful_shutdown(async move { stop.stopped().await })
-        .await
+    phonebox::server::serve(listener, state, Duration::from_secs(30)).await
 }
 
 /// Ctrl+C, or the SIGTERM launchd / systemd send to stop the agent.

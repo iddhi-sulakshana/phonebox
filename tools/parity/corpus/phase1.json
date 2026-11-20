@@ -210,5 +210,42 @@
     "name": "state: bad ev",
     "path": "/api/state?ev=abc",
     "compare": "status"
+  },
+  {
+    "name": "catalog",
+    "path": "/api/catalog",
+    "compare": "bytes"
+  },
+  {
+    "name": "live preview: state through /agent/api",
+    "path": "/agent/api/state",
+    "ignore": [
+      "/ts",
+      "/cfgVersion",
+      "/host",
+      "/pushVersion",
+      "/pc",
+      "/ping"
+    ]
+  },
+  {
+    "name": "guard: cross-site navigation to /agent/api",
+    "path": "/agent/api/info",
+    "headers": {
+      "Sec-Fetch-Site": "cross-site",
+      "Sec-Fetch-Mode": "navigate"
+    },
+    "compare": "status"
+  },
+  {
+    "name": "settings: emptied number",
+    "method": "PUT",
+    "path": "/api/settings",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"weather\": {\"city\": \"Kandy\", \"lat\": null, \"lon\": 80.6337}}",
+    "compare": "status",
+    "config_file": true
   }
 ]

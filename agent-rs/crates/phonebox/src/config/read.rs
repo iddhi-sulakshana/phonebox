@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 
 use serde_json::{Map, Value};
 
-use super::{AgentConfig, KNOWN_FIELDS, OPAQUE_FIELDS};
+use super::{AgentConfig, KNOWN_FIELDS, OPAQUE_FIELDS, VALUE_FIELDS};
 
 static KNOWN: LazyLock<HashMap<String, &'static str>> = LazyLock::new(|| {
     KNOWN_FIELDS
@@ -15,9 +15,22 @@ static KNOWN: LazyLock<HashMap<String, &'static str>> = LazyLock::new(|| {
         .collect()
 });
 
-/// Parses settings text. Errors read `Invalid JSON: …`, as `ConfigStore.Save` reports them.
+static VALUE: LazyLock<HashMap<&'static str, &'static str>> =
+    LazyLock::new(|| VALUE_FIELDS.iter().copied().collect());
+
+/// Parses settings text leniently (the file on disk): a null anywhere under a known property is the model's default.
+/// Errors read `Invalid JSON: …`, as `ConfigStore.Save` reports them.
 pub fn parse(text: &str) -> Result<AgentConfig, String> {
-    let value = parse_value(text)?;
+    from_value(parse_value(text)?)
+}
+
+/// Parses settings sent to be saved, as strictly as C# deserializes them: a null for a number or a switch is refused
+/// (an emptied number field arrives as null; it must not save the default in its place).
+pub fn parse_for_save(text: &str) -> Result<AgentConfig, String> {
+    from_value(canonicalize(parse_raw(text)?, true, "$")?)
+}
+
+fn from_value(value: Value) -> Result<AgentConfig, String> {
     if !value.is_object() {
         return Err("Invalid JSON: the settings must be a JSON object".to_string());
     }
@@ -27,10 +40,13 @@ pub fn parse(text: &str) -> Result<AgentConfig, String> {
 /// Reads JSON text with comments and trailing commas into a value whose known property names are in their canonical
 /// camelCase, with nulls dropped where the model has a default (as a missing property).
 pub fn parse_value(text: &str) -> Result<Value, String> {
+    canonicalize(parse_raw(text)?, false, "$")
+}
+
+fn parse_raw(text: &str) -> Result<Value, String> {
     let text = text.strip_prefix('\u{feff}').unwrap_or(text); // File.ReadAllText drops a UTF-8 byte order mark
-    let value: Value = serde_json::from_str(&strip_comments_and_trailing_commas(text))
-        .map_err(|e| format!("Invalid JSON: {e}"))?;
-    Ok(canonicalize(value))
+    serde_json::from_str(&strip_comments_and_trailing_commas(text))
+        .map_err(|e| format!("Invalid JSON: {e}"))
 }
 
 /// `JsonCommentHandling.Skip` + `AllowTrailingCommas`: `//` and `/* */` comments become spaces (so error positions keep
@@ -108,33 +124,49 @@ pub fn strip_comments_and_trailing_commas(text: &str) -> String {
 /// Known property names in any case become their camelCase spelling; a null under a known property is dropped (the
 /// model's default applies, as C# `Normalize` would fill it), and so are null items of arrays the model lists (C#
 /// filters them). Free-form dictionaries (`options`, `defaults`) and properties the model does not know are kept as
-/// written.
-fn canonicalize(value: Value) -> Value {
-    match value {
-        Value::Object(map) => Value::Object(canonical_object(map)),
+/// written. `strict` (a save): a null for a number or a switch is an error, worded as C# reports it; `path` is the
+/// JSON path of `value` for that message.
+fn canonicalize(value: Value, strict: bool, path: &str) -> Result<Value, String> {
+    Ok(match value {
+        Value::Object(map) => Value::Object(canonical_object(map, strict, path)?),
         Value::Array(items) => Value::Array(
             items
                 .into_iter()
-                .filter(|v| !v.is_null())
-                .map(canonicalize)
-                .collect(),
+                .enumerate()
+                .filter(|(_, v)| !v.is_null())
+                .map(|(i, v)| canonicalize(v, strict, &format!("{path}[{i}]")))
+                .collect::<Result<_, _>>()?,
         ),
         other => other,
-    }
+    })
 }
 
-fn canonical_object(map: Map<String, Value>) -> Map<String, Value> {
+fn canonical_object(
+    map: Map<String, Value>,
+    strict: bool,
+    path: &str,
+) -> Result<Map<String, Value>, String> {
     let mut out = Map::with_capacity(map.len());
     for (key, value) in map {
         match KNOWN.get(&key.to_ascii_lowercase()) {
             Some(&name) => {
+                let here = format!("{path}.{key}");
                 if value.is_null() {
-                    continue;
+                    match VALUE.get(name) {
+                        // C# has no null for a bool, int or double: System.Text.Json refuses it (without the line
+                        // and byte position .NET adds)
+                        Some(net) if strict => {
+                            return Err(format!(
+                                "Invalid JSON: The JSON value could not be converted to {net}. Path: {here}."
+                            ));
+                        }
+                        _ => continue,
+                    }
                 }
                 let value = if OPAQUE_FIELDS.contains(&name) {
                     value
                 } else {
-                    canonicalize(value)
+                    canonicalize(value, strict, &here)?
                 };
                 out.insert(name.to_string(), value);
             }
@@ -143,7 +175,7 @@ fn canonical_object(map: Map<String, Value>) -> Map<String, Value> {
             }
         }
     }
-    out
+    Ok(out)
 }
 
 #[cfg(test)]

@@ -13,8 +13,22 @@ use crate::config::write::to_dotnet_json;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
+        .route("/api/catalog", get(catalog))
         .route("/api/settings", get(get_settings).put(put_settings))
         .route("/api/config", get(get_config))
+}
+
+/// Widget types and page templates for the settings page's layout editor (the page loads nothing before them).
+async fn catalog() -> Response {
+    use crate::catalog::{COLS, ROWS, TEMPLATES_JSON, WIDGETS_JSON};
+    let text = format!(
+        "{{\"cols\":{COLS},\"rows\":{ROWS},\"widgets\":{WIDGETS_JSON},\"templates\":{TEMPLATES_JSON}}}"
+    );
+    (
+        [(header::CONTENT_TYPE, "application/json; charset=utf-8")],
+        text,
+    )
+        .into_response()
 }
 
 /// The settings, with the version the page sends back so it saves only over what it loaded.

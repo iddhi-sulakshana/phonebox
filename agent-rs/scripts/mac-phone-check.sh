@@ -66,12 +66,12 @@ HOME="$WORK/home" "$ROOT/agent-rs/target/release/PhoneBoxAgent" --config "$WORK/
   >"$WORK/rust.log" 2>&1 &
 RUST_PID=$!
 for _ in $(seq 1 60); do
-  grep -q "phone connected" "$WORK/rust.log" && break
+  grep -q "phone connected: " "$WORK/rust.log" && break
   kill -0 "$RUST_PID" 2>/dev/null || break
   sleep 1
 done
 show_log
-grep -q "phone connected" "$WORK/rust.log" || { echo "no phone connected within 60 s"; exit 1; }
+grep -q "phone connected: " "$WORK/rust.log" || { echo "no phone connected within 60 s"; exit 1; }
 cat <<'EOF'
 == check the phone now:
   - it shows the panel (clock, page dots; placeholders for the widgets the Rust agent does not serve yet)

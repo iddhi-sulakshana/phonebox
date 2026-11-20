@@ -56,7 +56,7 @@ impl ConfigStore {
         let stamp = file_ticks(&self.path);
         inner.seen = stamp;
         if inner.stamp != Some(stamp) {
-            match std::fs::read_to_string(&self.path)
+            match app_paths::read_all_text(&self.path)
                 .map_err(|e| e.to_string())
                 .and_then(|t| read::parse(&t))
             {
@@ -104,7 +104,7 @@ impl ConfigStore {
 
     /// Validates and saves; Ok is the version written. With `expected`, a save over a newer file is refused (CONFLICT).
     pub fn save(&self, json: &str, expected: Option<i64>) -> Result<i64, String> {
-        let cfg = read::parse(json)?;
+        let cfg = read::parse_for_save(json)?;
         let stale: HashSet<String> = self.get().shortcuts.iter().map(|s| s.id.clone()).collect();
         let cfg = normalize(cfg, Some(&stale));
         validate(&cfg)?;
@@ -148,7 +148,7 @@ impl ConfigStore {
             };
             (c, version)
         };
-        if let Ok(on_disk) = std::fs::read_to_string(&self.path)
+        if let Ok(on_disk) = app_paths::read_all_text(&self.path)
             .map_err(|e| e.to_string())
             .and_then(|t| read::parse(&t))
         {
@@ -740,5 +740,22 @@ mod tests {
             ),
             Err("App console profile 'Edit' has no app".into())
         );
+    }
+
+    /// Review #6: `File.ReadAllText` reads a UTF-16 file by its byte order mark (PowerShell 5.1's `>` writes one) and
+    /// replaces bytes that are not UTF-8; such a file must not read as "no settings" (a later save would replace it).
+    #[test]
+    fn a_utf16_file_or_stray_bytes_still_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        let text = "{ \"weather\": { \"city\": \"Kandy\", \"lat\": 7.29, \"lon\": 80.63 } }";
+        let mut utf16 = vec![0xFF, 0xFE];
+        utf16.extend(text.encode_utf16().flat_map(u16::to_le_bytes));
+        std::fs::write(&path, &utf16).unwrap();
+        assert_eq!(ConfigStore::new(path.clone()).get().weather.city, "Kandy");
+        // Windows-1252 "é" in a file saved by an old editor
+        let ansi = b"{ \"weather\": { \"city\": \"Pel\xe9\", \"lat\": 7.29, \"lon\": 80.63 } }";
+        std::fs::write(&path, ansi).unwrap();
+        assert_eq!(ConfigStore::new(path).get().weather.city, "Pel\u{fffd}");
     }
 }

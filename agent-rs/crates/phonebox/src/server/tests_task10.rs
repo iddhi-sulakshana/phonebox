@@ -17,7 +17,7 @@ async fn json(r: axum::http::Response<axum::body::Body>) -> serde_json::Value {
 }
 
 async fn put_settings(
-    app: &axum::Router,
+    app: &super::App,
     text: &str,
     version: Option<&str>,
 ) -> axum::http::Response<axum::body::Body> {
@@ -233,5 +233,106 @@ async fn json_answers_are_utf8_with_dotnet_numbers() {
     assert!(
         config.contains(r#""brightness":1,"#) || config.contains(r#""brightness":1}"#),
         "{config}"
+    );
+}
+
+/// Review #1: the settings page starts with `/api/catalog`; without it the page never loads.
+#[tokio::test]
+async fn catalog_carries_the_widgets_and_templates_files() {
+    let (_d, state) = test_state();
+    let app = build_router(state);
+    let r = send(&app, "GET", "/api/catalog", &[LOCAL]).await;
+    assert_eq!(r.status(), 200);
+    assert_eq!(
+        r.headers()["content-type"],
+        "application/json; charset=utf-8"
+    );
+    let expected = format!(
+        "{{\"cols\":12,\"rows\":6,\"widgets\":{},\"templates\":{}}}",
+        crate::catalog::WIDGETS_JSON,
+        crate::catalog::TEMPLATES_JSON
+    );
+    assert_eq!(String::from_utf8(body(r).await).unwrap(), expected);
+}
+
+/// Review #2: the panel in the layout editor's live preview calls `/agent/api/...`, the phone's own path; on the local
+/// port that is `/api/...`, rewritten before routing and before the guard (which must see the `/api` path).
+#[tokio::test]
+async fn the_live_preview_reaches_the_api_through_agent_api() {
+    let (_d, state) = test_state();
+    let app = build_router(state);
+    let r = send(&app, "GET", "/agent/api/state?ev=0", &[LOCAL]).await;
+    assert_eq!(r.status(), 200);
+    assert!(json(r).await["events"].is_array());
+    assert_eq!(
+        send(&app, "GET", "/Agent/API/info", &[LOCAL])
+            .await
+            .status(),
+        200
+    ); // any case, as ASP.NET
+    // a cross-site page navigation is fine for pages, never for the API: the guard sees the rewritten path
+    let navigate = [
+        LOCAL,
+        ("sec-fetch-site", "cross-site"),
+        ("sec-fetch-mode", "navigate"),
+    ];
+    assert_eq!(
+        send(&app, "GET", "/agent/api/info", &navigate)
+            .await
+            .status(),
+        403
+    );
+    assert_eq!(
+        send(&app, "GET", "/agent/apix/info", &[LOCAL])
+            .await
+            .status(),
+        404
+    ); // whole segments only
+}
+
+/// Review #3: an emptied number field reaches the agent as null. C# refuses it (its model has no null for a number), so
+/// the file keeps the user's value; it must not turn into the default (Tallinn's latitude) silently.
+#[tokio::test]
+async fn a_null_number_or_switch_is_refused_like_csharp() {
+    let (_d, state) = test_state();
+    let cfg = state.cfg.clone();
+    let app = build_router(state);
+    let put = |body: &'static str| {
+        let app = app.clone();
+        async move {
+            let req = axum::http::Request::builder()
+                .method("PUT")
+                .uri("/api/settings")
+                .header("host", "127.0.0.1:8765")
+                .header("content-type", "application/json")
+                .body(axum::body::Body::from(body))
+                .unwrap();
+            tower::ServiceExt::oneshot(app, req).await.unwrap()
+        }
+    };
+    assert_eq!(
+        put(r#"{"weather":{"city":"Kandy","lat":7.29,"lon":80.63}}"#)
+            .await
+            .status(),
+        200
+    );
+    let r = put(r#"{"weather":{"city":"Kandy","lat":null,"lon":80.63}}"#).await;
+    assert_eq!(r.status(), 400);
+    assert_eq!(
+        json(r).await["error"],
+        "Invalid JSON: The JSON value could not be converted to System.Double. Path: $.weather.lat."
+    );
+    assert_eq!(cfg.get().weather.lat, 7.29);
+    let r = put(r#"{"pages":[{"id":"p1","widgets":[{"type":"clock","x":null}]}]}"#).await;
+    assert_eq!(
+        json(r).await["error"],
+        "Invalid JSON: The JSON value could not be converted to System.Int32. Path: $.pages[0].widgets[0].x."
+    );
+    // nulls where C# has a reference type are fine (Normalize fills them), and so are null array items
+    assert_eq!(
+        put(r#"{"weather":{"city":null},"shortcuts":null,"pages":[null]}"#)
+            .await
+            .status(),
+        200
     );
 }
