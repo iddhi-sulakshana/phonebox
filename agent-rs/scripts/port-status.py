@@ -43,6 +43,14 @@ PHASE_BY_METHOD: dict[str, int] = {
     "AppRestartTests.ATerminalOrTheTrayIsNot": 1,
     "AppRestartTests.AProcessThatOnlyInheritedTheUnitIsNot": 1,
     "AppRestartTests.TheRestartCodeIsAFailure": 1,
+    # RuleTests.cs also holds the USB doctor (phase 1, with AdbReverse)
+    "UsbDoctorTests.ChargingWithoutDataBlamesTheCable": 1,
+    "UsbDoctorTests.WirelessChargingWithoutUsbDoesNotBlameACable": 1,
+    "UsbDoctorTests.BatteryReportsFromBeforeAClockRollbackDoNotRaiseADiagnosis": 1,
+    "UsbDoctorTests.ConnectedWithAdbButUnseenBlamesThePort": 1,
+    "UsbDoctorTests.ConnectedWithoutAdbAsksForDebugging": 1,
+    "UsbDoctorTests.StaysQuiet": 1,
+    "UsbDoctorTests.NoReportNoDiagnosis": 1,
     # StateSignal.MediaChanged compares media snapshots: it comes with the media monitor
     "StateSignalTests.AMediaChangeThatMattersPokesButTheTickingPositionDoesNot": 3,
 }

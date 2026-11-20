@@ -79,13 +79,19 @@ impl AppState {
                 None,
             ))
         };
+        // not started here: main starts the loop (tests never run adb)
+        let adb = crate::adb::AdbReverse::new(
+            cfg.clone(),
+            endpoint.port,
+            Arc::new(crate::adb::ProcessRunner::default()),
+        );
         AppState {
+            adb,
             cfg,
             endpoint,
             push,
             timings: Default::default(),
             phone: Default::default(),
-            adb: crate::adb::AdbReverse::idle(),
             stop: Stop::default(),
             sources,
             frames,

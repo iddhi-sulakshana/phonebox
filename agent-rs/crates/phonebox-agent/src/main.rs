@@ -89,6 +89,7 @@ fn main() -> ExitCode {
 async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Result<()> {
     let port = state.endpoint.port;
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
+    state.adb.start(); // the USB tunnel to the phone
     log::info(
         "PhoneBoxAgent",
         &format!(

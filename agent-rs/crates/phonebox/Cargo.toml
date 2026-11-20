@@ -26,6 +26,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 libc = "0.2"
 
 [dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
 http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }
 tempfile = "3"
