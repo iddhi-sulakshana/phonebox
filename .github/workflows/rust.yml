@@ -1,0 +1,60 @@
+name: rust
+
+on:
+  push:
+    paths: ["agent-rs/**", "tools/parity/**", ".github/workflows/rust.yml"]
+  pull_request:
+    paths: ["agent-rs/**", "tools/parity/**", ".github/workflows/rust.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: agent-rs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Rust toolchain (from rust-toolchain.toml)
+        run: rustup toolchain install 1.98.0 --profile minimal -c clippy,rustfmt
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+
+  # The Rust agent against the C# agent it replaces (the baseline in agent/, 0.9.23, built as users run it on each OS),
+  # side by side on the phase-1 corpus. Linux runs on the test server (agent-rs/scripts/remote-parity.sh).
+  parity:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, tfm: net10.0, exe: "", python: python3 }
+          - { os: macos-15-intel, tfm: net10.0, exe: "", python: python3 }
+          - { os: windows-latest, tfm: net10.0-windows10.0.19041.0, exe: ".exe", python: python }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
+      - name: Rust toolchain (from rust-toolchain.toml)
+        run: rustup toolchain install 1.98.0 --profile minimal
+      - name: Build the C# agent
+        run: dotnet build -c Release agent/PhoneBox.Agent -f ${{ matrix.tfm }} -v q -nologo
+      - name: Build the Rust agent
+        working-directory: agent-rs
+        run: cargo build --release
+      - name: Parity, phase 1
+        shell: bash
+        run: >-
+          ${{ matrix.python }} -I tools/parity/parity.py
+          --csharp "agent/PhoneBox.Agent/bin/Release/${{ matrix.tfm }}/PhoneBoxAgent${{ matrix.exe }}"
+          --rust "agent-rs/target/release/PhoneBoxAgent${{ matrix.exe }}"
+          --corpus tools/parity/corpus/phase1.json

@@ -50,3 +50,6 @@ tools/ui-tests/test-results/
 
 *.log
 *.txt
+# Python bytecode (tools/parity)
+__pycache__/
+*.pyc

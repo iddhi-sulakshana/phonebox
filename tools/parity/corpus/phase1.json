@@ -1,0 +1,251 @@
+[
+  {
+    "name": "info",
+    "path": "/api/info",
+    "ignore": [
+      "/version",
+      "/configPath",
+      "/logPath"
+    ]
+  },
+  {
+    "name": "settings",
+    "path": "/api/settings"
+  },
+  {
+    "name": "phone config",
+    "path": "/api/config",
+    "headers": {
+      "X-PhoneBox-App": "0.9.22"
+    },
+    "ignore": [
+      "/version"
+    ]
+  },
+  {
+    "name": "latency",
+    "path": "/api/latency",
+    "compare": "status"
+  },
+  {
+    "name": "settings page",
+    "path": "/",
+    "compare": "bytes"
+  },
+  {
+    "name": "favicon",
+    "path": "/favicon.ico",
+    "compare": "bytes"
+  },
+  {
+    "name": "panel index",
+    "path": "/panel/index.html",
+    "compare": "bytes"
+  },
+  {
+    "name": "panel main.js",
+    "path": "/panel/main.js",
+    "compare": "bytes"
+  },
+  {
+    "name": "panel style.css",
+    "path": "/panel/style.css",
+    "compare": "bytes"
+  },
+  {
+    "name": "panel widget",
+    "path": "/panel/widgets/basic.js",
+    "compare": "bytes"
+  },
+  {
+    "name": "panel missing file",
+    "path": "/panel/nope.js",
+    "compare": "status"
+  },
+  {
+    "name": "guard: foreign host",
+    "path": "/api/info",
+    "headers": {
+      "Host": "evil.example:{port}"
+    },
+    "compare": "status"
+  },
+  {
+    "name": "guard: foreign origin",
+    "path": "/api/info",
+    "headers": {
+      "Origin": "http://evil.example"
+    },
+    "compare": "status"
+  },
+  {
+    "name": "guard: same origin",
+    "path": "/api/info",
+    "headers": {
+      "Origin": "http://127.0.0.1:{port}"
+    },
+    "ignore": [
+      "/version",
+      "/configPath",
+      "/logPath"
+    ]
+  },
+  {
+    "name": "guard: localhost host",
+    "path": "/api/info",
+    "headers": {
+      "Host": "localhost:{port}"
+    },
+    "ignore": [
+      "/version",
+      "/configPath",
+      "/logPath"
+    ]
+  },
+  {
+    "name": "guard: cross-site fetch",
+    "method": "POST",
+    "path": "/api/restart",
+    "headers": {
+      "Sec-Fetch-Site": "cross-site",
+      "Sec-Fetch-Mode": "no-cors"
+    },
+    "compare": "status"
+  },
+  {
+    "name": "settings: wrong content type",
+    "method": "PUT",
+    "path": "/api/settings",
+    "headers": {
+      "Content-Type": "text/plain"
+    },
+    "body": "{}",
+    "compare": "status"
+  },
+  {
+    "name": "settings: stale version",
+    "method": "PUT",
+    "path": "/api/settings",
+    "headers": {
+      "Content-Type": "application/json",
+      "X-Config-Version": "1"
+    },
+    "body": "{}"
+  },
+  {
+    "name": "settings: invalid json",
+    "method": "PUT",
+    "path": "/api/settings",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{ not json",
+    "compare": "status"
+  },
+  {
+    "name": "settings: bad night time",
+    "method": "PUT",
+    "path": "/api/settings",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"night\": {\"start\": \"25:99\"}}"
+  },
+  {
+    "name": "settings: save",
+    "method": "PUT",
+    "path": "/api/settings",
+    "config_version": true,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"deviceSerial\": \"parity-none\", \"updates\": {\"auto\": false, \"repo\": \"iddhi-sulakshana/phonebox\"}, \"lan\": {\"token\": \"parityPhoneKey0000000000000000000000000000A\", \"webhookToken\": \"parityWebhookKey000000000000000000000000000\"}, \"weather\": {\"city\": \"Kandy\", \"lat\": 7.2906, \"lon\": 80.6337}, \"night\": {\"brightness\": 1}}",
+    "ignore": [
+      "/version"
+    ],
+    "config_file": true
+  },
+  {
+    "name": "settings after save",
+    "path": "/api/settings"
+  },
+  {
+    "name": "phone config after save",
+    "path": "/api/config",
+    "headers": {
+      "X-PhoneBox-App": "0.9.22"
+    },
+    "ignore": [
+      "/version"
+    ]
+  },
+  {
+    "name": "state",
+    "path": "/api/state",
+    "headers": {
+      "X-PhoneBox-App": "0.9.22"
+    },
+    "ignore": [
+      "/ts",
+      "/cfgVersion",
+      "/host",
+      "/pushVersion",
+      "/pc",
+      "/ping"
+    ]
+  },
+  {
+    "name": "state with events",
+    "path": "/api/state?ev=0",
+    "ignore": [
+      "/ts",
+      "/cfgVersion",
+      "/host",
+      "/pushVersion",
+      "/pc",
+      "/ping"
+    ]
+  },
+  {
+    "name": "state: bad ev",
+    "path": "/api/state?ev=abc",
+    "compare": "status"
+  },
+  {
+    "name": "catalog",
+    "path": "/api/catalog",
+    "compare": "bytes"
+  },
+  {
+    "name": "live preview: state through /agent/api",
+    "path": "/agent/api/state",
+    "ignore": [
+      "/ts",
+      "/cfgVersion",
+      "/host",
+      "/pushVersion",
+      "/pc",
+      "/ping"
+    ]
+  },
+  {
+    "name": "guard: cross-site navigation to /agent/api",
+    "path": "/agent/api/info",
+    "headers": {
+      "Sec-Fetch-Site": "cross-site",
+      "Sec-Fetch-Mode": "navigate"
+    },
+    "compare": "status"
+  },
+  {
+    "name": "settings: emptied number",
+    "method": "PUT",
+    "path": "/api/settings",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"weather\": {\"city\": \"Kandy\", \"lat\": null, \"lon\": 80.6337}}",
+    "compare": "status",
+    "config_file": true
+  }
+]
