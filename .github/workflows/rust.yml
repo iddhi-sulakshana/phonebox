@@ -28,8 +28,8 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
 
-  # The Rust agent against the C# agent it replaces (0.9.22, the build users run on each OS), side by side on the
-  # phase-1 corpus. Linux runs on the test server (agent-rs/scripts/remote-parity.sh).
+  # The Rust agent against the C# agent it replaces (the baseline in agent/, 0.9.23, built as users run it on each OS),
+  # side by side on the phase-1 corpus. Linux runs on the test server (agent-rs/scripts/remote-parity.sh).
   parity:
     strategy:
       fail-fast: false

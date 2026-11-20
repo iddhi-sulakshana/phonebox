@@ -30,9 +30,9 @@ release running: about 10% CPU continuously, about 270 MB memory, 40 threads, 10
      launchd/systemd restart contract (exit code 75 when service-managed);
    - release artifacts: `PhoneBoxAgent-<ver>-<rid>.zip` for `win-x64`, `linux-x64`, `linux-arm64`, `osx-x64`,
      `osx-arm64`, plus `SHA256SUMS-<ver>.txt`, as checked by `.github/workflows/artifact-contract.yml`.
-2. **Feature parity with a fixed baseline**: upstream commit `43800f9` ("Settings page: a waiting update shows in the
-   header, on every section", just after release 0.9.22). Every feature at that commit, on every platform it supports
-   there.
+2. **Feature parity with a fixed baseline**: the fork's `main` at `bb72345`, which is upstream release 0.9.23 (`26a0d32`)
+   plus the fork's battery-care fix. Every feature at that commit, on every platform it supports there. (Until
+   2026-11-20 the baseline was upstream `43800f9`, just after release 0.9.22; see decision 1.)
 3. **Tests ported**: every behavior covered by `agent/PhoneBox.Agent.Tests` (about 18,300 lines, xUnit) has an
    equivalent Rust test.
 4. **Measurably lighter** than the C# agent on the same machine with the same config (CPU, memory, threads, disk).
@@ -55,7 +55,7 @@ release running: about 10% CPU continuously, about 270 MB memory, 40 threads, 10
 
 ## Constraints
 
-- **The C# agent is the specification.** Where docs and code disagree, the code at `43800f9` and its tests win.
+- **The C# agent is the specification.** Where docs and code disagree, the code at `bb72345` and its tests win.
 - **Where tests and servers run.** The owner's rule: no tests or servers on the laptop. Linux test runs (unit tests,
   the parity harness, the C# reference agent) go to the `hetzner-iddhi` server (x86_64, 20 cores, .NET 10 installed,
   Rust **not** installed yet). macOS- and Windows-specific tests run on GitHub Actions runners (macOS arm64, macOS
@@ -173,9 +173,11 @@ order of work inside each phase.
 
 ## Decisions by the owner (2026-11-20)
 
-1. **Upstream is frozen at 0.9.22** (`43800f9`). The owner's installed C# agent has auto-update turned off
-   (`updates.auto = false`) so the machine, the phone and the parity oracle stay on that version for the whole port.
-   Upstream features released later can be ported after the switch, one at a time, as separate work.
+1. **Upstream is frozen at a fixed baseline.** First 0.9.22 (`43800f9`); on 2026-11-20, after plan 1, the owner moved
+   it to 0.9.23 with the fork's battery-care fix (`bb72345`), rebased `rust-agent` onto it and had the parity harness
+   rerun against it. The owner's installed C# agent has auto-update turned off (`updates.auto = false`), so the
+   machine, the phone and the parity oracle stay on a known version for the port. Upstream features released later
+   can be ported after the switch, one at a time, as separate work, or by moving the baseline again the same way.
 2. **The fork is public, with its own releases:** `iddhi-sulakshana/phonebox` on GitHub. Its releases are built by
    GitHub Actions on the public repo (macOS, Windows and Linux runners).
 3. **The fork builds and signs its own APK** with a new key belonging to the owner. The app's code is unchanged;

@@ -343,6 +343,12 @@ impl AdbReverse {
                 false,
             )
             .await?;
+            // Settings > Display > open on connect is off (a phone also used for app testing): the phone stays as it
+            // is, and the panel opens when the user starts it
+            if !cfg.display.open_on_connect {
+                crate::log::info(CATEGORY, &format!("{d}: adb reverse set up"));
+                continue;
+            }
             // display.followComputerLock (macOS) keeps a phone plugged in while the Mac is locked dark; it needs the
             // Mac's lock state, which comes with the session lock monitor (plan 6). Until then: wake and open.
             self.adb(
@@ -913,6 +919,42 @@ mod tests {
                 .any(|c| c == "-s FAKE1 reverse tcp:8765 tcp:8765")
         );
         assert!(calls.contains(&format!("-s FAKE1 {AWAKE}")));
+    }
+
+    /// A newly plugged-in phone is woken and shows the panel, unless Settings > Display > open on connect is off (a
+    /// phone that is also used for app testing): then only the reverse rule is set and the phone is left as it is.
+    #[tokio::test(start_paused = true)]
+    async fn a_new_phone_opens_the_panel_only_when_open_on_connect_is_on() {
+        for open_on_connect in [true, false] {
+            let fake = FakeAdb::with(|f| f.devices = vec!["FAKE1".into()]);
+            let settings = format!(
+                r#"{{"deviceSerial":"FAKE1","display":{{"homeScreen":false,"keepAwake":false,"followComputerLock":false,"openOnConnect":{open_on_connect}}}}}"#
+            );
+            let calls = run_until(&fake, &settings, 8765, |c| count(c, "devices") >= 2).await;
+            assert!(
+                calls
+                    .iter()
+                    .any(|c| c == "-s FAKE1 reverse tcp:8765 tcp:8765")
+            );
+            let opened = "-s FAKE1 shell am start -n net.oxog.phonebox.deskpanel/.MainActivity";
+            assert_eq!(
+                calls.iter().any(|c| c == opened),
+                open_on_connect,
+                "openOnConnect {open_on_connect}"
+            );
+            let woken = "-s FAKE1 shell input keyevent KEYCODE_WAKEUP";
+            assert_eq!(
+                calls.iter().any(|c| c == woken),
+                open_on_connect,
+                "openOnConnect {open_on_connect}"
+            );
+        }
+    }
+
+    #[test]
+    fn open_on_connect_is_on_by_default() {
+        let (_d, cfg) = test_cfg("{}");
+        assert!(cfg.get().display.open_on_connect);
     }
 
     #[tokio::test]

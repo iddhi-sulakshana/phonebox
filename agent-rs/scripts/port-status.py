@@ -19,7 +19,7 @@ CS_TESTS = ROOT / "agent" / "PhoneBox.Agent.Tests"
 RUST = ROOT / "agent-rs"
 OUT = RUST / "PORTING.md"
 
-BASELINE = "C# baseline at 43800f9 on Linux (net10.0, hetzner-iddhi): 1590 test cases passed, 0 failed, 0 skipped."
+BASELINE = "C# baseline at bb72345 (0.9.23 + battery-care fix) on Linux (net10.0, hetzner-iddhi): 1623 test cases passed, 0 failed, 0 skipped."
 
 # Phase of each C# test file (see docs/superpowers/plans/2026-11-20-rust-agent-roadmap.md). Files not listed belong to
 # a later plan and are assigned when that plan is written.

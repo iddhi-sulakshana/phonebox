@@ -469,6 +469,8 @@ pub struct DisplayConfig {
     pub pin: bool,
     pub home_screen: bool,
     pub keep_awake: bool,
+    /// Over USB, wake the phone and open PhoneBox when it is plugged in (or adb reconnects); off: only the tunnel.
+    pub open_on_connect: bool,
     pub follow_computer_lock: bool,
     #[serde(skip_serializing_if = "skip_none")]
     pub home_page: Option<String>,
@@ -501,6 +503,7 @@ defaults!(DisplayConfig {
     pin: false,
     home_screen: false,
     keep_awake: true,
+    open_on_connect: true,
     follow_computer_lock: false,
     home_page: None,
     switch_countdown_sec: 3,
@@ -1175,6 +1178,7 @@ pub(crate) const KNOWN_FIELDS: &[&str] = &[
     "pin",
     "homeScreen",
     "keepAwake",
+    "openOnConnect",
     "followComputerLock",
     "homePage",
     "switchCountdownSec",
@@ -1285,6 +1289,7 @@ pub(crate) const VALUE_FIELDS: &[(&str, &str)] = &[
     ("idleDimMin", "System.Int32"),
     ("idleReturnSec", "System.Int32"),
     ("keepAwake", "System.Boolean"),
+    ("openOnConnect", "System.Boolean"),
     ("lat", "System.Double"),
     ("lon", "System.Double"),
     ("max", "System.Int32"),

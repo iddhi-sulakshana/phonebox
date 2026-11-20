@@ -6,7 +6,7 @@ The design is a full port in eight phases. One plan per phase: each produces wor
 and is written when its phase starts, against the code as it stands then. A phase is done when its exit check passes
 and `agent-rs/PORTING.md` shows no unported C# test in its scope.
 
-| Plan | Phase | Scope (C# sources at `43800f9`) | Exit check |
+| Plan | Phase | Scope (C# sources at `bb72345`, 0.9.23; plan 1 was written at `43800f9`, 0.9.22) | Exit check |
 |---|---|---|---|
 | 1 | Foundation and core | Fork, toolchains, CI, parity harness; `AppPaths`, `AgentEndpoint`, `FileLogger`, `Config`, `BrowserGuard`, `PhoneRegistry`, `WebViewDoctor`, `RequestTimings`, `PushStore`, `StateSignal`, `StateFrameCache`, `AdbReverse`, `UsbDoctor`; routes `/`, `/favicon.ico`, `/panel/*`, `/api/settings`, `/api/config`, `/api/info`, `/api/state`, `/api/stream`, `/api/latency`, `/api/restart` | Owner's phone shows the panel from the Rust agent over USB; phase-1 corpus passes on Linux, macOS, Windows |
 | 2 | System | `SystemMonitor`, `Unix/UnixSystem`, `Unix/AppleSmc`, `Gpus`, `WindowsGpu`, `PingMonitor`, `ProcessMonitor`, `Unix/UnixProc`, `BatteryMonitor` (+ Razer), `ListeningPorts`, `Lan` adapters; routes `/api/procs*`, `/api/batteries`, `/api/network/adapters` | `pc`, `ping` in `/api/state` match C# on the MacBook hardware run |
