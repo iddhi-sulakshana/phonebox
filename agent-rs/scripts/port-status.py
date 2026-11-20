@@ -38,6 +38,8 @@ PHASE_BY_METHOD: dict[str, int] = {
     "LanTests.TheWebhookKeyOpensOnlyWebhooks": 4,
     "LanTests.TokensAreComparedExactly": 4,
     "LanTests.VirtualAdaptersAreSkippedUnlessTheyCarryTheDefaultRoute": 2,
+    # StateSignal.MediaChanged compares media snapshots: it comes with the media monitor
+    "StateSignalTests.AMediaChangeThatMattersPokesButTheTickingPositionDoesNot": 3,
 }
 
 CLASS_RE = re.compile(r"\b(?:class|record)\s+([A-Z][A-Za-z0-9_]*)")

@@ -9,7 +9,13 @@ pub mod catalog;
 pub mod config;
 pub mod file_logger;
 pub mod icon_text;
+pub mod phone_registry;
+pub mod push_store;
+pub mod request_timings;
 pub mod stack_widgets;
+pub mod state_frame_cache;
+pub mod state_signal;
+pub mod webview_doctor;
 
 #[cfg(test)]
 mod tests {
