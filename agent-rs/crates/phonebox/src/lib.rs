@@ -3,6 +3,10 @@
 //! Each module ports the C# file of the same name from `agent/PhoneBox.Agent` at upstream commit 43800f9, which is
 //! the specification (see docs/superpowers/specs/2026-11-20-rust-agent-design.md).
 
+pub mod agent_endpoint;
+pub mod app_paths;
+pub mod file_logger;
+
 #[cfg(test)]
 mod tests {
     #[test]
