@@ -15,4 +15,6 @@ name = "PhoneBoxAgent"
 path = "src/main.rs"
 
 [dependencies]
+axum = "0.8"
 phonebox = { path = "../phonebox" }
+tokio = { version = "1", features = ["full"] }
