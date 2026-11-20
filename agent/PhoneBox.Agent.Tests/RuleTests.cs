@@ -303,6 +303,22 @@ public class ChargeGuardTests
         Assert.Null(ChargeGuard.Decide(C, At(65, false), Now, "off", Now - 60_000));
     }
 
+    // Shortcuts may switch the charger inside a rooted phone, which then stays plugged in while not charging.
+    private static readonly ChargeConfig Shortcuts = new() { Enabled = true, Min = 50, Max = 80, Method = "shortcuts" };
+
+    [Fact]
+    public void ShortcutsStartChargingAtTheBottomWhilePluggedIn()
+    {
+        Assert.Equal("on", ChargeGuard.Decide(Shortcuts, At(50, true), Now, "off", Now - 60_000));
+        Assert.Equal("on", ChargeGuard.Decide(Shortcuts, At(40, true), Now, null, 0));                   // after an agent restart
+        Assert.Null(ChargeGuard.Decide(Shortcuts, At(45, true), Now, "on", Now - 60_000));               // just switched: wait
+        Assert.Equal("on", ChargeGuard.Decide(Shortcuts, At(45, true), Now, "on", Now - 11 * 60_000));   // still low later: again
+        Assert.Null(ChargeGuard.Decide(Shortcuts, At(65, true), Now, "off", Now - 11 * 60_000));         // in between: hold
+    }
+
+    [Fact]
+    public void APlugIsNotSwitchedOnWhileThePhoneIsPluggedIn() => Assert.Null(ChargeGuard.Decide(C, At(40, true), Now, null, 0));
+
     [Fact]
     public void RepeatsASwitchThatDidNotTakeOnlyAfterAWhile()
     {

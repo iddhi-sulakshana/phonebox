@@ -26,6 +26,10 @@
   changes until you turn it off). Off, a phone that connects over USB, or reconnects after adb restarts, is left as it
   is instead of being woken with the panel brought to the front, for a phone that also runs app tests over adb (#291,
   [snackncode](https://github.com/snackncode)).
+- Battery care with two shortcuts switches charging back on at the lower limit even while the phone is plugged in.
+  On a rooted phone the shortcuts can turn its charger off and on (for example `adb shell su -c 'echo 0 > …'`), and the
+  phone then stays plugged in while not charging. Battery care waited for it to be unplugged, so a battery that ran
+  down while the computer was off stayed low once the cable had power again.
 
 ## 0.9.23 — 2026-11-20
 

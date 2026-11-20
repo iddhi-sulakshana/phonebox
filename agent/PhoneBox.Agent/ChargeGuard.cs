@@ -72,7 +72,9 @@ public sealed class ChargeGuard(ConfigStore config, HomeAssistant ha, PushStore 
         if (r is null || now - r.At is < 0 or > SilentMs) return last == "off" ? "on" : null; // lost the phone: never leave it unpowered
         var retry = now - lastAt > RetryMs;
         if (r.Level >= c.Max && r.Plugged && (last != "off" || retry)) return "off";
-        if (r.Level <= c.Min && !r.Plugged && (last != "on" || retry)) return "on";
+        // A plug cut at the source leaves the phone unplugged. Shortcuts may instead switch the charger inside a rooted
+        // phone, which stays plugged in while not charging, so for them "plugged" can't tell whether it charges.
+        if (r.Level <= c.Min && (!r.Plugged || c.Method == "shortcuts") && (last != "on" || retry)) return "on";
         return null;
     }
 
