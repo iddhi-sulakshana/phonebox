@@ -183,12 +183,22 @@ mod tests {
         assert_eq!(s.pc.snapshot(), serde_json::Value::Null);
         assert_eq!(s.rules.snapshot(), serde_json::json!([]));
         assert_eq!(
-            s.privacy.snapshot(),
-            serde_json::json!({"mic": false, "camera": false, "micApps": [], "cameraApps": []})
-        );
-        assert_eq!(
             s.work.snapshot(),
             serde_json::json!({"sessions": [], "github": null})
+        );
+    }
+
+    #[test]
+    fn privacy_is_unknown_on_macos_and_off_elsewhere_until_the_monitor_reads_it() {
+        // macOS: the C# PrivacyMonitor cannot detect mic and camera use without extra permissions and says "unknown"
+        let (mic, camera) = if cfg!(target_os = "macos") {
+            (serde_json::Value::Null, serde_json::Value::Null)
+        } else {
+            (serde_json::json!(false), serde_json::json!(false))
+        };
+        assert_eq!(
+            StateSources::phase1().privacy.snapshot(),
+            serde_json::json!({"mic": mic, "camera": camera, "micApps": [], "cameraApps": []})
         );
     }
 
