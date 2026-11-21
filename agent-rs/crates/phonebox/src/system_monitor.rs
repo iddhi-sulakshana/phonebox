@@ -368,6 +368,33 @@ static CORE_SENSOR: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new
     regex::Regex::new(r"(?i)^(?:CPU )?Core #\d+$").expect("CoreSensor")
 });
 
+/// The GPU from the ioreg text (`ParseAppleGpu`).
+pub fn parse_apple_gpu(ioreg: &str, total_memory_bytes: f64) -> Option<crate::gpus::GpuInfo> {
+    use std::sync::LazyLock;
+    static UTIL: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r#""Device Utilization %"\s*=\s*(\d+)"#).expect("util"));
+    static MODEL: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r#""model"\s*=\s*"([^"]+)""#).expect("model"));
+    static ALLOC: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r#""Alloc system memory"\s*=\s*(\d+)"#).expect("alloc"));
+    let util: f64 = UTIL.captures(ioreg)?[1].parse().ok()?; // no accelerator entry: nothing to show
+    Some(crate::gpus::GpuInfo {
+        name: MODEL
+            .captures(ioreg)
+            .map_or_else(|| "Apple GPU".to_string(), |m| m[1].to_string()),
+        util: Some(util),
+        vram_used: ALLOC
+            .captures(ioreg)
+            .and_then(|m| m[1].parse::<f64>().ok())
+            .map(|a| round_dotnet(a / GB, 1)),
+        vram_total: (total_memory_bytes > 0.0).then(|| round_dotnet(total_memory_bytes / GB, 1)),
+        vendor: Some("apple".into()),
+        source: Some("ioreg".into()),
+        integrated: true,
+        ..Default::default()
+    })
+}
+
 /// The CPU temperature from LibreHardwareMonitor's data.json (`FindCpuTemp`): the package (Intel) or Tctl/Tdie (AMD)
 /// reading when there is one; otherwise the hottest "CPU Core #n" / "Core #n" temperature under a CPU's own node.
 pub fn find_cpu_temp(root: &serde_json::Value) -> Option<f64> {
@@ -870,5 +897,53 @@ mod tests {
             assert_eq!(keys, ["name", "description", "auto"], "{a}");
             assert_ne!(a["name"], "lo");
         }
+    }
+
+    // AppleGpuTests: the macOS GPU comes from ioreg text: load, memory the GPU holds, the machine's RAM as total.
+    const SIXTEEN_GB: f64 = 16.0 * 1024.0 * 1024.0 * 1024.0;
+
+    #[test]
+    fn load_and_memory_are_read_from_the_accelerator_entry() {
+        let g = parse_apple_gpu(
+            r#"+-o AGXAcceleratorG14X  <class AGXAcceleratorG14X>
+  {
+    "model" = "Apple M2 Pro"
+    "PerformanceStatistics" = {"Device Utilization %"=37,"Alloc system memory"=2147483648,"Renderer Utilization %"=30}
+  }"#,
+            SIXTEEN_GB,
+        )
+        .unwrap();
+        assert_eq!(g.name, "Apple M2 Pro");
+        assert_eq!(g.util, Some(37.0));
+        assert_eq!(g.vram_used, Some(2.0));
+        assert_eq!(g.vram_total, Some(16.0));
+        assert_eq!(g.temp, None); // no sensors: the panel must not show 0 °C
+        assert_eq!(g.power, None);
+    }
+
+    #[test]
+    fn spaces_around_the_equals_sign_are_fine() {
+        let g = parse_apple_gpu(
+            "\"Device Utilization %\" = 5\n\"Alloc system memory\" = 1073741824",
+            SIXTEEN_GB,
+        )
+        .unwrap();
+        assert_eq!(g.util, Some(5.0));
+        assert_eq!(g.vram_used, Some(1.0));
+        assert_eq!(g.name, "Apple GPU");
+    }
+
+    #[test]
+    fn without_an_accelerator_there_is_no_gpu() {
+        for text in ["", "nothing useful here"] {
+            assert_eq!(parse_apple_gpu(text, SIXTEEN_GB), None);
+        }
+    }
+
+    #[test]
+    fn without_a_memory_figure_the_memory_stays_empty() {
+        let g = parse_apple_gpu("\"Device Utilization %\"=9", 0.0).unwrap();
+        assert_eq!(g.util, Some(9.0));
+        assert_eq!((g.vram_used, g.vram_total), (None, None));
     }
 }
