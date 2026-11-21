@@ -319,7 +319,7 @@ impl AppState {
             apps: crate::app_catalog::AppCatalog::new(cfg.clone()),
             dictation: crate::dictation::Dictation::new(cfg.clone()),
             media: crate::media_monitor::MediaMonitor::new(),
-            deck: Arc::new(crate::media_monitor::NoDeck),
+            deck: Arc::new(crate::media_monitor::NoDeck::default()),
             spectrum: crate::spectrum_analyzer::SpectrumAnalyzer::new(cfg.clone()),
             icons: Arc::new(crate::shortcut_icon_uploads::ShortcutIconUploads::new(
                 icons_dir,

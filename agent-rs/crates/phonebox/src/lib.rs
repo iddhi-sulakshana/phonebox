@@ -18,6 +18,7 @@ pub mod claude_transcript;
 pub mod codex_bar;
 pub mod command_runner;
 pub mod config;
+pub mod control_deck;
 pub mod der;
 pub mod dictation;
 pub mod docker_monitor;

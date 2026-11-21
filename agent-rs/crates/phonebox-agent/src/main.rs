@@ -75,7 +75,7 @@ fn main() -> ExitCode {
     let audio = phonebox::audio_control::AudioControl::new();
     let media = phonebox::media_monitor::MediaMonitor::new();
     let deck: Arc<dyn phonebox::media_monitor::MediaDeck> =
-        Arc::new(phonebox::media_monitor::NoDeck);
+        Arc::new(phonebox::media_monitor::NoDeck::default());
     // the "work" frame, the process list and the permission hook read the same session monitor
     let sessions =
         phonebox::session_monitor::SessionMonitor::new(Some(cfg.clone()), app_paths::home());

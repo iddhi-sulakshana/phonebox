@@ -65,29 +65,30 @@ async fn media_action(
         return bad_request();
     };
     let (media, deck) = (s.media.clone(), s.deck.clone());
-    let outcome = tokio::task::spawn_blocking(move || {
-        let mut outcome = (false, None);
-        deck.run_with_media_focus(&mut || {
-            let system = media.snapshot();
-            if let Some(handled) = deck.try_control_radio(&action, system.as_ref()) {
-                outcome = (handled, deck.effective_media(media.snapshot()));
-                return;
-            }
-            let starting = action == "next"
-                || action == "prev"
-                || (action == "playpause" && system.as_ref().map(|m| m.playing) != Some(true));
-            let ok = media.control(&action, ms);
-            if ok && starting {
-                deck.stop_all_radios();
-            }
-            outcome = (ok, deck.effective_media(media.snapshot()));
-        });
-        outcome
-    })
-    .await;
+    // the deck's media focus, held across the awaits: a radio start and this command never both win
+    let gate = deck.media_focus();
+    let focus = gate.lock().await;
+    let system = media.snapshot();
+    let outcome = if let Some(handled) = deck.try_control_radio(&action, system.as_ref()).await {
+        (handled, deck.effective_media(media.snapshot()))
+    } else {
+        let starting = action == "next"
+            || action == "prev"
+            || (action == "playpause" && system.as_ref().map(|m| m.playing) != Some(true));
+        let control = {
+            let (media, action) = (media.clone(), action.clone());
+            tokio::task::spawn_blocking(move || media.control(&action, ms))
+        };
+        let ok = control.await.unwrap_or(false);
+        if ok && starting {
+            deck.stop_all_radios();
+        }
+        (ok, deck.effective_media(media.snapshot()))
+    };
+    drop(focus);
     crate::state_signal::poke();
     match outcome {
-        Ok((true, now)) => json_response(StatusCode::OK, &json!({ "ok": true, "media": now })),
+        (true, now) => json_response(StatusCode::OK, &json!({ "ok": true, "media": now })),
         _ => bad_request(),
     }
 }
@@ -1547,6 +1548,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_media_command_waits_for_the_decks_media_focus() {
+        use crate::server::guard::tests::{send, test_state};
+        let (_d, s) = test_state();
+        let app = crate::server::build_router(s.clone());
+        let held = s.deck.media_focus().lock_owned().await;
+        let mut call = Box::pin(send(
+            &app,
+            "POST",
+            "/api/media/bogus",
+            &[("host", "127.0.0.1:8765")],
+        ));
+        let early = tokio::time::timeout(std::time::Duration::from_millis(200), &mut call).await;
+        assert!(
+            early.is_err(),
+            "the command did not wait for the media focus"
+        );
+        drop(held);
+        let res = tokio::time::timeout(std::time::Duration::from_secs(5), call)
+            .await
+            .unwrap();
+        assert_eq!(res.status(), 400); // "bogus" is no media action
+    }
+
+    #[tokio::test]
     async fn without_a_cover_the_art_is_404_and_the_state_has_no_media() {
         let (_dir, state) = test_state();
         let media = state.media.clone();
@@ -1560,7 +1585,7 @@ mod tests {
                 playing: Mutex::new(true),
                 calls: Mutex::new(vec![]),
             }),
-            deck: Arc::new(crate::media_monitor::NoDeck),
+            deck: Arc::new(crate::media_monitor::NoDeck::default()),
         };
         let v = crate::state::StateSource::snapshot(&source);
         assert_eq!(v["app"], "Spotify");

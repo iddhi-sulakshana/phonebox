@@ -1,6 +1,7 @@
 //! The media data shared by the Windows and the Linux / macOS monitors (`Models.cs`), the deck seam the media routes
 //! go through (`ControlDeck`'s radio stations, plan 6), and the Windows monitor (`MediaMonitor.cs`: the GSMTC session).
 
+use std::sync::Arc;
 use std::time::Instant;
 
 /// What is playing. `sampled_at` dates `pos_ms`; the JSON adds `ageMs`, how old the position is when it is written.
@@ -84,26 +85,48 @@ pub struct AlbumArt {
 pub trait MediaDeck: Send + Sync {
     /// The media the phone sees: a radio station first, else the system's.
     fn effective_media(&self, system: Option<MediaSnapshot>) -> Option<MediaSnapshot>;
-    /// Inside [`MediaDeck::run_with_media_focus`]: Some(handled) when a station is the current media.
-    fn try_control_radio(&self, action: &str, system: Option<&MediaSnapshot>) -> Option<bool>;
+    /// Inside the media focus: Some(handled) when a station is the current media.
+    fn try_control_radio<'a>(
+        &'a self,
+        action: &'a str,
+        system: Option<&'a MediaSnapshot>,
+    ) -> futures_util::future::BoxFuture<'a, Option<bool>>;
     fn stop_all_radios(&self);
-    /// Runs `work` holding the deck's media focus (one media change at a time).
-    fn run_with_media_focus(&self, work: &mut dyn FnMut());
+    /// The deck's media focus (`_focusGate`): one media change at a time — radio starts and stops, the deck's media
+    /// commands, `/api/media` and Spotify play — held across their awaits.
+    fn media_focus(&self) -> Arc<tokio::sync::Mutex<()>>;
 }
 
-/// No control deck (until plan 6): the system's media as it is.
-pub struct NoDeck;
+/// Runs `work` holding the deck's media focus.
+pub async fn with_media_focus<T>(
+    deck: &dyn MediaDeck,
+    work: impl std::future::Future<Output = T>,
+) -> T {
+    let gate = deck.media_focus();
+    let _focus = gate.lock().await;
+    work.await
+}
+
+/// No control deck (until plan 6's deck replaces it): the system's media as it is.
+#[derive(Default)]
+pub struct NoDeck {
+    focus: Arc<tokio::sync::Mutex<()>>,
+}
 
 impl MediaDeck for NoDeck {
     fn effective_media(&self, system: Option<MediaSnapshot>) -> Option<MediaSnapshot> {
         system
     }
-    fn try_control_radio(&self, _action: &str, _system: Option<&MediaSnapshot>) -> Option<bool> {
-        None
+    fn try_control_radio<'a>(
+        &'a self,
+        _action: &'a str,
+        _system: Option<&'a MediaSnapshot>,
+    ) -> futures_util::future::BoxFuture<'a, Option<bool>> {
+        Box::pin(async { None })
     }
     fn stop_all_radios(&self) {}
-    fn run_with_media_focus(&self, work: &mut dyn FnMut()) {
-        work()
+    fn media_focus(&self) -> Arc<tokio::sync::Mutex<()>> {
+        self.focus.clone()
     }
 }
 
@@ -582,13 +605,14 @@ mod tests {
         assert!(v["ageMs"].as_i64().unwrap() >= 1500);
     }
 
-    #[test]
-    fn no_deck_passes_the_system_media_through() {
+    #[tokio::test]
+    async fn no_deck_passes_the_system_media_through() {
+        let deck = NoDeck::default();
         let s = MediaSnapshot::new("VLC", "x", "", "", false, 0, 0, 0, false);
-        assert_eq!(NoDeck.effective_media(Some(s.clone())), Some(s.clone()));
-        assert_eq!(NoDeck.try_control_radio("next", Some(&s)), None);
-        let mut ran = false;
-        NoDeck.run_with_media_focus(&mut || ran = true);
-        assert!(ran);
+        assert_eq!(deck.effective_media(Some(s.clone())), Some(s.clone()));
+        assert_eq!(deck.try_control_radio("next", Some(&s)).await, None);
+        assert!(with_media_focus(&deck, async { true }).await);
+        // one gate: media changes take turns
+        assert!(Arc::ptr_eq(&deck.media_focus(), &deck.media_focus()));
     }
 }
