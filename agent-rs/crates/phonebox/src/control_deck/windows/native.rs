@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use futures_util::future::BoxFuture;
 
 use super::super::models::*;
-use super::{audio, media, playback};
+use super::{audio, hardware, media, playback, service_state_name};
 use crate::media_monitor::SystemMedia;
 
 pub struct WindowsDeckNative {
@@ -16,6 +16,7 @@ pub struct WindowsDeckNative {
     gate: Mutex<()>,
     sessions: Arc<media::Sessions>,
     playback: Arc<playback::Playback>,
+    hardware: Arc<hardware::Hardware>,
 }
 
 impl WindowsDeckNative {
@@ -26,6 +27,7 @@ impl WindowsDeckNative {
             gate: Mutex::new(()),
             sessions: Arc::default(),
             playback: Arc::default(),
+            hardware: Arc::default(),
         }
     }
 
@@ -49,6 +51,7 @@ impl DeckNative for WindowsDeckNative {
                 }
                 .into(),
             ),
+            "service" => Some(service_state_name(hardware::service_state(&action.target)).into()),
             _ => None,
         }
     }
@@ -79,25 +82,30 @@ impl DeckNative for WindowsDeckNative {
     }
 
     fn monitors(&self) -> Vec<DeckMonitor> {
-        vec![]
+        self.hardware.monitors()
     }
 
-    fn brightness(&self, _: &str, _: i32) -> bool {
-        false
+    fn brightness(&self, id: &str, value: i32) -> bool {
+        self.hardware.brightness(id, value)
     }
 
     fn power_plans(&self) -> Vec<DeckItem> {
-        vec![]
+        self.hardware.power_plans()
     }
 
     fn platform_action<'a>(
         &'a self,
-        _: &'a str,
-        _: &'a str,
-        _: Option<&'a str>,
-        _: i32,
+        kind: &'a str,
+        target: &'a str,
+        argument: Option<&'a str>,
+        value: i32,
     ) -> BoxFuture<'a, bool> {
-        Box::pin(async { false })
+        Box::pin(self.hardware.clone().act(
+            kind.to_string(),
+            target.to_string(),
+            argument.map(str::to_string),
+            value,
+        ))
     }
 
     fn media(&self) -> BoxFuture<'_, Result<Vec<DeckMedia>, String>> {

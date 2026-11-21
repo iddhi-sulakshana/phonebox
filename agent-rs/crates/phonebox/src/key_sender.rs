@@ -318,7 +318,7 @@ impl Drop for MouseRecorder {
 }
 
 #[cfg(windows)]
-pub use os::tap;
+pub use os::{nudge_input, tap};
 pub use os::{send_combo, try_type_text};
 
 // ---------------------------------------------------------------- Windows
@@ -474,8 +474,7 @@ mod os {
     }
 
     /// A zero-pixel mouse move: this process becomes the one that received the last input, which Windows requires
-    /// before it lets a process bring a window to the front (used by plan 6's app console).
-    #[allow(dead_code)]
+    /// before it lets a process bring a window to the front (the deck's focus action).
     pub fn nudge_input() -> bool {
         send(&[mouse(0, 0, 0, MOUSEEVENTF_MOVE)])
     }
