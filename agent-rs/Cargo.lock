@@ -1061,7 +1061,11 @@ dependencies = [
  "futures-util",
  "getrandom 0.3.4",
  "hmac",
+ "http",
  "http-body-util",
+ "hyper",
+ "hyper-rustls",
+ "hyper-util",
  "indexmap",
  "libc",
  "p256",
@@ -1083,6 +1087,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-tungstenite",
  "tower",
+ "webpki-roots",
  "windows",
 ]
 

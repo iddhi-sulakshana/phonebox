@@ -46,6 +46,31 @@ impl Node {
         }
     }
 
+    pub fn is_object(&self) -> bool {
+        matches!(self, Node::Object(_))
+    }
+
+    /// `Str`: a member's text when it is a string.
+    pub fn text(&self, key: &str) -> Option<&str> {
+        self.get(key).and_then(Node::as_str)
+    }
+
+    /// `Num`: a member that is a finite number.
+    pub fn num(&self, key: &str) -> Option<f64> {
+        match self.get(key)? {
+            Node::Number(text) => text.parse::<f64>().ok().filter(|n| n.is_finite()),
+            _ => None,
+        }
+    }
+
+    /// `Long` (`TryGetInt64`): a member that is a whole number in range, written without a fraction or an exponent.
+    pub fn long(&self, key: &str) -> Option<i64> {
+        match self.get(key)? {
+            Node::Number(text) => text.parse().ok(),
+            _ => None,
+        }
+    }
+
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Node::String(s) => Some(s),

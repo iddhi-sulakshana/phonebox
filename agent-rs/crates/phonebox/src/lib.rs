@@ -41,6 +41,7 @@ pub mod pkcs12;
 pub mod png;
 pub mod process_monitor;
 pub mod push_store;
+pub mod quota;
 pub mod request_timings;
 pub mod server;
 pub mod session_monitor;
