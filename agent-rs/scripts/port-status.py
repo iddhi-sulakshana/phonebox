@@ -30,6 +30,10 @@ PHASE_BY_FILE = {
     "RequestTimingsTests": 1, "StateFrameCacheTests": 1, "StateSignalTests": 1, "PushCapacityTests": 1,
     "PushInputTests": 1, "PushShutdownTests": 1, "PushVersionTests": 1, "AdbReverseTests": 1,
     "AdbUnreachablePhoneTests": 1,
+    "GpuSourceTests": 2, "GpuIntegratedMergeTests": 2, "AppleGpuTests": 2, "CpuTempTests": 2,
+    "CpuTempMalformedTests": 2, "AppleSmcTests": 2, "BatteryTests": 2, "BatteryParsingTests": 2,
+    "ListeningPortsTests": 2, "PingMonitorTests": 2, "NetworkAdapterTests": 2, "NetworkRatesTests": 2, "ShTests": 2,
+    "DrmUsageTests": 2,
 }
 # Files that mix phases: the phase of single methods ("Class.Method"); the rest of such a file stays unassigned.
 PHASE_BY_METHOD: dict[str, int] = {
@@ -51,11 +55,16 @@ PHASE_BY_METHOD: dict[str, int] = {
     "UsbDoctorTests.ConnectedWithoutAdbAsksForDebugging": 1,
     "UsbDoctorTests.StaysQuiet": 1,
     "UsbDoctorTests.NoReportNoDiagnosis": 1,
+    # MonitorAuditTests.cs spans several monitors; these two are ProcessMonitor's (the rest: plans 5 and 6)
+    "MonitorAuditTests.ProcessDetailToleratesDuplicateSessionPidsAndLocksAgentProcess": 2,
+    "MonitorAuditTests.ColdProcessIconDoesNotCacheNullAndShortenArgsHandlesTabSeparators": 2,
     # StateSignal.MediaChanged compares media snapshots: it comes with the media monitor
     "StateSignalTests.AMediaChangeThatMattersPokesButTheTickingPositionDoesNot": 3,
 }
 
-CLASS_RE = re.compile(r"\b(?:class|record)\s+([A-Z][A-Za-z0-9_]*)")
+# xUnit test classes are public; private helpers (Fixture, Handler, FakeRun…) and text such as "<class AGX…>" inside a
+# string must not take over the methods that follow them
+CLASS_RE = re.compile(r"^\s*public\s+(?:(?:sealed|static|partial|abstract)\s+)*(?:class|record)\s+([A-Z][A-Za-z0-9_]*)")
 ATTR_RE = re.compile(r"^\s*\[(Fact|Theory)\b")
 METHOD_RE = re.compile(r"\b(?:void|Task|ValueTask)\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 RUST_TEST_ATTR_RE = re.compile(r"^\s*#\[(?:test|tokio::test\b[^\]]*)\]")

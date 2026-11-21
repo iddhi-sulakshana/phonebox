@@ -41,16 +41,16 @@ C# test methods: 898 · ported or ruled out: 108 · to do: 790
 | `AntigravityTests.PlanFailureDoesNotDiscardMeasuredSummary` |  | `plan_failure_does_not_discard_measured_summary` | todo |
 | `AntigravityTests.CancelledReadStopsWithoutPublishingHealthyData` |  | `cancelled_read_stops_without_publishing_healthy_data` | todo |
 | `AntigravityTests.MissingMeasurementsDoNotProduceAHealthyProvider` |  | `missing_measurements_do_not_produce_a_healthy_provider` | todo |
-| `Handler.NestedRemainingFractionIsMeasuredInsteadOfReportedAsUnused` |  | `nested_remaining_fraction_is_measured_instead_of_reported_as_unused` | todo |
-| `Handler.UnknownOrInvalidMeasurementsAreSkipped` |  | `unknown_or_invalid_measurements_are_skipped` | todo |
-| `Handler.EndpointUsesTheCorrectPortAndMatchingToken` |  | `endpoint_uses_the_correct_port_and_matching_token` | todo |
-| `Handler.InvalidPortsAreNotEndpoints` |  | `invalid_ports_are_not_endpoints` | todo |
-| `Handler.ParseEndpointFromCommandLine_ExtractsPortAndToken` |  | `parse_endpoint_from_command_line_extracts_port_and_token` | todo |
-| `Handler.ParseEndpointFromCommandLine_Invalid_ReturnsNull` |  | `parse_endpoint_from_command_line_invalid_returns_null` | todo |
-| `Handler.ParseAntigravityLimits_MultiGroup_OrdersSessionBeforeWeekly` |  | `parse_antigravity_limits_multi_group_orders_session_before_weekly` | todo |
-| `Handler.ParseAntigravityLimits_SingleGroup_UsesSimpleLabels` |  | `parse_antigravity_limits_single_group_uses_simple_labels` | todo |
-| `Handler.ParseAntigravityLimits_MalformedOrEmpty_ReturnsEmptyList` |  | `parse_antigravity_limits_malformed_or_empty_returns_empty_list` | todo |
-| `Handler.ParseAntigravityPlan_ExtractsPlanName_FallsBackToUserTier` |  | `parse_antigravity_plan_extracts_plan_name_falls_back_to_user_tier` | todo |
+| `AntigravityTests.NestedRemainingFractionIsMeasuredInsteadOfReportedAsUnused` |  | `nested_remaining_fraction_is_measured_instead_of_reported_as_unused` | todo |
+| `AntigravityTests.UnknownOrInvalidMeasurementsAreSkipped` |  | `unknown_or_invalid_measurements_are_skipped` | todo |
+| `AntigravityTests.EndpointUsesTheCorrectPortAndMatchingToken` |  | `endpoint_uses_the_correct_port_and_matching_token` | todo |
+| `AntigravityTests.InvalidPortsAreNotEndpoints` |  | `invalid_ports_are_not_endpoints` | todo |
+| `AntigravityTests.ParseEndpointFromCommandLine_ExtractsPortAndToken` |  | `parse_endpoint_from_command_line_extracts_port_and_token` | todo |
+| `AntigravityTests.ParseEndpointFromCommandLine_Invalid_ReturnsNull` |  | `parse_endpoint_from_command_line_invalid_returns_null` | todo |
+| `AntigravityTests.ParseAntigravityLimits_MultiGroup_OrdersSessionBeforeWeekly` |  | `parse_antigravity_limits_multi_group_orders_session_before_weekly` | todo |
+| `AntigravityTests.ParseAntigravityLimits_SingleGroup_UsesSimpleLabels` |  | `parse_antigravity_limits_single_group_uses_simple_labels` | todo |
+| `AntigravityTests.ParseAntigravityLimits_MalformedOrEmpty_ReturnsEmptyList` |  | `parse_antigravity_limits_malformed_or_empty_returns_empty_list` | todo |
+| `AntigravityTests.ParseAntigravityPlan_ExtractsPlanName_FallsBackToUserTier` |  | `parse_antigravity_plan_extracts_plan_name_falls_back_to_user_tier` | todo |
 | `AppCatalogTests.HidingThePageWithTheWidgetTurnsOpeningOff` |  | `hiding_the_page_with_the_widget_turns_opening_off` | todo |
 | `AppCatalogTests.ConcurrentRequestsConvertAnIconOnce` |  | `concurrent_requests_convert_an_icon_once` | todo |
 | `AppCatalogTests.AFailedConversionIsRetriedAfterItExpires` |  | `a_failed_conversion_is_retried_after_it_expires` | todo |
@@ -88,21 +88,21 @@ C# test methods: 898 · ported or ruled out: 108 · to do: 790
 | `AppearanceTests.ImportedAppearanceValuesAreBoundedAndOnlyKnownStylesAreAccepted` |  | `imported_appearance_values_are_bounded_and_only_known_styles_are_accepted` | todo |
 | `AppearanceTests.DuplicatedWidgetsHaveIndependentAppearance` |  | `duplicated_widgets_have_independent_appearance` | todo |
 | `AppearanceTests.InvalidAppearanceTypesDoNotOverwriteSettings` |  | `invalid_appearance_types_do_not_overwrite_settings` | todo |
-| `AppleGpuTests.LoadAndMemoryAreReadFromTheAcceleratorEntry` |  | `load_and_memory_are_read_from_the_accelerator_entry` | todo |
-| `AGXAcceleratorG14X.SpacesAroundTheEqualsSignAreFine` |  | `spaces_around_the_equals_sign_are_fine` | todo |
-| `AGXAcceleratorG14X.WithoutAnAcceleratorThereIsNoGpu` |  | `without_an_accelerator_there_is_no_gpu` | todo |
-| `AGXAcceleratorG14X.WithoutAMemoryFigureTheMemoryStaysEmpty` |  | `without_a_memory_figure_the_memory_stays_empty` | todo |
-| `AppleSmcTests.CpuKeys` |  | `cpu_keys` | todo |
-| `AppleSmcTests.GpuKeys` |  | `gpu_keys` | todo |
-| `AppleSmcTests.TheAverageLeavesOutSensorsThatAreOffOrNonsense` |  | `the_average_leaves_out_sensors_that_are_off_or_nonsense` | todo |
-| `AppleSmcTests.WithoutAValidReadingThereIsNoTemperature` |  | `without_a_valid_reading_there_is_no_temperature` | todo |
-| `AppleSmcTests.KeyNamesRoundTrip` |  | `key_names_round_trip` | todo |
-| `AppleSmcTests.FourCcIsBigEndian` |  | `four_cc_is_big_endian` | todo |
-| `AppleSmcTests.OnAnAppleSiliconMacTheReadingsArePlausible` |  | `on_an_apple_silicon_mac_the_readings_are_plausible` | todo |
-| `Clock.AnAlreadyExpiredRequestIsNotOfferedToThePhone` |  | `an_already_expired_request_is_not_offered_to_the_phone` | todo |
-| `Clock.ADecisionMustArriveStrictlyBeforeTheRequestExpires` |  | `a_decision_must_arrive_strictly_before_the_request_expires` | todo |
-| `StallingLog.ARequestEndsAtItsExpiryAndIsNotListedAfterIt` |  | `a_request_ends_at_its_expiry_and_is_not_listed_after_it` | todo |
-| `StallingLog.ADecisionIsAcceptedOnlyIfTheRequestReturnsIt` |  | `a_decision_is_accepted_only_if_the_request_returns_it` | todo |
+| `AppleGpuTests.LoadAndMemoryAreReadFromTheAcceleratorEntry` | 2 | `load_and_memory_are_read_from_the_accelerator_entry` | todo |
+| `AppleGpuTests.SpacesAroundTheEqualsSignAreFine` | 2 | `spaces_around_the_equals_sign_are_fine` | todo |
+| `AppleGpuTests.WithoutAnAcceleratorThereIsNoGpu` | 2 | `without_an_accelerator_there_is_no_gpu` | todo |
+| `AppleGpuTests.WithoutAMemoryFigureTheMemoryStaysEmpty` | 2 | `without_a_memory_figure_the_memory_stays_empty` | todo |
+| `AppleSmcTests.CpuKeys` | 2 | `cpu_keys` | todo |
+| `AppleSmcTests.GpuKeys` | 2 | `gpu_keys` | todo |
+| `AppleSmcTests.TheAverageLeavesOutSensorsThatAreOffOrNonsense` | 2 | `the_average_leaves_out_sensors_that_are_off_or_nonsense` | todo |
+| `AppleSmcTests.WithoutAValidReadingThereIsNoTemperature` | 2 | `without_a_valid_reading_there_is_no_temperature` | todo |
+| `AppleSmcTests.KeyNamesRoundTrip` | 2 | `key_names_round_trip` | todo |
+| `AppleSmcTests.FourCcIsBigEndian` | 2 | `four_cc_is_big_endian` | todo |
+| `AppleSmcTests.OnAnAppleSiliconMacTheReadingsArePlausible` | 2 | `on_an_apple_silicon_mac_the_readings_are_plausible` | todo |
+| `ApprovalExpiryTests.AnAlreadyExpiredRequestIsNotOfferedToThePhone` |  | `an_already_expired_request_is_not_offered_to_the_phone` | todo |
+| `ApprovalExpiryTests.ADecisionMustArriveStrictlyBeforeTheRequestExpires` |  | `a_decision_must_arrive_strictly_before_the_request_expires` | todo |
+| `ApprovalOutcomeTests.ARequestEndsAtItsExpiryAndIsNotListedAfterIt` |  | `a_request_ends_at_its_expiry_and_is_not_listed_after_it` | todo |
+| `ApprovalOutcomeTests.ADecisionIsAcceptedOnlyIfTheRequestReturnsIt` |  | `a_decision_is_accepted_only_if_the_request_returns_it` | todo |
 | `AudioCacheTests.SnapshotReturnsAtOnceAndFillsInTheBackground` |  | `snapshot_returns_at_once_and_fills_in_the_background` | todo |
 | `AudioCacheTests.AnOlderBackgroundReadCannotReplaceANewerCurrentReading` |  | `an_older_background_read_cannot_replace_a_newer_current_reading` | todo |
 | `AudioSetVolumeTests.ASuccessfulSetShowsTheNewVolumeAtOnce` |  | `a_successful_set_shows_the_new_volume_at_once` | todo |
@@ -131,20 +131,20 @@ C# test methods: 898 · ported or ruled out: 108 · to do: 790
 | `AuditRegressionTests.APushedOffValueDoesNotTurnAPushRuleOnInAnyCase` |  | `a_pushed_off_value_does_not_turn_a_push_rule_on_in_any_case` | todo |
 | `AuditRegressionTests.APushRuleJudgesAJsonPayloadByItsValue` |  | `a_push_rule_judges_a_json_payload_by_its_value` | todo |
 | `AuditRegressionTests.ABackgroundProcessLeftByTheCommandDoesNotBlockTheWidget` |  | `a_background_process_left_by_the_command_does_not_block_the_widget` | todo |
-| `BatteryParsingTests.MacBluetoothKeepsValidLevelsAndDevicesAroundMalformedEntries` |  | `mac_bluetooth_keeps_valid_levels_and_devices_around_malformed_entries` | todo |
-| `BatteryTests.ActiveBatteryRefreshBalancesResponsivenessAndReceiverWakeups` |  | `active_battery_refresh_balances_responsiveness_and_receiver_wakeups` | todo |
-| `BatteryTests.MacBatteriesStayAtOnceAMinuteBecauseSystemProfilerIsSlow` |  | `mac_batteries_stay_at_once_a_minute_because_system_profiler_is_slow` | todo |
-| `BatteryTests.DisconnectedWindowsDevicesAreExcluded` |  | `disconnected_windows_devices_are_excluded` | todo |
-| `BatteryTests.KindFromName` |  | `kind_from_name` | todo |
-| `BatteryTests.BuildRazerReport_ConstructsValidBatteryAndChargingRequests` |  | `build_razer_report_constructs_valid_battery_and_charging_requests` | todo |
-| `BatteryTests.ParseRazerBattery_And_Charging_FromCapturedDeviceResponses` |  | `parse_razer_battery_and_charging_from_captured_device_responses` | todo |
-| `BatteryTests.RazerPaProtocol_BuildsFramesAndParsesCapturedHeadsetResponses` |  | `razer_pa_protocol_builds_frames_and_parses_captured_headset_responses` | todo |
-| `BatteryTests.BarracudaPaProtocol_UsesItsOwnOffsetsAndParsesRepliesWithOrWithoutReportId` |  | `barracuda_pa_protocol_uses_its_own_offsets_and_parses_replies_with_or_without_report_id` | todo |
-| `BatteryTests.RazerKindFromPid_MapsKnownDevicesAndFallsBackToName` |  | `razer_kind_from_pid_maps_known_devices_and_falls_back_to_name` | todo |
-| `BatteryTests.MergeRazerIntoBluetooth_PreservesBluetoothDuplicatesAndCollapsesCableWithDongle` |  | `merge_razer_into_bluetooth_preserves_bluetooth_duplicates_and_collapses_cable_with_dongle` | todo |
-| `BatteryTests.QueryRazerFeatureDevice_EverySentFrameHasReadBitSet` |  | `query_razer_feature_device_every_sent_frame_has_read_bit_set` | todo |
-| `BatteryTests.QueryRazerFeatureDevice_NeverSendsToUnknownOrHeadsetOnlyPids` |  | `query_razer_feature_device_never_sends_to_unknown_or_headset_only_pids` | todo |
-| `BatteryTests.QueryRazerFeatureDevice_StopsOnOkAndUsesPreferredTxFirst` |  | `query_razer_feature_device_stops_on_ok_and_uses_preferred_tx_first` | todo |
+| `BatteryParsingTests.MacBluetoothKeepsValidLevelsAndDevicesAroundMalformedEntries` | 2 | `mac_bluetooth_keeps_valid_levels_and_devices_around_malformed_entries` | todo |
+| `BatteryTests.ActiveBatteryRefreshBalancesResponsivenessAndReceiverWakeups` | 2 | `active_battery_refresh_balances_responsiveness_and_receiver_wakeups` | todo |
+| `BatteryTests.MacBatteriesStayAtOnceAMinuteBecauseSystemProfilerIsSlow` | 2 | `mac_batteries_stay_at_once_a_minute_because_system_profiler_is_slow` | todo |
+| `BatteryTests.DisconnectedWindowsDevicesAreExcluded` | 2 | `disconnected_windows_devices_are_excluded` | todo |
+| `BatteryTests.KindFromName` | 2 | `kind_from_name` | todo |
+| `BatteryTests.BuildRazerReport_ConstructsValidBatteryAndChargingRequests` | 2 | `build_razer_report_constructs_valid_battery_and_charging_requests` | todo |
+| `BatteryTests.ParseRazerBattery_And_Charging_FromCapturedDeviceResponses` | 2 | `parse_razer_battery_and_charging_from_captured_device_responses` | todo |
+| `BatteryTests.RazerPaProtocol_BuildsFramesAndParsesCapturedHeadsetResponses` | 2 | `razer_pa_protocol_builds_frames_and_parses_captured_headset_responses` | todo |
+| `BatteryTests.BarracudaPaProtocol_UsesItsOwnOffsetsAndParsesRepliesWithOrWithoutReportId` | 2 | `barracuda_pa_protocol_uses_its_own_offsets_and_parses_replies_with_or_without_report_id` | todo |
+| `BatteryTests.RazerKindFromPid_MapsKnownDevicesAndFallsBackToName` | 2 | `razer_kind_from_pid_maps_known_devices_and_falls_back_to_name` | todo |
+| `BatteryTests.MergeRazerIntoBluetooth_PreservesBluetoothDuplicatesAndCollapsesCableWithDongle` | 2 | `merge_razer_into_bluetooth_preserves_bluetooth_duplicates_and_collapses_cable_with_dongle` | todo |
+| `BatteryTests.QueryRazerFeatureDevice_EverySentFrameHasReadBitSet` | 2 | `query_razer_feature_device_every_sent_frame_has_read_bit_set` | todo |
+| `BatteryTests.QueryRazerFeatureDevice_NeverSendsToUnknownOrHeadsetOnlyPids` | 2 | `query_razer_feature_device_never_sends_to_unknown_or_headset_only_pids` | todo |
+| `BatteryTests.QueryRazerFeatureDevice_StopsOnOkAndUsesPreferredTxFirst` | 2 | `query_razer_feature_device_stops_on_ok_and_uses_preferred_tx_first` | todo |
 | `CalendarOverlapTests.RecurrenceFastForwardRetainsEveryOverlappingOccurrence` |  | `recurrence_fast_forward_retains_every_overlapping_occurrence` | todo |
 | `CalendarOverlapTests.ALongAllDayOccurrenceStartingBeforeTheWindowIsKept` |  | `a_long_all_day_occurrence_starting_before_the_window_is_kept` | todo |
 | `CameraFeedsTests.BackToBackJpegsAreSplitEvenAcrossReads` |  | `back_to_back_jpegs_are_split_even_across_reads` | todo |
@@ -157,17 +157,17 @@ C# test methods: 898 · ported or ruled out: 108 · to do: 790
 | `CameraFeedsTests.TheFrameRateStaysWithinItsRange` |  | `the_frame_rate_stays_within_its_range` | todo |
 | `CameraFeedsTests.APictureAWidgetAlreadyHasIsNotSentAgain` |  | `a_picture_a_widget_already_has_is_not_sent_again` | todo |
 | `CameraFeedsTests.SavingRefusesAnythingButRtspAndKeepsTheCameraId` |  | `saving_refuses_anything_but_rtsp_and_keeps_the_camera_id` | todo |
-| `FakeRun.AQueuedFrameRequestStartsWithCurrentCameraSettings` |  | `a_queued_frame_request_starts_with_current_camera_settings` | todo |
-| `FakeRun.AWidgetOnAnEnabledPageStartsItsCameraAndGetsTheLatestFrame` |  | `a_widget_on_an_enabled_page_starts_its_camera_and_gets_the_latest_frame` | todo |
-| `FakeRun.NothingIsPulledWithoutACameraWidgetOnAnEnabledPage` |  | `nothing_is_pulled_without_a_camera_widget_on_an_enabled_page` | todo |
-| `FakeRun.ACameraStopsSoonAfterThePanelStopsAsking` |  | `a_camera_stops_soon_after_the_panel_stops_asking` | todo |
-| `FakeRun.AnOldFrameIsNotShownAsLiveAndAStalledFfmpegIsRestartedLater` |  | `an_old_frame_is_not_shown_as_live_and_a_stalled_ffmpeg_is_restarted_later` | todo |
-| `FakeRun.AFailedLoginIsReportedAsAStateWithoutFfmpegsText` |  | `a_failed_login_is_reported_as_a_state_without_ffmpegs_text` | todo |
-| `FakeRun.ACameraThatNeverAnswersIsReportedUnreachable` |  | `a_camera_that_never_answers_is_reported_unreachable` | todo |
-| `FakeRun.AStoppedFfmpegsLateFrameIsNotShownAndDoesNotResetTheBackoff` |  | `a_stopped_ffmpegs_late_frame_is_not_shown_and_does_not_reset_the_backoff` | todo |
-| `FakeRun.WithoutFfmpegNothingStartsAndThePanelIsTold` |  | `without_ffmpeg_nothing_starts_and_the_panel_is_told` | todo |
-| `FakeRun.AChangedAddressRestartsTheCameraAndARemovedOneStops` |  | `a_changed_address_restarts_the_camera_and_a_removed_one_stops` | todo |
-| `FakeRun.ThePhoneMayAskForCameraPicturesOverWifi` |  | `the_phone_may_ask_for_camera_pictures_over_wifi` | todo |
+| `CameraFeedsTests.AQueuedFrameRequestStartsWithCurrentCameraSettings` |  | `a_queued_frame_request_starts_with_current_camera_settings` | todo |
+| `CameraFeedsTests.AWidgetOnAnEnabledPageStartsItsCameraAndGetsTheLatestFrame` |  | `a_widget_on_an_enabled_page_starts_its_camera_and_gets_the_latest_frame` | todo |
+| `CameraFeedsTests.NothingIsPulledWithoutACameraWidgetOnAnEnabledPage` |  | `nothing_is_pulled_without_a_camera_widget_on_an_enabled_page` | todo |
+| `CameraFeedsTests.ACameraStopsSoonAfterThePanelStopsAsking` |  | `a_camera_stops_soon_after_the_panel_stops_asking` | todo |
+| `CameraFeedsTests.AnOldFrameIsNotShownAsLiveAndAStalledFfmpegIsRestartedLater` |  | `an_old_frame_is_not_shown_as_live_and_a_stalled_ffmpeg_is_restarted_later` | todo |
+| `CameraFeedsTests.AFailedLoginIsReportedAsAStateWithoutFfmpegsText` |  | `a_failed_login_is_reported_as_a_state_without_ffmpegs_text` | todo |
+| `CameraFeedsTests.ACameraThatNeverAnswersIsReportedUnreachable` |  | `a_camera_that_never_answers_is_reported_unreachable` | todo |
+| `CameraFeedsTests.AStoppedFfmpegsLateFrameIsNotShownAndDoesNotResetTheBackoff` |  | `a_stopped_ffmpegs_late_frame_is_not_shown_and_does_not_reset_the_backoff` | todo |
+| `CameraFeedsTests.WithoutFfmpegNothingStartsAndThePanelIsTold` |  | `without_ffmpeg_nothing_starts_and_the_panel_is_told` | todo |
+| `CameraFeedsTests.AChangedAddressRestartsTheCameraAndARemovedOneStops` |  | `a_changed_address_restarts_the_camera_and_a_removed_one_stops` | todo |
+| `CameraFeedsTests.ThePhoneMayAskForCameraPicturesOverWifi` |  | `the_phone_may_ask_for_camera_pictures_over_wifi` | todo |
 | `ChargeGuardSwitchTests.AQueuedTestDoesNotSwitchASupplyTheSettingsReplaced` |  | `a_queued_test_does_not_switch_a_supply_the_settings_replaced` | todo |
 | `ChargeGuardSwitchTests.ATestOnForAnotherSupplyDoesNotHideTheTrackedOffSupply` |  | `a_test_on_for_another_supply_does_not_hide_the_tracked_off_supply` | todo |
 | `ChargeRecoveryTests.DisablingAfterASettingsChangeRestoresTheOriginalPlug` |  | `disabling_after_a_settings_change_restores_the_original_plug` | todo |
@@ -289,20 +289,20 @@ C# test methods: 898 · ported or ruled out: 108 · to do: 790
 | `Hour12ConfigTests.DisplayHour12NormalizesAndPreservesWireTypes` | 1 | `display_hour12_normalizes_and_preserves_wire_types` | ported |
 | `ConfigVersionTextTests.TheVersionGoesOutAsTextThatComesBackExactly` | 1 | `the_version_goes_out_as_text_that_comes_back_exactly` | ported |
 | `ConfigVersionTextTests.ARoundedVersionIsRefused` | 1 | `a_rounded_version_is_refused` | ported |
-| `Fixture.MissingExplicitProfileDeviceDoesNotWriteAnyLevels` |  | `missing_explicit_profile_device_does_not_write_any_levels` | todo |
-| `Fixture.ExplicitProfileOutputOverridesCapturedRoleSelection` |  | `explicit_profile_output_overrides_captured_role_selection` | todo |
-| `Fixture.PhoneCannotProvideAnExecutableOrUnknownTarget` |  | `phone_cannot_provide_an_executable_or_unknown_target` | todo |
-| `Fixture.GroupedApplicationVolumeUpdatesEveryMatchingSessionAcrossOutputs` |  | `grouped_application_volume_updates_every_matching_session_across_outputs` | todo |
-| `Fixture.SnapshotGroupsApplicationSessionsAcrossOutputs` |  | `snapshot_groups_application_sessions_across_outputs` | todo |
-| `Fixture.SnapshotHidesInactiveSessionsButGroupedWritesStillReachThem` |  | `snapshot_hides_inactive_sessions_but_grouped_writes_still_reach_them` | todo |
-| `Fixture.UnknownProcessesDoNotCollapseIntoOneApplication` |  | `unknown_processes_do_not_collapse_into_one_application` | todo |
-| `Fixture.GroupedSessionIdFromAnExistingPhoneUpdatesEveryCopy` |  | `grouped_session_id_from_an_existing_phone_updates_every_copy` | todo |
-| `Fixture.PowerActionsCannotBypassOptInOrHoldNonce` |  | `power_actions_cannot_bypass_opt_in_or_hold_nonce` | todo |
-| `Fixture.ZeroSoundVolumeIsPreserved` |  | `zero_sound_volume_is_preserved` | todo |
-| `Fixture.SleepFadesOnlyTheSelectedPlayerThenPausesAndRestoresVolume` |  | `sleep_fades_only_the_selected_player_then_pauses_and_restores_volume` | todo |
-| `Fixture.SleepFadePreservesManualVolumeChanges` |  | `sleep_fade_preserves_manual_volume_changes` | todo |
-| `Fixture.DisabledControlIsHiddenRejectedAndStopped` |  | `disabled_control_is_hidden_rejected_and_stopped` | todo |
-| `Fixture.DisabledPlaylistProfileAndDefaultEnablementBehaveSafely` |  | `disabled_playlist_profile_and_default_enablement_behave_safely` | todo |
+| `ControlDeckCommandTests.MissingExplicitProfileDeviceDoesNotWriteAnyLevels` |  | `missing_explicit_profile_device_does_not_write_any_levels` | todo |
+| `ControlDeckCommandTests.ExplicitProfileOutputOverridesCapturedRoleSelection` |  | `explicit_profile_output_overrides_captured_role_selection` | todo |
+| `ControlDeckCommandTests.PhoneCannotProvideAnExecutableOrUnknownTarget` |  | `phone_cannot_provide_an_executable_or_unknown_target` | todo |
+| `ControlDeckCommandTests.GroupedApplicationVolumeUpdatesEveryMatchingSessionAcrossOutputs` |  | `grouped_application_volume_updates_every_matching_session_across_outputs` | todo |
+| `ControlDeckCommandTests.SnapshotGroupsApplicationSessionsAcrossOutputs` |  | `snapshot_groups_application_sessions_across_outputs` | todo |
+| `ControlDeckCommandTests.SnapshotHidesInactiveSessionsButGroupedWritesStillReachThem` |  | `snapshot_hides_inactive_sessions_but_grouped_writes_still_reach_them` | todo |
+| `ControlDeckCommandTests.UnknownProcessesDoNotCollapseIntoOneApplication` |  | `unknown_processes_do_not_collapse_into_one_application` | todo |
+| `ControlDeckCommandTests.GroupedSessionIdFromAnExistingPhoneUpdatesEveryCopy` |  | `grouped_session_id_from_an_existing_phone_updates_every_copy` | todo |
+| `ControlDeckCommandTests.PowerActionsCannotBypassOptInOrHoldNonce` |  | `power_actions_cannot_bypass_opt_in_or_hold_nonce` | todo |
+| `ControlDeckCommandTests.ZeroSoundVolumeIsPreserved` |  | `zero_sound_volume_is_preserved` | todo |
+| `ControlDeckCommandTests.SleepFadesOnlyTheSelectedPlayerThenPausesAndRestoresVolume` |  | `sleep_fades_only_the_selected_player_then_pauses_and_restores_volume` | todo |
+| `ControlDeckCommandTests.SleepFadePreservesManualVolumeChanges` |  | `sleep_fade_preserves_manual_volume_changes` | todo |
+| `ControlDeckCommandTests.DisabledControlIsHiddenRejectedAndStopped` |  | `disabled_control_is_hidden_rejected_and_stopped` | todo |
+| `ControlDeckCommandTests.DisabledPlaylistProfileAndDefaultEnablementBehaveSafely` |  | `disabled_playlist_profile_and_default_enablement_behave_safely` | todo |
 | `ControlDeckPanicTests.AHoldThatBeginsDuringPanicCannotReopenTheMicrophone` |  | `a_hold_that_begins_during_panic_cannot_reopen_the_microphone` | todo |
 | `ControlDeckPanicTests.AFailedPanicMuteStaysPendingAndBlocksPushToTalkUntilItLands` |  | `a_failed_panic_mute_stays_pending_and_blocks_push_to_talk_until_it_lands` | todo |
 | `ControlDeckPanicTests.AFailedManualMuteKeepsThePanicMutePending` |  | `a_failed_manual_mute_keeps_the_panic_mute_pending` | todo |
@@ -323,7 +323,7 @@ C# test methods: 898 · ported or ruled out: 108 · to do: 790
 | `ControlDeckTests.ConcurrentRadioStartAndMediaPlayPauseSerializeWithoutBothPlaying` |  | `concurrent_radio_start_and_media_play_pause_serialize_without_both_playing` | todo |
 | `ControlDeckTests.PlaylistActionStopsActiveRadioOnlyWhenSpotifySucceeds` |  | `playlist_action_stops_active_radio_only_when_spotify_succeeds` | todo |
 | `ControlDeckTests.DisablingOrRemovingARadioAcrossFocusAndPlayGatesNeverLeavesItPlaying` |  | `disabling_or_removing_a_radio_across_focus_and_play_gates_never_leaves_it_playing` | todo |
-| `FakeRadioDeckNative.PanicMuteDropsActivePttLeasesAndPttSamplesUncachedAudioAndSweepsOnDispose` |  | `panic_mute_drops_active_ptt_leases_and_ptt_samples_uncached_audio_and_sweeps_on_dispose` | todo |
+| `ControlDeckTests.PanicMuteDropsActivePttLeasesAndPttSamplesUncachedAudioAndSweepsOnDispose` |  | `panic_mute_drops_active_ptt_leases_and_ptt_samples_uncached_audio_and_sweeps_on_dispose` | todo |
 | `ControlTasksTests.TasksReportOutputAndRejectUnknownOrBuiltinCommands` |  | `tasks_report_output_and_reject_unknown_or_builtin_commands` | todo |
 | `ControlTasksTests.StoppingAnOwnedServerDoesNotStopAnUnrelatedProcess` |  | `stopping_an_owned_server_does_not_stop_an_unrelated_process` | todo |
 | `CoreAuditTests.C1_ASettingsPageCanSaveOverAConfigFileThatWasUnreadableAtStart` |  | `c1_a_settings_page_can_save_over_a_config_file_that_was_unreadable_at_start` | todo |
@@ -331,21 +331,21 @@ C# test methods: 898 · ported or ruled out: 108 · to do: 790
 | `CoreAuditTests.C2_ValuesReachDataJsonWhileAScriptKeepsPushing` |  | `c2_values_reach_data_json_while_a_script_keeps_pushing` | todo |
 | `CoreAuditTests.C3_APhoneWithoutTheAppIsOfferedTheInstall` |  | `c3_a_phone_without_the_app_is_offered_the_install` | todo |
 | `CoreAuditTests.C4_SaveAnswersNullEntriesWithAnErrorMessageNotAnException` |  | `c4_save_answers_null_entries_with_an_error_message_not_an_exception` | todo |
-| `CpuTempMalformedTests.NonObjectNodesAndNonStringNamesAreSkipped` |  | `non_object_nodes_and_non_string_names_are_skipped` | todo |
-| `CpuTempMalformedTests.AnExplicitNonTemperatureTypeIsNotReadAsATemperature` |  | `an_explicit_non_temperature_type_is_not_read_as_a_temperature` | todo |
-| `CpuTempTests.ThePackageReadingWinsWhenThereIsOne` |  | `the_package_reading_wins_when_there_is_one` | todo |
-| `CpuTempTests.OlderIntelCpusUseTheHottestCore` |  | `older_intel_cpus_use_the_hottest_core` | todo |
-| `CpuTempTests.CoreSensorsOutsideTheCpuNeverCount` |  | `core_sensors_outside_the_cpu_never_count` | todo |
-| `CpuTempTests.ACpuIsRecognisedByItsIconWhenItHasNoHardwareId` |  | `a_cpu_is_recognised_by_its_icon_when_it_has_no_hardware_id` | todo |
-| `CpuTempTests.AmdTctlStillWorks` |  | `amd_tctl_still_works` | todo |
-| `CpuTempTests.NoCpuSensorsMeansNoTemperature` |  | `no_cpu_sensors_means_no_temperature` | todo |
-| `CpuTempTests.FahrenheitSensorsConvertToCelsiusAndNullChildrenAreTolerated` |  | `fahrenheit_sensors_convert_to_celsius_and_null_children_are_tolerated` | todo |
-| `Slow.SpotifyTimeoutIsReportedAsUnavailableInsteadOfThrowing` |  | `spotify_timeout_is_reported_as_unavailable_instead_of_throwing` | todo |
-| `Slow.DeckRunsTheOffCommandOfAToggleWhosePushedStateIsOn` |  | `deck_runs_the_off_command_of_a_toggle_whose_pushed_state_is_on` | todo |
-| `Slow.ATaskThatCannotStartIsNotReportedAsStarted` |  | `a_task_that_cannot_start_is_not_reported_as_started` | todo |
-| `Slow.SleepFadeMatchesThePlayersOwnAudioSession` |  | `sleep_fade_matches_the_players_own_audio_session` | todo |
-| `Slow.ASleepTimerCanBeCancelledAfterItsPlayerClosed` |  | `a_sleep_timer_can_be_cancelled_after_its_player_closed` | todo |
-| `Slow.AFolderShortcutIsNotTreatedAsARunningApplication` |  | `a_folder_shortcut_is_not_treated_as_a_running_application` | todo |
+| `CpuTempMalformedTests.NonObjectNodesAndNonStringNamesAreSkipped` | 2 | `non_object_nodes_and_non_string_names_are_skipped` | todo |
+| `CpuTempMalformedTests.AnExplicitNonTemperatureTypeIsNotReadAsATemperature` | 2 | `an_explicit_non_temperature_type_is_not_read_as_a_temperature` | todo |
+| `CpuTempTests.ThePackageReadingWinsWhenThereIsOne` | 2 | `the_package_reading_wins_when_there_is_one` | todo |
+| `CpuTempTests.OlderIntelCpusUseTheHottestCore` | 2 | `older_intel_cpus_use_the_hottest_core` | todo |
+| `CpuTempTests.CoreSensorsOutsideTheCpuNeverCount` | 2 | `core_sensors_outside_the_cpu_never_count` | todo |
+| `CpuTempTests.ACpuIsRecognisedByItsIconWhenItHasNoHardwareId` | 2 | `a_cpu_is_recognised_by_its_icon_when_it_has_no_hardware_id` | todo |
+| `CpuTempTests.AmdTctlStillWorks` | 2 | `amd_tctl_still_works` | todo |
+| `CpuTempTests.NoCpuSensorsMeansNoTemperature` | 2 | `no_cpu_sensors_means_no_temperature` | todo |
+| `CpuTempTests.FahrenheitSensorsConvertToCelsiusAndNullChildrenAreTolerated` | 2 | `fahrenheit_sensors_convert_to_celsius_and_null_children_are_tolerated` | todo |
+| `DeckAuditTests.SpotifyTimeoutIsReportedAsUnavailableInsteadOfThrowing` |  | `spotify_timeout_is_reported_as_unavailable_instead_of_throwing` | todo |
+| `DeckAuditTests.DeckRunsTheOffCommandOfAToggleWhosePushedStateIsOn` |  | `deck_runs_the_off_command_of_a_toggle_whose_pushed_state_is_on` | todo |
+| `DeckAuditTests.ATaskThatCannotStartIsNotReportedAsStarted` |  | `a_task_that_cannot_start_is_not_reported_as_started` | todo |
+| `DeckAuditTests.SleepFadeMatchesThePlayersOwnAudioSession` |  | `sleep_fade_matches_the_players_own_audio_session` | todo |
+| `DeckAuditTests.ASleepTimerCanBeCancelledAfterItsPlayerClosed` |  | `a_sleep_timer_can_be_cancelled_after_its_player_closed` | todo |
+| `DeckAuditTests.AFolderShortcutIsNotTreatedAsARunningApplication` |  | `a_folder_shortcut_is_not_treated_as_a_running_application` | todo |
 | `DictationTests.TheTextIsTypedWithASpaceAfterIt` |  | `the_text_is_typed_with_a_space_after_it` | todo |
 | `DictationTests.LineBreaksNeverBecomeEnter` |  | `line_breaks_never_become_enter` | todo |
 | `DictationTests.EnterOnlyWithTheWidgetsOption` |  | `enter_only_with_the_widgets_option` | todo |
@@ -380,29 +380,29 @@ C# test methods: 898 · ported or ruled out: 108 · to do: 790
 | `DockerTests.ParsePodmanTemplateNdjsonFallback` |  | `parse_podman_template_ndjson_fallback` | todo |
 | `DockerTests.ParseDockerNdjsonFormat` |  | `parse_docker_ndjson_format` | todo |
 | `DockerTests.ColdCacheActWarmsSnapshotSpacedLabelsExtractProjectAndIsoStartedAtFormatsStatus` |  | `cold_cache_act_warms_snapshot_spaced_labels_extract_project_and_iso_started_at_formats_status` | todo |
-| `DrmUsageTests.AnI915FdinfoIsParsedWithoutItsMemoryLines` |  | `an_i915_fdinfo_is_parsed_without_its_memory_lines` | todo |
-| `DrmUsageTests.AnXeFdinfoIsParsedIntoCyclesAndTotals` |  | `an_xe_fdinfo_is_parsed_into_cycles_and_totals` | todo |
-| `DrmUsageTests.OtherFdinfoIsNotAClient` |  | `other_fdinfo_is_not_a_client` | todo |
-| `DrmUsageTests.I915LoadIsBusyNanosecondsOverTheInterval` |  | `i915_load_is_busy_nanoseconds_over_the_interval` | todo |
-| `DrmUsageTests.XeLoadIsBusyCyclesOverTotalCycles` |  | `xe_load_is_busy_cycles_over_total_cycles` | todo |
-| `DrmUsageTests.ClientsAddUpAndTwoFdsOfOneClientCountOnce` |  | `clients_add_up_and_two_fds_of_one_client_count_once` | todo |
-| `DrmUsageTests.OnlyClientsInBothSamplesAndOnThisCardCount` |  | `only_clients_in_both_samples_and_on_this_card_count` | todo |
-| `DrmUsageTests.ACounterThatWentBackwardsIsSkipped` |  | `a_counter_that_went_backwards_is_skipped` | todo |
-| `DrmUsageTests.ADipIsIgnoredUntilTheCounterCatchesUp` |  | `a_dip_is_ignored_until_the_counter_catches_up` | todo |
-| `DrmUsageTests.OnlySharesOverTheSameIntervalAreAddedUp` |  | `only_shares_over_the_same_interval_are_added_up` | todo |
-| `DrmUsageTests.ACardIsMeasuredOnlyWhenTimePassed` |  | `a_card_is_measured_only_when_time_passed` | todo |
-| `DrmUsageTests.AnXeClientWithoutCountersForAMomentIsUnknownNotIdle` |  | `an_xe_client_without_counters_for_a_moment_is_unknown_not_idle` | todo |
-| `DrmUsageTests.ACardHasAValueOnlyOnceAClientWasMeasuredAndStaysAtZeroWhenItsClientsExit` |  | `a_card_has_a_value_only_once_a_client_was_measured_and_stays_at_zero_when_its_clients_exit` | todo |
-| `DrmUsageTests.TheLoadStaysWithinAHundredAndASecondReadAtTheSameTimeKeepsTheBaseline` |  | `the_load_stays_within_a_hundred_and_a_second_read_at_the_same_time_keeps_the_baseline` | todo |
-| `DrmUsageTests.TheFirstSampleHasNoLoadAndAnIdleCardThenShowsZero` |  | `the_first_sample_has_no_load_and_an_idle_card_then_shows_zero` | todo |
-| `DrmUsageTests.AClientThatCantBeReadForAMomentKeepsItsBaseline` |  | `a_client_that_cant_be_read_for_a_moment_keeps_its_baseline` | todo |
-| `DrmUsageTests.AClientUnreadableDuringADiscoveryPassIsKeptAndRetried` |  | `a_client_unreadable_during_a_discovery_pass_is_kept_and_retried` | todo |
-| `DrmUsageTests.BetweenDiscoveryPassesOnlyTheKnownClientsAreRead` |  | `between_discovery_passes_only_the_known_clients_are_read` | todo |
-| `DrmUsageTests.AClientWhoseFdinfoIsGoneIsDroppedWithoutAFullPass` |  | `a_client_whose_fdinfo_is_gone_is_dropped_without_a_full_pass` | todo |
-| `DrmUsageTests.AKernelWithoutBusyCountersLeavesTheLoadEmptyNotZero` |  | `a_kernel_without_busy_counters_leaves_the_load_empty_not_zero` | todo |
-| `DrmUsageTests.AnIntelCardOnLinuxGetsItsLoadFromFdinfo` |  | `an_intel_card_on_linux_gets_its_load_from_fdinfo` | todo |
-| `DrmUsageTests.AnIntelCardWithoutAPciAddressHasNoLoad` |  | `an_intel_card_without_a_pci_address_has_no_load` | todo |
-| `DrmUsageTests.FdsThatArentGpuDevicesAreNotRead` |  | `fds_that_arent_gpu_devices_are_not_read` | todo |
+| `DrmUsageTests.AnI915FdinfoIsParsedWithoutItsMemoryLines` | 2 | `an_i915_fdinfo_is_parsed_without_its_memory_lines` | todo |
+| `DrmUsageTests.AnXeFdinfoIsParsedIntoCyclesAndTotals` | 2 | `an_xe_fdinfo_is_parsed_into_cycles_and_totals` | todo |
+| `DrmUsageTests.OtherFdinfoIsNotAClient` | 2 | `other_fdinfo_is_not_a_client` | todo |
+| `DrmUsageTests.I915LoadIsBusyNanosecondsOverTheInterval` | 2 | `i915_load_is_busy_nanoseconds_over_the_interval` | todo |
+| `DrmUsageTests.XeLoadIsBusyCyclesOverTotalCycles` | 2 | `xe_load_is_busy_cycles_over_total_cycles` | todo |
+| `DrmUsageTests.ClientsAddUpAndTwoFdsOfOneClientCountOnce` | 2 | `clients_add_up_and_two_fds_of_one_client_count_once` | todo |
+| `DrmUsageTests.OnlyClientsInBothSamplesAndOnThisCardCount` | 2 | `only_clients_in_both_samples_and_on_this_card_count` | todo |
+| `DrmUsageTests.ACounterThatWentBackwardsIsSkipped` | 2 | `a_counter_that_went_backwards_is_skipped` | todo |
+| `DrmUsageTests.ADipIsIgnoredUntilTheCounterCatchesUp` | 2 | `a_dip_is_ignored_until_the_counter_catches_up` | todo |
+| `DrmUsageTests.OnlySharesOverTheSameIntervalAreAddedUp` | 2 | `only_shares_over_the_same_interval_are_added_up` | todo |
+| `DrmUsageTests.ACardIsMeasuredOnlyWhenTimePassed` | 2 | `a_card_is_measured_only_when_time_passed` | todo |
+| `DrmUsageTests.AnXeClientWithoutCountersForAMomentIsUnknownNotIdle` | 2 | `an_xe_client_without_counters_for_a_moment_is_unknown_not_idle` | todo |
+| `DrmUsageTests.ACardHasAValueOnlyOnceAClientWasMeasuredAndStaysAtZeroWhenItsClientsExit` | 2 | `a_card_has_a_value_only_once_a_client_was_measured_and_stays_at_zero_when_its_clients_exit` | todo |
+| `DrmUsageTests.TheLoadStaysWithinAHundredAndASecondReadAtTheSameTimeKeepsTheBaseline` | 2 | `the_load_stays_within_a_hundred_and_a_second_read_at_the_same_time_keeps_the_baseline` | todo |
+| `DrmUsageTests.TheFirstSampleHasNoLoadAndAnIdleCardThenShowsZero` | 2 | `the_first_sample_has_no_load_and_an_idle_card_then_shows_zero` | todo |
+| `DrmUsageTests.AClientThatCantBeReadForAMomentKeepsItsBaseline` | 2 | `a_client_that_cant_be_read_for_a_moment_keeps_its_baseline` | todo |
+| `DrmUsageTests.AClientUnreadableDuringADiscoveryPassIsKeptAndRetried` | 2 | `a_client_unreadable_during_a_discovery_pass_is_kept_and_retried` | todo |
+| `DrmUsageTests.BetweenDiscoveryPassesOnlyTheKnownClientsAreRead` | 2 | `between_discovery_passes_only_the_known_clients_are_read` | todo |
+| `DrmUsageTests.AClientWhoseFdinfoIsGoneIsDroppedWithoutAFullPass` | 2 | `a_client_whose_fdinfo_is_gone_is_dropped_without_a_full_pass` | todo |
+| `DrmUsageTests.AKernelWithoutBusyCountersLeavesTheLoadEmptyNotZero` | 2 | `a_kernel_without_busy_counters_leaves_the_load_empty_not_zero` | todo |
+| `DrmUsageTests.AnIntelCardOnLinuxGetsItsLoadFromFdinfo` | 2 | `an_intel_card_on_linux_gets_its_load_from_fdinfo` | todo |
+| `DrmUsageTests.AnIntelCardWithoutAPciAddressHasNoLoad` | 2 | `an_intel_card_without_a_pci_address_has_no_load` | todo |
+| `DrmUsageTests.FdsThatArentGpuDevicesAreNotRead` | 2 | `fds_that_arent_gpu_devices_are_not_read` | todo |
 | `EmptyPageConfigTests.AnEffectivelyEmptyPageListRestoresUsableDefaults` | 1 | `an_effectively_empty_page_list_restores_usable_defaults` | ported |
 | `EmptyPageConfigTests.NullEntriesDoNotReplaceAValidCustomPage` | 1 | `null_entries_do_not_replace_a_valid_custom_page` | ported |
 | `EndpointTests.DefaultsAndIsolatedInstancesHaveDistinctUrlsAndMutexes` | 1 | `defaults_and_isolated_instances_have_distinct_urls_and_mutexes` | ported |
@@ -433,38 +433,38 @@ C# test methods: 898 · ported or ruled out: 108 · to do: 790
 | `FeedHttpTests.PrivateAddressesOnlyForLocalHosts` |  | `private_addresses_only_for_local_hosts` | todo |
 | `FeedHttpTests.ARedirectFromALocalHostToAnotherHostIsPublicOnly` |  | `a_redirect_from_a_local_host_to_another_host_is_public_only` | todo |
 | `FeedHttpTests.HostileTitlesAreCutBeforeCleaning` |  | `hostile_titles_are_cut_before_cleaning` | todo |
-| `GatedFeed.InFlightFetchPublishesOnlyCurrentSources` |  | `in_flight_fetch_publishes_only_current_sources` | todo |
-| `GatedFeed.EachFeedIsFetchedAtMostEveryFifteenMinutes` |  | `each_feed_is_fetched_at_most_every_fifteen_minutes` | todo |
-| `GatedFeed.NothingIsFetchedWithoutAFeedsWidgetOnAnEnabledPage` |  | `nothing_is_fetched_without_a_feeds_widget_on_an_enabled_page` | todo |
-| `GatedFeed.AFailedFetchKeepsTheLastHeadlinesAndReportsTheError` |  | `a_failed_fetch_keeps_the_last_headlines_and_reports_the_error` | todo |
-| `GatedFeed.ArticlesOpenByIdOnlyWhenAllowed` |  | `articles_open_by_id_only_when_allowed` | todo |
-| `GatedFeed.OpeningNeedsTheWidgetOnAnEnabledPage` |  | `opening_needs_the_widget_on_an_enabled_page` | todo |
-| `GatedFeed.OpeningIsOffUntilTheWidgetAllowsIt` |  | `opening_is_off_until_the_widget_allows_it` | todo |
-| `GatedFeed.NoFetchStartsAfterTheWidgetIsRemoved` |  | `no_fetch_starts_after_the_widget_is_removed` | todo |
-| `GatedFeed.TheLinkNeverReachesThePhone` |  | `the_link_never_reaches_the_phone` | todo |
-| `GatedFeed.FeedAddressesStayOffThePhone` |  | `feed_addresses_stay_off_the_phone` | todo |
+| `FeedMonitorTests.InFlightFetchPublishesOnlyCurrentSources` |  | `in_flight_fetch_publishes_only_current_sources` | todo |
+| `FeedMonitorTests.EachFeedIsFetchedAtMostEveryFifteenMinutes` |  | `each_feed_is_fetched_at_most_every_fifteen_minutes` | todo |
+| `FeedMonitorTests.NothingIsFetchedWithoutAFeedsWidgetOnAnEnabledPage` |  | `nothing_is_fetched_without_a_feeds_widget_on_an_enabled_page` | todo |
+| `FeedMonitorTests.AFailedFetchKeepsTheLastHeadlinesAndReportsTheError` |  | `a_failed_fetch_keeps_the_last_headlines_and_reports_the_error` | todo |
+| `FeedMonitorTests.ArticlesOpenByIdOnlyWhenAllowed` |  | `articles_open_by_id_only_when_allowed` | todo |
+| `FeedMonitorTests.OpeningNeedsTheWidgetOnAnEnabledPage` |  | `opening_needs_the_widget_on_an_enabled_page` | todo |
+| `FeedMonitorTests.OpeningIsOffUntilTheWidgetAllowsIt` |  | `opening_is_off_until_the_widget_allows_it` | todo |
+| `FeedMonitorTests.NoFetchStartsAfterTheWidgetIsRemoved` |  | `no_fetch_starts_after_the_widget_is_removed` | todo |
+| `FeedMonitorTests.TheLinkNeverReachesThePhone` |  | `the_link_never_reaches_the_phone` | todo |
+| `FeedMonitorTests.FeedAddressesStayOffThePhone` |  | `feed_addresses_stay_off_the_phone` | todo |
 | `FileLoggerTests.LoggingAfterDisposalDoesNotThrowOrAppend` | 1 | `logging_after_disposal_does_not_throw_or_append` | ported |
 | `FileLoggerTests.DisposingWhileALogIsBeingFormattedDoesNotFailTheCaller` | 1 | `disposing_while_a_log_is_being_formatted_does_not_fail_the_caller` | ported |
-| `GpuIntegratedMergeTests.TheWindowsIntegratedFlagIsKeptWhenAnEarlierSourceMergesTheSameGpu` |  | `the_windows_integrated_flag_is_kept_when_an_earlier_source_merges_the_same_gpu` | todo |
-| `GpuSourceTests.TheDiscreteCardComesFirstEvenWhenTheIntegratedOneIsListedFirst` |  | `the_discrete_card_comes_first_even_when_the_integrated_one_is_listed_first` | todo |
-| `GpuSourceTests.TheSameCardFromTwoSourcesIsOneEntryAndTheFirstSourceWins` |  | `the_same_card_from_two_sources_is_one_entry_and_the_first_source_wins` | todo |
-| `GpuSourceTests.WithoutNvidiaSmiTheOsEntriesStay` |  | `without_nvidia_smi_the_os_entries_stay` | todo |
-| `GpuSourceTests.TwoIdenticalCardsStayTwoEntries` |  | `two_identical_cards_stay_two_entries` | todo |
-| `GpuSourceTests.IntegratedGraphicsAreToldApartByName` |  | `integrated_graphics_are_told_apart_by_name` | todo |
-| `GpuSourceTests.NvidiaSmiLinesCarryTheIndexNameAndMemoryClock` |  | `nvidia_smi_lines_carry_the_index_name_and_memory_clock` | todo |
-| `GpuSourceTests.NvidiaSmiNotSupportedFieldsAreEmptyNotZero` |  | `nvidia_smi_not_supported_fields_are_empty_not_zero` | todo |
-| `GpuSourceTests.NvidiaSmiNoiseIsSkipped` |  | `nvidia_smi_noise_is_skipped` | todo |
-| `GpuSourceTests.AnAmdCardIsReadFromLibreHardwareMonitor` |  | `an_amd_card_is_read_from_libre_hardware_monitor` | todo |
-| `GpuSourceTests.OlderLibreHardwareMonitorWithoutIdsIsRecognisedByItsIcon` |  | `older_libre_hardware_monitor_without_ids_is_recognised_by_its_icon` | todo |
-| `GpuSourceTests.AnLhmIntelIntegratedGpuIsMarkedIntegrated` |  | `an_lhm_intel_integrated_gpu_is_marked_integrated` | todo |
-| `GpuSourceTests.LhmFillsTheSensorsTheOsCannotRead` |  | `lhm_fills_the_sensors_the_os_cannot_read` | todo |
-| `GpuSourceTests.LhmValuesAreReadWithTheirUnit` |  | `lhm_values_are_read_with_their_unit` | todo |
-| `GpuSourceTests.OtherLhmValuesAreIgnored` |  | `other_lhm_values_are_ignored` | todo |
-| `GpuSourceTests.AnAmdCardIsReadFromLinuxSysfs` |  | `an_amd_card_is_read_from_linux_sysfs` | todo |
-| `GpuSourceTests.LinuxNvidiaCardsAreLeftToNvidiaSmiAndAnApuIsIntegrated` |  | `linux_nvidia_cards_are_left_to_nvidia_smi_and_an_apu_is_integrated` | todo |
-| `GpuSourceTests.WithoutSysfsThereAreNoGpus` |  | `without_sysfs_there_are_no_gpus` | todo |
-| `GpuSourceTests.TheCurrentDpmLevelIsTheStarredOne` |  | `the_current_dpm_level_is_the_starred_one` | todo |
-| `GpuSourceTests.UnicodeArcTrademarksFourGigRadeonSysfsMergePriorityAndCommaNvidiaNamesAreHandledCleanly` |  | `unicode_arc_trademarks_four_gig_radeon_sysfs_merge_priority_and_comma_nvidia_names_are_handled_cleanly` | todo |
+| `GpuIntegratedMergeTests.TheWindowsIntegratedFlagIsKeptWhenAnEarlierSourceMergesTheSameGpu` | 2 | `the_windows_integrated_flag_is_kept_when_an_earlier_source_merges_the_same_gpu` | todo |
+| `GpuSourceTests.TheDiscreteCardComesFirstEvenWhenTheIntegratedOneIsListedFirst` | 2 | `the_discrete_card_comes_first_even_when_the_integrated_one_is_listed_first` | todo |
+| `GpuSourceTests.TheSameCardFromTwoSourcesIsOneEntryAndTheFirstSourceWins` | 2 | `the_same_card_from_two_sources_is_one_entry_and_the_first_source_wins` | todo |
+| `GpuSourceTests.WithoutNvidiaSmiTheOsEntriesStay` | 2 | `without_nvidia_smi_the_os_entries_stay` | todo |
+| `GpuSourceTests.TwoIdenticalCardsStayTwoEntries` | 2 | `two_identical_cards_stay_two_entries` | todo |
+| `GpuSourceTests.IntegratedGraphicsAreToldApartByName` | 2 | `integrated_graphics_are_told_apart_by_name` | todo |
+| `GpuSourceTests.NvidiaSmiLinesCarryTheIndexNameAndMemoryClock` | 2 | `nvidia_smi_lines_carry_the_index_name_and_memory_clock` | todo |
+| `GpuSourceTests.NvidiaSmiNotSupportedFieldsAreEmptyNotZero` | 2 | `nvidia_smi_not_supported_fields_are_empty_not_zero` | todo |
+| `GpuSourceTests.NvidiaSmiNoiseIsSkipped` | 2 | `nvidia_smi_noise_is_skipped` | todo |
+| `GpuSourceTests.AnAmdCardIsReadFromLibreHardwareMonitor` | 2 | `an_amd_card_is_read_from_libre_hardware_monitor` | todo |
+| `GpuSourceTests.OlderLibreHardwareMonitorWithoutIdsIsRecognisedByItsIcon` | 2 | `older_libre_hardware_monitor_without_ids_is_recognised_by_its_icon` | todo |
+| `GpuSourceTests.AnLhmIntelIntegratedGpuIsMarkedIntegrated` | 2 | `an_lhm_intel_integrated_gpu_is_marked_integrated` | todo |
+| `GpuSourceTests.LhmFillsTheSensorsTheOsCannotRead` | 2 | `lhm_fills_the_sensors_the_os_cannot_read` | todo |
+| `GpuSourceTests.LhmValuesAreReadWithTheirUnit` | 2 | `lhm_values_are_read_with_their_unit` | todo |
+| `GpuSourceTests.OtherLhmValuesAreIgnored` | 2 | `other_lhm_values_are_ignored` | todo |
+| `GpuSourceTests.AnAmdCardIsReadFromLinuxSysfs` | 2 | `an_amd_card_is_read_from_linux_sysfs` | todo |
+| `GpuSourceTests.LinuxNvidiaCardsAreLeftToNvidiaSmiAndAnApuIsIntegrated` | 2 | `linux_nvidia_cards_are_left_to_nvidia_smi_and_an_apu_is_integrated` | todo |
+| `GpuSourceTests.WithoutSysfsThereAreNoGpus` | 2 | `without_sysfs_there_are_no_gpus` | todo |
+| `GpuSourceTests.TheCurrentDpmLevelIsTheStarredOne` | 2 | `the_current_dpm_level_is_the_starred_one` | todo |
+| `GpuSourceTests.UnicodeArcTrademarksFourGigRadeonSysfsMergePriorityAndCommaNvidiaNamesAreHandledCleanly` | 2 | `unicode_arc_trademarks_four_gig_radeon_sysfs_merge_priority_and_comma_nvidia_names_are_handled_cleanly` | todo |
 | `HlsRadioTests.DetectsHlsUrlsWithQueryStringsAndProbesExtensionlessManifestsWithoutReadingInfiniteStreams` |  | `detects_hls_urls_with_query_strings_and_probes_extensionless_manifests_without_reading_infinite_streams` | todo |
 | `HlsRadioTests.ProbeManifestAbortsWhenResponseBodyStallsAfterHeaders` |  | `probe_manifest_aborts_when_response_body_stalls_after_headers` | todo |
 | `HlsRadioTests.MatchesAudioRenderDevice_MatchesCoreAudioIdsAgainstSwdInterfacePaths` |  | `matches_audio_render_device_matches_core_audio_ids_against_swd_interface_paths` | todo |
@@ -537,16 +537,16 @@ C# test methods: 898 · ported or ruled out: 108 · to do: 790
 | `KeySenderTests.NumpadKeysHaveTheirOwnNames` |  | `numpad_keys_have_their_own_names` | todo |
 | `KeySenderTests.UnknownNumpadNamesAreRejected` |  | `unknown_numpad_names_are_rejected` | todo |
 | `KeySenderTests.WindowsKeypadCodes` |  | `windows_keypad_codes` | todo |
-| `ListeningPortsTests.FindsAListenerOfThisProcess` |  | `finds_a_listener_of_this_process` | todo |
-| `ListeningPortsTests.InvalidProcessIdsHaveNoPorts` |  | `invalid_process_ids_have_no_ports` | todo |
-| `ListeningPortsTests.ResultIsCappedSortedAndDistinct` |  | `result_is_capped_sorted_and_distinct` | todo |
-| `ListeningPortsTests.ProcNetTcpKeepsOnlyOwnLoopbackListeners` |  | `proc_net_tcp_keeps_only_own_loopback_listeners` | todo |
-| `ListeningPortsTests.ProcNetTcp6ReadsLoopbackAndAnyAddresses` |  | `proc_net_tcp6_reads_loopback_and_any_addresses` | todo |
-| `ListeningPortsTests.LsofNamesKeepLoopbackAndWildcardListeners` |  | `lsof_names_keep_loopback_and_wildcard_listeners` | todo |
-| `ListeningPortsTests.WindowsOwnerPidTablesKeepOnlyTheProcessesLoopbackListeners` |  | `windows_owner_pid_tables_keep_only_the_processes_loopback_listeners` | todo |
-| `ListeningPortsTests.AnIpv6OnlyListenerIsReachedOnIpv6Loopback` |  | `an_ipv6_only_listener_is_reached_on_ipv6_loopback` | todo |
-| `ListeningPortsTests.BothFamiliesOnOnePortAreKept` |  | `both_families_on_one_port_are_kept` | todo |
-| `ListeningPortsTests.MappedAddressesAreReadAsIpv4` |  | `mapped_addresses_are_read_as_ipv4` | todo |
+| `ListeningPortsTests.FindsAListenerOfThisProcess` | 2 | `finds_a_listener_of_this_process` | todo |
+| `ListeningPortsTests.InvalidProcessIdsHaveNoPorts` | 2 | `invalid_process_ids_have_no_ports` | todo |
+| `ListeningPortsTests.ResultIsCappedSortedAndDistinct` | 2 | `result_is_capped_sorted_and_distinct` | todo |
+| `ListeningPortsTests.ProcNetTcpKeepsOnlyOwnLoopbackListeners` | 2 | `proc_net_tcp_keeps_only_own_loopback_listeners` | todo |
+| `ListeningPortsTests.ProcNetTcp6ReadsLoopbackAndAnyAddresses` | 2 | `proc_net_tcp6_reads_loopback_and_any_addresses` | todo |
+| `ListeningPortsTests.LsofNamesKeepLoopbackAndWildcardListeners` | 2 | `lsof_names_keep_loopback_and_wildcard_listeners` | todo |
+| `ListeningPortsTests.WindowsOwnerPidTablesKeepOnlyTheProcessesLoopbackListeners` | 2 | `windows_owner_pid_tables_keep_only_the_processes_loopback_listeners` | todo |
+| `ListeningPortsTests.AnIpv6OnlyListenerIsReachedOnIpv6Loopback` | 2 | `an_ipv6_only_listener_is_reached_on_ipv6_loopback` | todo |
+| `ListeningPortsTests.BothFamiliesOnOnePortAreKept` | 2 | `both_families_on_one_port_are_kept` | todo |
+| `ListeningPortsTests.MappedAddressesAreReadAsIpv4` | 2 | `mapped_addresses_are_read_as_ipv4` | todo |
 | `MacMediaTests.SystemMetadataAdvancesFromTheReportedPositionAndStopsWhenPaused` |  | `system_metadata_advances_from_the_reported_position_and_stops_when_paused` | todo |
 | `MacMediaTests.PositionIsExtrapolatedFromWhenTheSourcePublishedIt` |  | `position_is_extrapolated_from_when_the_source_published_it` | todo |
 | `MacMediaTests.ThePublishedPositionIsKeptWhilePausedOrWhenTheTimestampCannotBeTrusted` |  | `the_published_position_is_kept_while_paused_or_when_the_timestamp_cannot_be_trusted` | todo |
@@ -577,14 +577,14 @@ C# test methods: 898 · ported or ruled out: 108 · to do: 790
 | `MonitorAuditTests.ClaudeSessionFileOfAReusedPidIsNotShownAsALiveSession` |  | `claude_session_file_of_a_reused_pid_is_not_shown_as_a_live_session` | todo |
 | `MonitorAuditTests.QuotaLimitWhoseWindowHasResetIsNotReportedAsUsedUp` |  | `quota_limit_whose_window_has_reset_is_not_reported_as_used_up` | todo |
 | `MonitorAuditTests.CodexRolloutsUnderOneMegabyteDoNotDropFirstLineTurnContextOrRateLimits` |  | `codex_rollouts_under_one_megabyte_do_not_drop_first_line_turn_context_or_rate_limits` | todo |
-| `MonitorAuditTests.ProcessDetailToleratesDuplicateSessionPidsAndLocksAgentProcess` |  | `process_detail_tolerates_duplicate_session_pids_and_locks_agent_process` | todo |
+| `MonitorAuditTests.ProcessDetailToleratesDuplicateSessionPidsAndLocksAgentProcess` | 2 | `process_detail_tolerates_duplicate_session_pids_and_locks_agent_process` | todo |
 | `MonitorAuditTests.CodexProjectComesFromALongOrBomPrefixedFirstRecordAndWaitsForAnIncompleteOne` |  | `codex_project_comes_from_a_long_or_bom_prefixed_first_record_and_waits_for_an_incomplete_one` | todo |
-| `MonitorAuditTests.ColdProcessIconDoesNotCacheNullAndShortenArgsHandlesTabSeparators` |  | `cold_process_icon_does_not_cache_null_and_shorten_args_handles_tab_separators` | todo |
-| `NetworkAdapterTests.AutomaticCountsEthernetAndWifiButNotVirtualOrVpn` |  | `automatic_counts_ethernet_and_wifi_but_not_virtual_or_vpn` | todo |
-| `NetworkAdapterTests.ChosenAdaptersReplaceTheAutomaticChoice` |  | `chosen_adapters_replace_the_automatic_choice` | todo |
-| `NetworkAdapterTests.TheSettingIsTidiedOnSave` |  | `the_setting_is_tidied_on_save` | todo |
-| `NetworkRatesTests.AnInterfaceThatAppearsOrDisappearsDoesNotChangeOtherTraffic` |  | `an_interface_that_appears_or_disappears_does_not_change_other_traffic` | todo |
-| `NetworkRatesTests.ResetCountersDoNotHideTrafficFromAnotherInterface` |  | `reset_counters_do_not_hide_traffic_from_another_interface` | todo |
+| `MonitorAuditTests.ColdProcessIconDoesNotCacheNullAndShortenArgsHandlesTabSeparators` | 2 | `cold_process_icon_does_not_cache_null_and_shorten_args_handles_tab_separators` | todo |
+| `NetworkAdapterTests.AutomaticCountsEthernetAndWifiButNotVirtualOrVpn` | 2 | `automatic_counts_ethernet_and_wifi_but_not_virtual_or_vpn` | todo |
+| `NetworkAdapterTests.ChosenAdaptersReplaceTheAutomaticChoice` | 2 | `chosen_adapters_replace_the_automatic_choice` | todo |
+| `NetworkAdapterTests.TheSettingIsTidiedOnSave` | 2 | `the_setting_is_tidied_on_save` | todo |
+| `NetworkRatesTests.AnInterfaceThatAppearsOrDisappearsDoesNotChangeOtherTraffic` | 2 | `an_interface_that_appears_or_disappears_does_not_change_other_traffic` | todo |
+| `NetworkRatesTests.ResetCountersDoNotHideTrafficFromAnotherInterface` | 2 | `reset_counters_do_not_hide_traffic_from_another_interface` | todo |
 | `NoteEditTests.SetsTheTextOfANote` |  | `sets_the_text_of_a_note` | todo |
 | `NoteEditTests.AnEmptyTextClearsTheNote` |  | `an_empty_text_clears_the_note` | todo |
 | `NoteEditTests.AMissingTextIsRefused` |  | `a_missing_text_is_refused` | todo |
@@ -641,10 +641,10 @@ C# test methods: 898 · ported or ruled out: 108 · to do: 790
 | `PhotoFrameTests.AnOlderScanForTheSameSelectionCannotPublishOverTheOneThatOwnsTheSlot` |  | `an_older_scan_for_the_same_selection_cannot_publish_over_the_one_that_owns_the_slot` | todo |
 | `PhotoFrameTests.TurningSubfoldersOffDropsTheRecursiveScanInFlight` |  | `turning_subfolders_off_drops_the_recursive_scan_in_flight` | todo |
 | `PhotoFrameTests.AnUnsetFolderShowsNothingAndNothingThrows` |  | `an_unset_folder_shows_nothing_and_nothing_throws` | todo |
-| `PingMonitorTests.ExistingConfigsKeepPingingTheDefaultHost` |  | `existing_configs_keep_pinging_the_default_host` | todo |
-| `PingMonitorTests.HostIsTrimmedEmptyMeansOffAndJunkFallsBack` |  | `host_is_trimmed_empty_means_off_and_junk_falls_back` | todo |
-| `PingMonitorTests.ChangingTheTargetImmediatelyHidesPreviousMeasurements` |  | `changing_the_target_immediately_hides_previous_measurements` | todo |
-| `PingMonitorTests.AnEmptyHostSendsNothingAndClearsTheSnapshot` |  | `an_empty_host_sends_nothing_and_clears_the_snapshot` | todo |
+| `PingMonitorTests.ExistingConfigsKeepPingingTheDefaultHost` | 2 | `existing_configs_keep_pinging_the_default_host` | todo |
+| `PingMonitorTests.HostIsTrimmedEmptyMeansOffAndJunkFallsBack` | 2 | `host_is_trimmed_empty_means_off_and_junk_falls_back` | todo |
+| `PingMonitorTests.ChangingTheTargetImmediatelyHidesPreviousMeasurements` | 2 | `changing_the_target_immediately_hides_previous_measurements` | todo |
+| `PingMonitorTests.AnEmptyHostSendsNothingAndClearsTheSnapshot` | 2 | `an_empty_host_sends_nothing_and_clears_the_snapshot` | todo |
 | `PortableAudioPlaybackTests.BuildStartInfoFormatsEachPlayerAndVolumeDeterministically` |  | `build_start_info_formats_each_player_and_volume_deterministically` | todo |
 | `PortableAudioPlaybackTests.ActionStateReflectsResolvedPlayerAvailability` |  | `action_state_reflects_resolved_player_availability` | todo |
 | `PortableAudioPlaybackTests.PlayRejectsMissingFilesAndInvalidTargetsBeforeSpawning` |  | `play_rejects_missing_files_and_invalid_targets_before_spawning` | todo |
@@ -661,9 +661,9 @@ C# test methods: 898 · ported or ruled out: 108 · to do: 790
 | `PushInputTests.APartialPushSnapshotKeepsItsValidEntriesWithoutBreakingState` | 1 | `a_partial_push_snapshot_keeps_its_valid_entries_without_breaking_state` | ported |
 | `PushInputTests.NonNumericPayloadTtlRemainsOrdinaryData` | 1 | `non_numeric_payload_ttl_remains_ordinary_data` | ported |
 | `PushInputTests.UnknownLengthRequestLimitCountsBytes` | 1 | `unknown_length_request_limit_counts_bytes` | ported |
-| `SaveWarning.DisposingTheHostFlushesUpdatesStillWaitingForTheTimer` | 1 | `disposing_the_host_flushes_updates_still_waiting_for_the_timer` | ported |
-| `SaveWarning.APlainFilenamePersistsInTheWorkingDirectory` | 1 | `a_plain_filename_persists_in_the_working_directory` | ported |
-| `SaveWarning.SavingRetriesAfterATemporaryFilesystemFailure` | 1 | `saving_retries_after_a_temporary_filesystem_failure` | ported |
+| `PushShutdownTests.DisposingTheHostFlushesUpdatesStillWaitingForTheTimer` | 1 | `disposing_the_host_flushes_updates_still_waiting_for_the_timer` | ported |
+| `PushShutdownTests.APlainFilenamePersistsInTheWorkingDirectory` | 1 | `a_plain_filename_persists_in_the_working_directory` | ported |
+| `PushShutdownTests.SavingRetriesAfterATemporaryFilesystemFailure` | 1 | `saving_retries_after_a_temporary_filesystem_failure` | ported |
 | `PushVersionTests.ConcurrentUpdatesEachAdvanceTheVersion` | 1 | `concurrent_updates_each_advance_the_version` | ported |
 | `QuestionPromptTests.TheQuestionAndItsChoicesAreListedAsText` |  | `the_question_and_its_choices_are_listed_as_text` | todo |
 | `QuestionPromptTests.WithoutQuestionsItStillTellsYouToLookAtTheTerminal` |  | `without_questions_it_still_tells_you_to_look_at_the_terminal` | todo |
@@ -764,7 +764,7 @@ C# test methods: 898 · ported or ruled out: 108 · to do: 790
 | `SessionTitleTests.WithoutAConfigNoTitleComesOut` |  | `without_a_config_no_title_comes_out` | todo |
 | `SessionTitleTests.TheWorkDataForThePhoneCarriesTheTitleOnlyWhenTitlesAreOn` |  | `the_work_data_for_the_phone_carries_the_title_only_when_titles_are_on` | todo |
 | `SessionTitleTests.ThePermissionCardNeverShowsTheTitle` |  | `the_permission_card_never_shows_the_title` | todo |
-| `ShTests.OutputDeadlineAppliesAfterTheDirectProcessExits` |  | `output_deadline_applies_after_the_direct_process_exits` | todo |
+| `ShTests.OutputDeadlineAppliesAfterTheDirectProcessExits` | 2 | `output_deadline_applies_after_the_direct_process_exits` | todo |
 | `ShortcutIconTests.RecognisesWhetherACommandNamesARealFile` |  | `recognises_whether_a_command_names_a_real_file` | todo |
 | `ShortcutIconTests.CommandsWithoutAFileHaveNoIcon` |  | `commands_without_a_file_have_no_icon` | todo |
 | `ShortcutIconTests.AMissingProgramHasNoIcon` |  | `a_missing_program_has_no_icon` | todo |
@@ -792,10 +792,10 @@ C# test methods: 898 · ported or ruled out: 108 · to do: 790
 | `ShortcutIconUploadsTests.CleanupDropsUploadsForShortcutsThatNoLongerExist` |  | `cleanup_drops_uploads_for_shortcuts_that_no_longer_exist` | todo |
 | `ShortcutIconUploadsTests.CleanupOnAFolderThatWasNeverCreatedDoesNothing` |  | `cleanup_on_a_folder_that_was_never_created_does_nothing` | todo |
 | `ShortcutIconUploadsTests.AnIdWithPathCharactersCannotEscapeTheIconsFolder` |  | `an_id_with_path_characters_cannot_escape_the_icons_folder` | todo |
-| `Capture.ThePhoneDoesNotGetTheConfiguredTextOfAFailedShortcut` |  | `the_phone_does_not_get_the_configured_text_of_a_failed_shortcut` | todo |
-| `Capture.ThePhoneStillGetsTheAgentsOwnAccessibilityHint` |  | `the_phone_still_gets_the_agents_own_accessibility_hint` | todo |
-| `Capture.AToggleHeldByTwoRulesStaysOnUntilTheLastOneEnds` |  | `a_toggle_held_by_two_rules_stays_on_until_the_last_one_ends` | todo |
-| `Capture.AFailedReleaseIsLogged` |  | `a_failed_release_is_logged` | todo |
+| `ShortcutRuleFollowUpTests.ThePhoneDoesNotGetTheConfiguredTextOfAFailedShortcut` |  | `the_phone_does_not_get_the_configured_text_of_a_failed_shortcut` | todo |
+| `ShortcutRuleFollowUpTests.ThePhoneStillGetsTheAgentsOwnAccessibilityHint` |  | `the_phone_still_gets_the_agents_own_accessibility_hint` | todo |
+| `ShortcutRuleFollowUpTests.AToggleHeldByTwoRulesStaysOnUntilTheLastOneEnds` |  | `a_toggle_held_by_two_rules_stays_on_until_the_last_one_ends` | todo |
+| `ShortcutRuleFollowUpTests.AFailedReleaseIsLogged` |  | `a_failed_release_is_logged` | todo |
 | `SingleFileMigrationTests.ASingleFileAgentRemovesTheFrameworkDependentFilesAndKeepsTheRest` |  | `a_single_file_agent_removes_the_framework_dependent_files_and_keeps_the_rest` | todo |
 | `SingleFileMigrationTests.AFrameworkDependentAgentKeepsItsFiles` |  | `a_framework_dependent_agent_keeps_its_files` | todo |
 | `SingleFileMigrationTests.AMissingDirectoryOrPartialSetIsFine` |  | `a_missing_directory_or_partial_set_is_fine` | todo |
@@ -813,17 +813,17 @@ C# test methods: 898 · ported or ruled out: 108 · to do: 790
 | `SpectrumAnalyzerTests.CaptureIsRefusedWithoutTheWidgetOnAnEnabledPage` |  | `capture_is_refused_without_the_widget_on_an_enabled_page` | todo |
 | `SpectrumAnalyzerTests.TheWidgetOnAnEnabledPageIsShown` |  | `the_widget_on_an_enabled_page_is_shown` | todo |
 | `SpectrumAnalyzerTests.ThePhoneMayAskForBandsOverWifi` |  | `the_phone_may_ask_for_bands_over_wifi` | todo |
-| `Fixture.TracksCarryTheSmallestUsableCoverFromSpotifysImageServer` |  | `tracks_carry_the_smallest_usable_cover_from_spotifys_image_server` | todo |
-| `Fixture.ThePlayingEpisodeAndQueuedEpisodesAreAskedFor` |  | `the_playing_episode_and_queued_episodes_are_asked_for` | todo |
-| `Fixture.CoversFromAnyOtherHostAreDropped` |  | `covers_from_any_other_host_are_dropped` | todo |
-| `Fixture.EpisodesUseTheShowNameAndTheirOwnImages` |  | `episodes_use_the_show_name_and_their_own_images` | todo |
-| `Fixture.PkceUsesSingleUseStateAndDoesNotWriteTokensIntoSettings` |  | `pkce_uses_single_use_state_and_does_not_write_tokens_into_settings` | todo |
-| `Fixture.StartingAnotherSignInInvalidatesThePreviousState` |  | `starting_another_sign_in_invalidates_the_previous_state` | todo |
-| `Fixture.DisconnectPersistsAcrossRestartAndDisablesManualTokenFallback` |  | `disconnect_persists_across_restart_and_disables_manual_token_fallback` | todo |
-| `Fixture.QueueCommandsRejectUnobservedItemsAndSaveUsesCurrentItem` |  | `queue_commands_reject_unobserved_items_and_save_uses_current_item` | todo |
-| `Fixture.RateLimitSuppressesRepeatedHttpRequests` |  | `rate_limit_suppresses_repeated_http_requests` | todo |
-| `Fixture.PlaybackTargetsAreSpotifyUrisOnly` |  | `playback_targets_are_spotify_uris_only` | todo |
-| `Fixture.ClientChangesInvalidateSnapshotReconnectClearsRateLimitAndEmptyRefreshPreservesToken` |  | `client_changes_invalidate_snapshot_reconnect_clears_rate_limit_and_empty_refresh_preserves_token` | todo |
+| `SpotifyControlTests.TracksCarryTheSmallestUsableCoverFromSpotifysImageServer` |  | `tracks_carry_the_smallest_usable_cover_from_spotifys_image_server` | todo |
+| `SpotifyControlTests.ThePlayingEpisodeAndQueuedEpisodesAreAskedFor` |  | `the_playing_episode_and_queued_episodes_are_asked_for` | todo |
+| `SpotifyControlTests.CoversFromAnyOtherHostAreDropped` |  | `covers_from_any_other_host_are_dropped` | todo |
+| `SpotifyControlTests.EpisodesUseTheShowNameAndTheirOwnImages` |  | `episodes_use_the_show_name_and_their_own_images` | todo |
+| `SpotifyControlTests.PkceUsesSingleUseStateAndDoesNotWriteTokensIntoSettings` |  | `pkce_uses_single_use_state_and_does_not_write_tokens_into_settings` | todo |
+| `SpotifyControlTests.StartingAnotherSignInInvalidatesThePreviousState` |  | `starting_another_sign_in_invalidates_the_previous_state` | todo |
+| `SpotifyControlTests.DisconnectPersistsAcrossRestartAndDisablesManualTokenFallback` |  | `disconnect_persists_across_restart_and_disables_manual_token_fallback` | todo |
+| `SpotifyControlTests.QueueCommandsRejectUnobservedItemsAndSaveUsesCurrentItem` |  | `queue_commands_reject_unobserved_items_and_save_uses_current_item` | todo |
+| `SpotifyControlTests.RateLimitSuppressesRepeatedHttpRequests` |  | `rate_limit_suppresses_repeated_http_requests` | todo |
+| `SpotifyControlTests.PlaybackTargetsAreSpotifyUrisOnly` |  | `playback_targets_are_spotify_uris_only` | todo |
+| `SpotifyControlTests.ClientChangesInvalidateSnapshotReconnectClearsRateLimitAndEmptyRefreshPreservesToken` |  | `client_changes_invalidate_snapshot_reconnect_clears_rate_limit_and_empty_refresh_preserves_token` | todo |
 | `SpotifyCredentialTests.ARotatedManualTokenReplacesTheOldOneWhenAnotherClientsCredentialFileExists` |  | `a_rotated_manual_token_replaces_the_old_one_when_another_clients_credential_file_exists` | todo |
 | `SpotifyCredentialTests.ASettingsChangeDuringASnapshotDoesNotMixTwoAccounts` |  | `a_settings_change_during_a_snapshot_does_not_mix_two_accounts` | todo |
 | `SpotifyCredentialTests.ADisconnectDuringASnapshotIsNotUndoneByItsAnswer` |  | `a_disconnect_during_a_snapshot_is_not_undone_by_its_answer` | todo |
@@ -839,12 +839,12 @@ C# test methods: 898 · ported or ruled out: 108 · to do: 790
 | `StateSignalTests.ASubscriberThatThrowsDoesNotStopThePokeOrTheCaller` | 1 | `a_subscriber_that_throws_does_not_stop_the_poke_or_the_caller` | ported |
 | `StateSignalTests.AMediaChangeThatMattersPokesButTheTickingPositionDoesNot` | 3 | `a_media_change_that_matters_pokes_but_the_ticking_position_does_not` | todo |
 | `StoreFollowUpTests.ASetWaitingForASaveDoesNotBlockTheOthers` |  | `a_set_waiting_for_a_save_does_not_block_the_others` | todo |
-| `FailingLog.AFailedSaveIsRetriedEvenWhenItsWarningCannotBeWritten` |  | `a_failed_save_is_retried_even_when_its_warning_cannot_be_written` | todo |
-| `FailingLog.AFormatChangeThatCannotRetireTheOldFileKeepsTheOldIcon` |  | `a_format_change_that_cannot_retire_the_old_file_keeps_the_old_icon` | todo |
-| `FailingLog.APageReferenceWithStraySpacesFindsItsPage` |  | `a_page_reference_with_stray_spaces_finds_its_page` | todo |
-| `FailingLog.DocumentationAddressesAreNotPublic` |  | `documentation_addresses_are_not_public` | todo |
-| `FailingLog.ReplacingClaudeSettingsKeepsThemOwnerOnly` |  | `replacing_claude_settings_keeps_them_owner_only` | todo |
-| `FailingLog.AMalformedHooksValueIsLeftAsItIs` |  | `a_malformed_hooks_value_is_left_as_it_is` | todo |
+| `StoreFollowUpTests.AFailedSaveIsRetriedEvenWhenItsWarningCannotBeWritten` |  | `a_failed_save_is_retried_even_when_its_warning_cannot_be_written` | todo |
+| `StoreFollowUpTests.AFormatChangeThatCannotRetireTheOldFileKeepsTheOldIcon` |  | `a_format_change_that_cannot_retire_the_old_file_keeps_the_old_icon` | todo |
+| `StoreFollowUpTests.APageReferenceWithStraySpacesFindsItsPage` |  | `a_page_reference_with_stray_spaces_finds_its_page` | todo |
+| `StoreFollowUpTests.DocumentationAddressesAreNotPublic` |  | `documentation_addresses_are_not_public` | todo |
+| `StoreFollowUpTests.ReplacingClaudeSettingsKeepsThemOwnerOnly` |  | `replacing_claude_settings_keeps_them_owner_only` | todo |
+| `StoreFollowUpTests.AMalformedHooksValueIsLeftAsItIs` |  | `a_malformed_hooks_value_is_left_as_it_is` | todo |
 | `TerminalStandInTests.WindowsTerminalFallsBackToPowerShell` |  | `windows_terminal_falls_back_to_power_shell` | todo |
 | `TerminalStandInTests.LinuxTriesTheTerminalVariableFirst` |  | `linux_tries_the_terminal_variable_first` | todo |
 | `TerminalStandInTests.LinuxWithoutTheVariableStartsWithTheDesktopTerminals` |  | `linux_without_the_variable_starts_with_the_desktop_terminals` | todo |
@@ -887,10 +887,10 @@ C# test methods: 898 · ported or ruled out: 108 · to do: 790
 | `WebViewDoctorTests.RejectsOverlongPackageHeader` | 1 | `rejects_overlong_package_header` | ported |
 | `WebViewDoctorTests.DiagnoseRecentIgnoresStalePhonesAndFindsActiveOutdatedOne` | 1 | `diagnose_recent_ignores_stale_phones_and_finds_active_outdated_one` | ported |
 | `WebViewDoctorTests.RegistryStoresNormalizedWebViewAndDeduplicatesWarning` | 1 | `registry_stores_normalized_web_view_and_deduplicates_warning` | ported |
-| `StubHandler.TryValidateTargetEnforcesHttpsDefaultPortAndAllowlist` |  | `try_validate_target_enforces_https_default_port_and_allowlist` | todo |
-| `StubHandler.IsPublicAddressRejectsLoopbackPrivateAndLinkLocal` |  | `is_public_address_rejects_loopback_private_and_link_local` | todo |
-| `StubHandler.FetchAsyncBlocksRedirectsAndOversizedResponses` |  | `fetch_async_blocks_redirects_and_oversized_responses` | todo |
-| `StubHandler.ProxyEndpointStaysLocalAndOffLanAllowlist` |  | `proxy_endpoint_stays_local_and_off_lan_allowlist` | todo |
+| `WidgetFeedProxyTests.TryValidateTargetEnforcesHttpsDefaultPortAndAllowlist` |  | `try_validate_target_enforces_https_default_port_and_allowlist` | todo |
+| `WidgetFeedProxyTests.IsPublicAddressRejectsLoopbackPrivateAndLinkLocal` |  | `is_public_address_rejects_loopback_private_and_link_local` | todo |
+| `WidgetFeedProxyTests.FetchAsyncBlocksRedirectsAndOversizedResponses` |  | `fetch_async_blocks_redirects_and_oversized_responses` | todo |
+| `WidgetFeedProxyTests.ProxyEndpointStaysLocalAndOffLanAllowlist` |  | `proxy_endpoint_stays_local_and_off_lan_allowlist` | todo |
 | `WidgetFeedProxyTransportTests.BodyConnectionFailuresBecomeBadGateway` |  | `body_connection_failures_become_bad_gateway` | todo |
 | `WidgetFeedProxyTransportTests.CallerCancellationRemainsCancellation` |  | `caller_cancellation_remains_cancellation` | todo |
 | `WidgetFeedProxyTransportTests.UnknownLengthBodiesRespectTheDecodedByteLimit` |  | `unknown_length_bodies_respect_the_decoded_byte_limit` | todo |
