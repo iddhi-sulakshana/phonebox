@@ -27,6 +27,10 @@ pub fn log(level: Level, category: &str, message: &str) {
     }
 }
 
+pub fn debug(category: &str, message: &str) {
+    log(Level::Debug, category, message);
+}
+
 pub fn info(category: &str, message: &str) {
     log(Level::Information, category, message);
 }

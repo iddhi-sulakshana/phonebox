@@ -311,7 +311,7 @@ pub fn process_name(pid: u32) -> Option<String> {
 }
 
 /// .NET's `Process.GetProcessesByName`: every process with this name, compared without regard to case.
-fn processes_named(name: &str) -> Vec<ProcRow> {
+pub(crate) fn processes_named(name: &str) -> Vec<ProcRow> {
     let want = fold(name);
     list_processes(None)
         .into_iter()

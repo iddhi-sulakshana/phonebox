@@ -125,6 +125,8 @@ pub struct AppState {
     pub ping: Arc<crate::ping_monitor::PingMonitor>,
     /// The process list (`/api/procs*`); main starts its sampling loop.
     pub procs: Arc<crate::process_monitor::ProcessMonitor>,
+    /// Wireless device batteries (`/api/batteries`); main starts its loop.
+    pub batteries: Arc<crate::battery_monitor::BatteryMonitor>,
 }
 
 impl AppState {
@@ -156,6 +158,7 @@ impl AppState {
             procs: crate::process_monitor::ProcessMonitor::new(Arc::new(
                 crate::process_monitor::NoSessions,
             )),
+            batteries: crate::battery_monitor::BatteryMonitor::new(),
             cfg,
             endpoint,
             push,

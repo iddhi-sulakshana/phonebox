@@ -1,5 +1,5 @@
-//! The system routes: `GET /api/network/adapters` (Settings › Ping & network) and the process list (`/api/procs*`);
-//! the battery routes come with their monitor.
+//! The system routes: `GET /api/network/adapters` (Settings › Ping & network), the process list (`/api/procs*`) and
+//! the device batteries (`GET /api/batteries`).
 
 use axum::Router;
 use axum::extract::{Query, State};
@@ -17,6 +17,15 @@ pub fn routes() -> Router<AppState> {
         .route("/api/procs/icon", get(proc_icon))
         .route("/api/procs/detail", get(proc_detail))
         .route("/api/procs/kill", post(proc_kill))
+        .route("/api/batteries", get(batteries))
+}
+
+/// Battery levels of wireless devices (headphones, mice, keyboards…), for the Device batteries widget.
+async fn batteries(State(s): State<AppState>) -> Response {
+    json_response(
+        StatusCode::OK,
+        &serde_json::json!({ "devices": s.batteries.snapshot() }),
+    )
 }
 
 /// `SystemMonitor.Adapters(cfg.Get().Ping.Adapters)`: the list does not depend on the chosen adapters.
@@ -197,6 +206,20 @@ mod tests {
             StatusCode::BAD_REQUEST
         );
         assert_eq!(call(&app, "GET", "/api/procs?top=").await.0, StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn batteries_list_the_devices_and_start_the_reads() {
+        let (_dir, state) = test_state();
+        let monitor = state.batteries.clone();
+        let app = build_router(state);
+        let (status, kind, json) = call(&app, "GET", "/api/batteries").await;
+        assert_eq!(
+            (status, kind.as_str()),
+            (StatusCode::OK, "application/json; charset=utf-8")
+        );
+        assert_eq!(json, serde_json::json!({"devices": []}));
+        assert!(monitor.is_wanted());
     }
 
     #[tokio::test]
