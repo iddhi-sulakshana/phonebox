@@ -2,3 +2,4 @@
 //! Like the C# files they compile on every OS; the OS-specific calls inside are `cfg`-gated.
 
 pub mod sh;
+pub mod unix_system;
