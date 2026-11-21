@@ -273,7 +273,7 @@ fn list_processes(only: Option<&[u32]>) -> Vec<ProcRow> {
 
 /// .NET's `ProcessName`: on Windows without ".exe"; on Linux the kernel's 15-character name, or argv[0]'s file name
 /// when the kernel name is a cut-off start of it.
-fn dotnet_name(pid: u32, os_name: &str) -> String {
+pub(crate) fn dotnet_name(pid: u32, os_name: &str) -> String {
     if cfg!(windows) {
         let n = os_name.len();
         if n > 4 && os_name.is_char_boundary(n - 4) && os_name[n - 4..].eq_ignore_ascii_case(".exe")

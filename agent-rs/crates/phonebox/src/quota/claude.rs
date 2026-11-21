@@ -552,6 +552,7 @@ impl QuotaMonitor {
                 ("Authorization".into(), format!("Bearer {token}")),
                 ("anthropic-beta".into(), "oauth-2025-04-20".into()),
             ],
+            body: None,
         };
         let reply = match (self.http)(request).await {
             Ok(reply) => reply,

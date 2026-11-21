@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use futures_util::FutureExt;
 use futures_util::future::BoxFuture;
-use http_body_util::{BodyExt, Empty};
+use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::{TokioExecutor, TokioIo};
@@ -130,11 +130,12 @@ pub async fn connect_ipv4_first(
     .await
 }
 
-/// A GET with these headers.
+/// A GET with these headers, or a POST of `body`.
 #[derive(Debug, Clone)]
 pub struct UsageRequest {
     pub url: String,
     pub headers: Vec<(String, String)>,
+    pub body: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -159,25 +160,44 @@ pub type UsageHttp =
 /// The real client: HTTP/1.1 over [`connect_ipv4_first`], TLS (rustls, the webpki roots) when the build has it.
 pub fn usage_http() -> UsageHttp {
     #[cfg(feature = "tls")]
-    let connector = {
-        let mut roots = rustls::RootCertStore::empty();
-        roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-        let config = rustls::ClientConfig::builder_with_provider(Arc::new(
-            rustls::crypto::ring::default_provider(),
-        ))
-        .with_safe_default_protocol_versions()
-        .expect("the ring provider supports the default TLS versions")
-        .with_root_certificates(roots)
-        .with_no_client_auth();
-        hyper_rustls::HttpsConnectorBuilder::new()
-            .with_tls_config(config)
-            .https_or_http()
-            .enable_http1()
-            .wrap_connector(Ipv4FirstConnector)
-    };
+    {
+        let config = rustls::ClientConfig::builder_with_provider(tls_provider())
+            .with_safe_default_protocol_versions()
+            .expect("the ring provider supports the default TLS versions")
+            .with_root_certificates(webpki_roots())
+            .with_no_client_auth();
+        http_with_tls(config)
+    }
     #[cfg(not(feature = "tls"))]
-    let connector = Ipv4FirstConnector;
-    let client: UsageClient = Client::builder(TokioExecutor::new()).build(connector);
+    {
+        wrap(Client::builder(TokioExecutor::new()).build(Ipv4FirstConnector))
+    }
+}
+
+#[cfg(feature = "tls")]
+pub(crate) fn tls_provider() -> Arc<rustls::crypto::CryptoProvider> {
+    Arc::new(rustls::crypto::ring::default_provider())
+}
+
+#[cfg(feature = "tls")]
+pub(crate) fn webpki_roots() -> rustls::RootCertStore {
+    let mut roots = rustls::RootCertStore::empty();
+    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    roots
+}
+
+/// The quota client with this TLS configuration (HTTP/1.1 over [`connect_ipv4_first`], no proxy, no redirects).
+#[cfg(feature = "tls")]
+pub(crate) fn http_with_tls(config: rustls::ClientConfig) -> UsageHttp {
+    let connector = hyper_rustls::HttpsConnectorBuilder::new()
+        .with_tls_config(config)
+        .https_or_http()
+        .enable_http1()
+        .wrap_connector(Ipv4FirstConnector);
+    wrap(Client::builder(TokioExecutor::new()).build(connector))
+}
+
+fn wrap(client: UsageClient) -> UsageHttp {
     Arc::new(move |req| {
         let client = client.clone();
         Box::pin(async move { send(&client, req).await })
@@ -185,9 +205,9 @@ pub fn usage_http() -> UsageHttp {
 }
 
 #[cfg(feature = "tls")]
-type UsageClient = Client<hyper_rustls::HttpsConnector<Ipv4FirstConnector>, Empty<Bytes>>;
+type UsageClient = Client<hyper_rustls::HttpsConnector<Ipv4FirstConnector>, Full<Bytes>>;
 #[cfg(not(feature = "tls"))]
-type UsageClient = Client<Ipv4FirstConnector, Empty<Bytes>>;
+type UsageClient = Client<Ipv4FirstConnector, Full<Bytes>>;
 
 /// Why the connector gave up, with the host and port as .NET adds them (`Could not connect (host:443)`).
 #[derive(Debug)]
@@ -239,7 +259,12 @@ async fn send(client: &UsageClient, req: UsageRequest) -> Result<UsageReply, Htt
     if !cfg!(feature = "tls") && req.url.starts_with("https:") {
         return Err(HttpFail::Other("this build has no TLS".into()));
     }
-    let mut builder = http::Request::get(&req.url).header(
+    let builder = if req.body.is_some() {
+        http::Request::post(&req.url)
+    } else {
+        http::Request::get(&req.url)
+    };
+    let mut builder = builder.header(
         http::header::USER_AGENT,
         format!("PhoneBox/{}", crate::app_paths::version()),
     );
@@ -247,7 +272,7 @@ async fn send(client: &UsageClient, req: UsageRequest) -> Result<UsageReply, Htt
         builder = builder.header(name.as_str(), value.as_str());
     }
     let request = builder
-        .body(Empty::new())
+        .body(Full::new(Bytes::from(req.body.unwrap_or_default())))
         .map_err(|e| HttpFail::Other(e.to_string()))?;
     let exchange = async {
         let res = client.request(request).await.map_err(client_error)?;
@@ -466,6 +491,7 @@ mod tests {
                 ("Authorization".into(), "Bearer fake-token".into()),
                 ("anthropic-beta".into(), "x".into()),
             ],
+            body: None,
         })
         .await
         .unwrap();
@@ -501,6 +527,7 @@ mod tests {
         let result = http(UsageRequest {
             url: format!("http://127.0.0.1:{port}/"),
             headers: vec![],
+            body: None,
         })
         .await;
         assert_eq!(
@@ -511,6 +538,7 @@ mod tests {
             let result = http(UsageRequest {
                 url: "https://127.0.0.1:1/".into(),
                 headers: vec![],
+                body: None,
             })
             .await;
             assert_eq!(

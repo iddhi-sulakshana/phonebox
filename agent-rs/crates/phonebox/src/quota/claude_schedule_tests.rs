@@ -419,6 +419,7 @@ async fn a_connect_failure_of_the_real_handler_is_a_connection_error() {
     let result = http(UsageRequest {
         url: format!("http://127.0.0.1:{port}/"),
         headers: vec![],
+        body: None,
     })
     .await;
     assert!(matches!(result, Err(HttpFail::Connect(_))), "{result:?}");

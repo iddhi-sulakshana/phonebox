@@ -1,5 +1,6 @@
 //! Port of `QuotaMonitor.cs`: quota usage of the AI subscriptions (Claude, Codex, Antigravity, and what CodexBar adds).
 
+pub mod antigravity;
 pub mod claude;
 pub mod codex;
 pub mod connect;
