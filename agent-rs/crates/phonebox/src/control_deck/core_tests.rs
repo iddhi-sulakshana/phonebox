@@ -877,6 +877,26 @@ fn mixer_parameters_and_shortcut_process_names() {
     }
 }
 
+#[test]
+fn listen_lines_escape_as_dotnet_does() {
+    let packet = DeckAudioPacket {
+        rate: 48_000,
+        channels: 2,
+        bits: 32,
+        encoding: "IeeeFloat".into(),
+        data: Some("AA+/".into()),
+    };
+    assert_eq!(
+        listen_line(&packet),
+        "{\"rate\":48000,\"channels\":2,\"bits\":32,\"encoding\":\"IeeeFloat\",\"data\":\"AA\\u002B/\"}\n"
+    );
+    let keep_alive = DeckAudioPacket {
+        data: None,
+        ..packet
+    };
+    assert!(listen_line(&keep_alive).ends_with("\"data\":null}\n"));
+}
+
 // Rust-only: the phone's request limits, the generic outcome texts and what the snapshot says about each control.
 
 #[tokio::test]

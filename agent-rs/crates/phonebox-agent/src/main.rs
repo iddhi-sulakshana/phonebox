@@ -120,9 +120,9 @@ fn main() -> ExitCode {
     media.start(state.stop.clone());
     state.media = media;
     // the rules and the charge guard use the monitors put in above; /api/state reads the same engine
-    let state = state
-        .rewire()
-        .with_controls(Arc::new(phonebox::control_deck::core::NoNative));
+    // the deck plays sounds and stations with the platform's players and reads the same volume and media
+    let native = phonebox::control_deck::platform_native(state.audio.clone(), state.media.clone());
+    let state = state.rewire().with_controls(native);
     rules.set(state.rules.clone());
     deck.set(state.controls.clone());
     let controls = state.controls.clone();

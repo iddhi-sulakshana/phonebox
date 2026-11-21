@@ -151,6 +151,8 @@ pub struct ControlDeck {
     spotify: Option<Arc<crate::spotify_control::SpotifyControl>>,
     /// What a workflow or routing control last did, shown on its card (`_actionResults`).
     action_results: Mutex<std::collections::HashMap<String, String>>,
+    /// At most two `/api/controls/listen` streams.
+    listeners: Arc<tokio::sync::Semaphore>,
 }
 
 impl ControlDeck {
@@ -211,6 +213,7 @@ impl ControlDeck {
                 master: options.master,
                 spotify: options.spotify,
                 action_results: Mutex::default(),
+                listeners: Arc::new(tokio::sync::Semaphore::new(2)),
             }
         })
     }
@@ -866,6 +869,35 @@ impl ControlDeck {
         Ok(())
     }
 
+    /// `GET /api/controls/listen`: the computer's sound as NDJSON lines (one packet each) until listening is turned
+    /// off; Err(403) unless listening is allowed (Windows only), Err(429) while two others listen.
+    pub fn listen(&self) -> Result<futures_util::stream::BoxStream<'static, String>, u16> {
+        use futures_util::StreamExt;
+        if !self.cfg.get().controls.allow_listening || !cfg!(windows) {
+            return Err(403);
+        }
+        let permit = self
+            .listeners
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| 429u16)?;
+        let cfg = self.cfg.clone();
+        let packets = self
+            .native
+            .listen()
+            .unwrap_or_else(|| futures_util::stream::empty().boxed());
+        Ok(packets
+            .take_while(move |_| {
+                let on = cfg.get().controls.allow_listening;
+                async move { on }
+            })
+            .map(move |packet| {
+                let _listening = &permit;
+                listen_line(&packet)
+            })
+            .boxed())
+    }
+
     /// The agent is stopping: every hold ends (microphones restored), ducked and fading sessions get their volume back,
     /// task programs end (at most 8 s), and the native side lets go. Once; blocks.
     pub fn dispose(&self) {
@@ -884,6 +916,24 @@ impl ControlDeck {
         self.tasks.stop_all(Duration::from_secs(8));
         self.native.dispose();
     }
+}
+
+/// One packet as `/api/controls/listen` writes it: camelCase, escaped as .NET's default encoder does (`+` in the base64
+/// is `\u002B`), and a newline.
+pub fn listen_line(p: &DeckAudioPacket) -> String {
+    use crate::config::write::escape_js_default;
+    let data = p
+        .data
+        .as_deref()
+        .map_or_else(|| "null".to_string(), escape_js_default);
+    format!(
+        "{{\"rate\":{},\"channels\":{},\"bits\":{},\"encoding\":{},\"data\":{}}}\n",
+        p.rate,
+        p.channels,
+        p.bits,
+        escape_js_default(&p.encoding),
+        data
+    )
 }
 
 /// Unix milliseconds now.

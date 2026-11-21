@@ -5,9 +5,27 @@ pub mod core;
 pub mod leases;
 pub mod midi;
 pub mod models;
+pub mod portable;
 pub mod tasks;
 #[cfg(test)]
 pub(crate) mod testing;
+
+/// The deck's native side on this platform: the command-line players off Windows (Windows' own comes with the
+/// Windows tasks; until then nothing there).
+pub fn platform_native(
+    audio: std::sync::Arc<crate::audio_control::AudioControl>,
+    media: std::sync::Arc<dyn crate::media_monitor::SystemMedia>,
+) -> std::sync::Arc<dyn models::DeckNative> {
+    #[cfg(windows)]
+    {
+        let _ = (audio, media);
+        std::sync::Arc::new(core::NoNative)
+    }
+    #[cfg(not(windows))]
+    {
+        std::sync::Arc::new(portable::PortableDeckNative::new(audio, media, None))
+    }
+}
 
 /// Monotonic milliseconds (`Environment.TickCount64` in the C# agent): leases, confirmations and caches.
 pub(crate) fn monotonic_ms() -> i64 {

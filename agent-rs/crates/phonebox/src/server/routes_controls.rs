@@ -14,6 +14,7 @@ pub fn routes() -> Router<AppState> {
         .route("/api/controls/state", get(state))
         .route("/api/controls/command/{kind}", post(command))
         .route("/api/controls/capture", post(capture))
+        .route("/api/controls/listen", get(listen))
         .route("/api/controls/task-output/{id}", get(task_output))
 }
 
@@ -50,6 +51,21 @@ async fn command(
         Ok(result) => json_response(StatusCode::OK, &result),
         // only the request's own end cancels, and then nobody reads the answer
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// The computer's sound as NDJSON (Windows, when the settings allow it); 403 or 429 with an empty body otherwise.
+async fn listen(State(s): State<AppState>) -> Response {
+    use futures_util::StreamExt;
+    match s.controls.listen() {
+        Err(status) => StatusCode::from_u16(status)
+            .unwrap_or(StatusCode::FORBIDDEN)
+            .into_response(),
+        Ok(lines) => (
+            [(header::CONTENT_TYPE, "application/x-ndjson")],
+            axum::body::Body::from_stream(lines.map(Ok::<_, std::convert::Infallible>)),
+        )
+            .into_response(),
     }
 }
 
@@ -130,6 +146,11 @@ mod tests {
             assert_eq!(res.status(), 400, "{bad}");
             assert_eq!(text(res).await, "");
         }
+
+        // listening is off unless the settings allow it (and on Windows only)
+        let res = send(&app, "GET", "/api/controls/listen", &[LOCAL]).await;
+        assert_eq!(res.status(), 403);
+        assert_eq!(text(res).await, "");
 
         // no audio here: the capture fails as the C# agent's unhandled error did
         let res = send(&app, "POST", "/api/controls/capture", &[LOCAL]).await;
