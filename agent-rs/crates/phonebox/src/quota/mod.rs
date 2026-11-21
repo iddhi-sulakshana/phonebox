@@ -187,12 +187,15 @@ pub struct QuotaMonitor {
     /// `claude-quota.json` in the local data folder; `claude-quota-schedule.json` sits beside it.
     pub(crate) claude_cache_path: PathBuf,
     /// Claude Code's credentials file (read only).
-    #[allow(dead_code)] // until the Claude schedule reads it
     pub(crate) credentials_path: PathBuf,
     #[allow(dead_code)] // until the Codex reader uses it
     pub(crate) codex_sessions_root: PathBuf,
-    #[allow(dead_code)] // until the Claude schedule sends with it
     pub(crate) http: UsageHttp,
+    /// Claude Code's macOS Keychain item; None uses the `security` tool, and only for the default credentials path on
+    /// macOS. Tests give a reader of their own so nothing touches the real Keychain.
+    pub(crate) read_keychain: Option<claude::KeychainReader>,
+    /// The Claude schedule; held for a whole pass (one pass at a time).
+    pub(crate) claude_sched: tokio::sync::Mutex<claude::ClaudeSched>,
     pub(crate) state: Mutex<State>,
 }
 
@@ -205,6 +208,8 @@ impl QuotaMonitor {
             credentials_path: home.join(".claude").join(".credentials.json"),
             codex_sessions_root: home.join(".codex").join("sessions"),
             http: connect::usage_http(),
+            read_keychain: None,
+            claude_sched: Default::default(),
             state: Mutex::new(State::default()),
         }
     }
