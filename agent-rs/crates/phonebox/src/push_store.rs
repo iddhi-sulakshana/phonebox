@@ -119,6 +119,12 @@ impl PushStore {
 
     pub fn snapshot(&self) -> IndexMap<String, PushItem> {
         self.purge_expired();
+        self.live_items()
+    }
+
+    /// The values whose TTL has not passed, without purging: a purge may reach `changed()`, which takes the persist
+    /// lock, so the save (which holds that lock) reads this instead.
+    fn live_items(&self) -> IndexMap<String, PushItem> {
         let now = now_ms();
         self.items()
             .iter()
@@ -247,6 +253,8 @@ impl PushStore {
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_millis(delay_ms));
             if let Some(store) = me.upgrade() {
+                // before the lock: an expired value is a change (C#'s Snapshot purges inside its re-entrant lock)
+                store.purge_expired();
                 let mut state = store.persist.lock().unwrap_or_else(|e| e.into_inner());
                 if !state.disposed {
                     store.save_pending_locked(&mut state);
@@ -257,6 +265,7 @@ impl PushStore {
 
     /// Saves a pending change now (the agent is stopping); later timers do nothing.
     pub fn dispose(&self) {
+        self.purge_expired();
         let mut state = self.persist.lock().unwrap_or_else(|e| e.into_inner());
         if state.disposed {
             return;
@@ -277,7 +286,7 @@ impl PushStore {
             let tmp = crate::app_paths::with_suffix(&self.data_path, ".tmp");
             crate::app_paths::write_all_text_private(
                 &tmp,
-                &serde_json::to_string(&self.snapshot()).expect("push values serialize"),
+                &serde_json::to_string(&self.live_items()).expect("push values serialize"),
             )?;
             std::fs::rename(&tmp, &self.data_path)
         })();
@@ -397,6 +406,35 @@ mod tests {
     // not-ported: TestPortsTests.ConcurrentFixturesKeepDistinctBoundListeners: tests the C# fixtures' port helper; Rust test servers bind port 0
 
     // StoreFollowUpTests: a Set that has to wait for a save in progress must not hold up every other Set behind it.
+    // review of PR 1: the save took the snapshot under the persist lock, and a value that expired meanwhile made the
+    // purge reach `changed()`, which takes the same lock again (C#'s lock is re-entrant, std's is not)
+    #[test]
+    fn a_value_that_expires_before_the_save_does_not_deadlock() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data.json");
+        let store = PushStore::new(&path);
+        store.set("x", serde_json::json!(1), Some(1)).unwrap();
+        store.set("kept", serde_json::json!(2), None).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        let (done, finished) = std::sync::mpsc::channel();
+        let saver = store.clone();
+        std::thread::spawn(move || {
+            saver.dispose();
+            let _ = done.send(());
+        });
+        assert!(
+            finished
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .is_ok(),
+            "dispose did not return"
+        );
+        let saved = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            saved.contains("kept") && !saved.contains("\"x\""),
+            "{saved}"
+        );
+    }
+
     #[test]
     fn a_set_waiting_for_a_save_does_not_block_the_others() {
         let dir = tempfile::tempdir().unwrap();
