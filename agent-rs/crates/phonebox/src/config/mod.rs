@@ -1065,7 +1065,11 @@ impl ConsoleProfile {
             .map(str::trim)
             .filter(|a| !a.is_empty())
             .map(|a| {
-                if a.len() >= 4 && a[a.len() - 4..].eq_ignore_ascii_case(".exe") {
+                // `.exe` is ASCII: a cut inside a multi-byte character is no match
+                if a.len() >= 4
+                    && a.is_char_boundary(a.len() - 4)
+                    && a[a.len() - 4..].eq_ignore_ascii_case(".exe")
+                {
                     &a[..a.len() - 4]
                 } else {
                     a
@@ -1361,6 +1365,16 @@ mod tests {
 
     fn page_ids(c: &AgentConfig) -> Vec<&str> {
         c.pages.iter().map(|p| p.id.as_str()).collect()
+    }
+
+    // review of PR 1: the `.exe` check sliced bytes and panicked inside a multi-byte character
+    #[test]
+    fn app_names_with_non_ascii_text_do_not_panic() {
+        let profile = ConsoleProfile {
+            apps: "猫猫, café.EXE, x.exe,é".into(),
+            ..Default::default()
+        };
+        assert_eq!(profile.app_names(), vec!["猫猫", "café", "x", "é"]);
     }
 
     #[test]

@@ -751,6 +751,14 @@ mod tests {
             s.save(r#"{"night":{"start":"25:99"}}"#, None),
             Err("Night mode times must be in HH:MM format".into())
         );
+        // C# reads a null time as null, which its check (`?? ""`) refuses; a missing one is the default
+        for body in [r#"{"night":{"start":null}}"#, r#"{"Night":{"End":null}}"#] {
+            assert_eq!(
+                s.save(body, None),
+                Err("Night mode times must be in HH:MM format".into()),
+                "{body}"
+            );
+        }
         assert_eq!(
             s.save(
                 r#"{"cameras":{"sources":[{"name":"Door","url":"http://x"}]}}"#,

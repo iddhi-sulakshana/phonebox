@@ -155,6 +155,19 @@ fn canonical_object(
         match KNOWN.get(&key.to_ascii_lowercase()) {
             Some(&name) => {
                 let here = format!("{path}.{key}");
+                // a saved null night time reaches C#'s HH:MM check as "" (`?? ""`) and is refused; on load it is the
+                // default
+                if value.is_null()
+                    && strict
+                    && matches!(name, "start" | "end")
+                    && path
+                        .rsplit('.')
+                        .next()
+                        .is_some_and(|p| p.eq_ignore_ascii_case("night"))
+                {
+                    out.insert(name.to_string(), Value::String(String::new()));
+                    continue;
+                }
                 if value.is_null() && !NULL_KEPT.contains(&name) {
                     match VALUE.get(name) {
                         // C# has no null for a bool, int or double: System.Text.Json refuses it (without the line
