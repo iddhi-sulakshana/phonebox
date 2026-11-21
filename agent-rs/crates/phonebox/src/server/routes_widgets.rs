@@ -1,9 +1,9 @@
-//! The widget data routes of plan 6 survey B: feeds (and, later in plan 6, calendars, photos, cameras and the feed
-//! proxy) (`Program.cs:494-528`, `:809`).
+//! The widget data routes of plan 6 survey B: feeds, calendars, photos, cameras and the feed proxy
+//! (`Program.cs:494-528`, `:809`).
 
 use axum::Router;
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use serde_json::json;
@@ -21,6 +21,42 @@ pub fn routes() -> Router<AppState> {
         .route("/api/calendar", get(calendar))
         .route("/api/photos", get(photos))
         .route("/api/photos/{id}", get(photo))
+        .route("/api/camera", get(camera))
+}
+
+/// The latest picture of the camera a Camera widget shows (`fresh`: exactly "true" or "1", read as text so an odd
+/// value is not a 400). Never cached; the camera's address stays here.
+async fn camera(State(s): State<AppState>, headers: HeaderMap, Query(q): QueryList) -> Response {
+    use axum::http::{HeaderValue, header};
+    let device = headers
+        .get("x-phonebox-device")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    let widget = query::value(&q, "widget");
+    let fresh = matches!(query::value(&q, "fresh").as_deref(), Some("true" | "1"));
+    let cameras = s.cameras.clone();
+    // it may start ffmpeg: off the async workers
+    let (status, jpeg, state) =
+        tokio::task::spawn_blocking(move || cameras.frame(Some(&device), widget.as_deref(), fresh))
+            .await
+            .unwrap_or((503, None, "starting"));
+    let mut res = match jpeg {
+        // no newer picture than the one this widget has
+        _ if status == 204 => StatusCode::NO_CONTENT.into_response(),
+        Some(jpeg) => ([(header::CONTENT_TYPE, "image/jpeg")], jpeg).into_response(),
+        None => json_response(
+            StatusCode::from_u16(status).unwrap_or(StatusCode::SERVICE_UNAVAILABLE),
+            &json!({ "state": state }),
+        ),
+    };
+    let h = res.headers_mut();
+    h.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    h.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    res
 }
 
 /// The photo ids of the chosen folder (scanned in the background), or why there are none.
@@ -266,6 +302,38 @@ mod tests {
         );
         let res = send(&app, "GET", "/api/photos/0123456789abcdef", &[LOCAL]).await;
         assert_eq!(json_of(res).await, json!({"error": "Unknown photo"}));
+    }
+
+    #[tokio::test]
+    async fn the_camera_route_answers_a_state_that_is_never_cached_on_both_ports() {
+        let (_d, s) = test_state();
+        s.cfg
+            .save(
+                r#"{"lan":{"enabled":true,"port":8766,"token":"phone-key"},
+                    "pages":[{"id":"p","title":"P","widgets":[{"id":"w","type":"camera","x":0,"y":0,"w":4,"h":3,"options":{"camera":"gone00000001"}}]}]}"#,
+                None,
+            )
+            .unwrap();
+        let app = crate::server::build_router(s.clone());
+        let phone = ("x-phonebox-device", "phone1");
+        // fresh is read as text: odd values are not a 400
+        for (path, state) in [
+            ("/api/camera", "unknown"),
+            ("/api/camera?widget=p/x", "unknown"),
+            ("/api/camera?widget=p/w", "pick"),
+            ("/api/camera?widget=p/w&fresh=True", "pick"),
+            ("/api/camera?widget=p/w&fresh=x", "pick"),
+        ] {
+            let res = send(&app, "GET", path, &[LOCAL, phone]).await;
+            assert_eq!(res.status(), 404, "{path}");
+            assert_eq!(res.headers()["cache-control"], "no-store", "{path}");
+            assert_eq!(res.headers()["x-content-type-options"], "nosniff", "{path}");
+            assert_eq!(json_of(res).await, json!({"state": state}), "{path}");
+        }
+        let wifi = crate::server::build_wifi_router(s);
+        let key = ("authorization", "Bearer phone-key");
+        let res = send(&wifi, "GET", "/api/camera?widget=p/w", &[key]).await;
+        assert_eq!(json_of(res).await, json!({"state": "pick"}));
     }
 
     #[tokio::test]

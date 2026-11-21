@@ -256,7 +256,7 @@ fn validate_console_profile(p: &ConsoleProfile) -> Result<(), String> {
 }
 
 /// `CameraFeeds.ValidUrl`: an absolute rtsp:// or rtsps:// address with a host.
-fn valid_camera_url(url: &str) -> bool {
+pub(crate) fn valid_camera_url(url: &str) -> bool {
     let Some((scheme, rest)) = url.trim().split_once("://") else {
         return false;
     };

@@ -169,6 +169,7 @@ async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Res
     state.discord.start(state.stop.clone()); // Discord's local RPC pipe while Discord is enabled, polled every 2 s
     state.feeds.start(state.stop.clone()); // every 5 s; each feed at most every 15 min, only while a Feeds widget shows
     state.calendar.start(state.stop.clone()); // at once, then every 10 min, on calendar changes and on /api/refresh
+    state.cameras.start(state.stop.clone()); // every second: stops cameras off screen, restarts stalled ffmpegs
     log::info(
         "PhoneBoxAgent",
         &format!(

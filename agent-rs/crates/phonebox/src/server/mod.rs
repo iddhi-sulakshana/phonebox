@@ -262,6 +262,7 @@ pub struct AppState {
     pub feeds: Arc<crate::feeds::FeedMonitor>,
     pub calendar: Arc<crate::calendar::CalendarMonitor>,
     pub photos: Arc<crate::photo_frame::PhotoFrame>,
+    pub cameras: Arc<crate::camera_feeds::CameraFeeds>,
     /// `/api/proxy`'s client (a fake in tests).
     pub proxy: crate::widget_feed_proxy::ProxySend,
 }
@@ -319,8 +320,18 @@ impl AppState {
             let photos = photos.clone();
             settings_hooks.add(Arc::new(move || photos.settings_saved()));
         }
+        let cameras = Arc::new(crate::camera_feeds::CameraFeeds::new(
+            cfg.clone(),
+            crate::camera_feeds::real_launcher(),
+        ));
+        {
+            // a camera whose address changed starts again, a removed one stops
+            let cameras = cameras.clone();
+            settings_hooks.add(Arc::new(move || cameras.settings_saved()));
+        }
         AppState {
             photos,
+            cameras,
             transcripts: sessions.transcripts(),
             procs: crate::process_monitor::ProcessMonitor::new(sessions.clone()),
             hook,

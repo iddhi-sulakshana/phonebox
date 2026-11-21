@@ -13,6 +13,7 @@ pub mod audio_control;
 pub mod battery_monitor;
 pub mod browser_guard;
 pub mod calendar;
+pub mod camera_feeds;
 pub mod catalog;
 pub mod claude_hook;
 pub mod claude_transcript;
