@@ -77,6 +77,17 @@ impl StateSources {
         self
     }
 
+    /// `rules` and `rulesPaused` from the rule engine.
+    pub fn with_rules(
+        mut self,
+        active: Box<dyn StateSource>,
+        paused: Box<dyn StateSource>,
+    ) -> StateSources {
+        self.rules = active;
+        self.rules_paused = paused;
+        self
+    }
+
     /// `privacy` from the privacy monitor.
     pub fn with_privacy(mut self, privacy: Box<dyn StateSource>) -> StateSources {
         self.privacy = privacy;

@@ -653,7 +653,7 @@ pub fn slug(s: &str) -> String {
 }
 
 /// `double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture)` for the values a rule's box may hold.
-fn parse_invariant_double(s: &str) -> Option<f64> {
+pub(crate) fn parse_invariant_double(s: &str) -> Option<f64> {
     let t = s.trim();
     match t.to_ascii_lowercase().as_str() {
         "infinity" | "+infinity" | "∞" => Some(f64::INFINITY),

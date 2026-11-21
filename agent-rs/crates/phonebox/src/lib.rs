@@ -58,6 +58,7 @@ pub mod process_monitor;
 pub mod push_store;
 pub mod quota;
 pub mod request_timings;
+pub mod rule_engine;
 pub mod screen_sync;
 pub mod server;
 pub mod session_lock_monitor;

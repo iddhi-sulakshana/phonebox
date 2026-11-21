@@ -82,6 +82,7 @@ fn main() -> ExitCode {
     let github = Arc::new(phonebox::github_monitor::GitHubMonitor::new());
     let obs = Arc::new(phonebox::obs_monitor::ObsMonitor::new(cfg.clone()));
     let privacy = phonebox::privacy_monitor::PrivacyMonitor::new();
+    let rules = Arc::new(phonebox::rule_engine::RulesSlot::default());
     let sources = phonebox::state::StateSources::phase1()
         .with_pc(Box::new(system.clone()))
         .with_ping(Box::new(ping.clone()))
@@ -99,6 +100,10 @@ fn main() -> ExitCode {
         .with_privacy(Box::new(phonebox::privacy_monitor::PrivacyState(
             privacy.clone(),
         )))
+        .with_rules(
+            Box::new(phonebox::rule_engine::ActiveRules(rules.clone())),
+            Box::new(phonebox::rule_engine::RulesPaused(rules.clone())),
+        )
         .with_work(Box::new(phonebox::session_monitor::WorkFeed {
             sessions: sessions.clone(),
             github: github.clone(),
@@ -115,6 +120,9 @@ fn main() -> ExitCode {
     // started here, on its own thread: the server never stops it before the process ends
     media.start(state.stop.clone());
     state.media = media;
+    // the rules read the monitors put in above; /api/state reads the same engine
+    let state = state.with_rules();
+    rules.set(state.rules.clone());
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
     let result = runtime.block_on(serve(state, config_path));
     push.dispose();
@@ -176,6 +184,7 @@ async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Res
     state.calendar.start(state.stop.clone()); // at once, then every 10 min, on calendar changes and on /api/refresh
     state.cameras.start(state.stop.clone()); // every second: stops cameras off screen, restarts stalled ffmpegs
     state.privacy.start(state.stop.clone()); // every 2 s (macOS: unknown)
+    state.rules.start(state.stop.clone()); // after 3 s, then every second
     // every second: the phones' screens follow the Mac's lock while display.followComputerLock is on
     phonebox::session_lock_monitor::start(state.cfg.clone(), state.adb.clone(), state.stop.clone());
     log::info(

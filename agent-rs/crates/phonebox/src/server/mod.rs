@@ -9,6 +9,7 @@ mod routes_integrations;
 pub mod routes_pair;
 mod routes_phones;
 mod routes_push;
+mod routes_rules;
 pub mod routes_settings;
 pub mod routes_state;
 mod routes_system;
@@ -111,6 +112,7 @@ fn all_routes() -> axum::Router<AppState> {
         .merge(routes_integrations::routes())
         .merge(routes_widgets::routes())
         .merge(routes_phones::routes())
+        .merge(routes_rules::routes())
         // Kestrel's default request body limit: a settings page with many pages still fits
         .layer(axum::extract::DefaultBodyLimit::max(30_000_000))
 }
@@ -204,6 +206,8 @@ pub struct AppState {
     pub adb: Arc<crate::adb::AdbReverse>,
     /// Microphone and camera use (the "On air" widget and rules); main shares it with the state sources.
     pub privacy: Arc<crate::privacy_monitor::PrivacyMonitor>,
+    /// Automation rules; [`AppState::with_rules`] builds it over the monitors in place.
+    pub rules: Arc<crate::rule_engine::RuleEngine>,
     pub stop: Stop,
     /// The monitors behind `/api/state` and the live stream.
     pub sources: Arc<crate::state::StateSources>,
@@ -331,7 +335,15 @@ impl AppState {
             let cameras = cameras.clone();
             settings_hooks.add(Arc::new(move || cameras.settings_saved()));
         }
-        AppState {
+        let state = AppState {
+            // replaced below, once the monitors it reads are in place
+            rules: crate::rule_engine::RuleEngine::new(
+                cfg.clone(),
+                push.clone(),
+                None,
+                Arc::new(crate::rule_engine::NoInputs),
+                crate::rule_engine::RuleClock::system(),
+            ),
             privacy: crate::privacy_monitor::PrivacyMonitor::new(),
             photos,
             cameras,
@@ -384,11 +396,25 @@ impl AppState {
             stop: Stop::default(),
             sources,
             frames,
-        }
+        };
+        state.with_rules()
     }
 }
 
 impl AppState {
+    /// A rule engine over the monitors now in place (main calls it again after putting its own monitors in).
+    pub fn with_rules(mut self) -> AppState {
+        let inputs = Arc::new(crate::rule_engine::LiveInputs::of(&self));
+        self.rules = crate::rule_engine::RuleEngine::new(
+            self.cfg.clone(),
+            self.push.clone(),
+            Some(self.audio.clone()),
+            inputs,
+            crate::rule_engine::RuleClock::system(),
+        );
+        self
+    }
+
     /// The session and GitHub monitors main built first (the state sources' "work" frame reads them): the process list
     /// and the permission hook read the same session monitor.
     pub fn with_work(
