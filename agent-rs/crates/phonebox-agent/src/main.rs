@@ -38,6 +38,16 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     };
 
+    // an install updated from a framework-dependent C# release still carries its files; nothing loads them now
+    if let Ok(exe) = std::env::current_exe()
+        && phonebox::update::migration::running_installed(&exe)
+    {
+        phonebox::update::migration::remove_framework_dependent_leftovers(
+            &app_paths::install_dir(),
+            true,
+        );
+    }
+
     let custom = args.iter().skip_while(|a| *a != "--config").nth(1).cloned();
     if custom.is_none() {
         let _ = app_paths::ensure_config();
