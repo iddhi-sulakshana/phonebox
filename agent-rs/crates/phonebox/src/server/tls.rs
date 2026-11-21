@@ -210,6 +210,10 @@ mod tests {
 
     /// The Wi-Fi server on a free port, with Wi-Fi on, the phone key `phone-key` and a trackpad page.
     async fn start(handshake_timeout: Duration) -> Wifi {
+        start_with(handshake_timeout, crate::server::WIFI_HEADERS_TIMEOUT).await
+    }
+
+    async fn start_with(handshake_timeout: Duration, headers_timeout: Duration) -> Wifi {
         let (dir, state) = test_state();
         state
             .cfg
@@ -224,10 +228,11 @@ mod tests {
         let addr = tcp.local_addr().unwrap();
         let listener =
             TlsListener::new(tcp, server_config(&cert).unwrap(), handshake_timeout).unwrap();
-        let server = tokio::spawn(crate::server::serve_wifi_on(
+        let server = tokio::spawn(crate::server::serve_wifi_with(
             listener,
             state.clone(),
             Duration::from_secs(30),
+            headers_timeout,
         ));
         Wifi {
             _dir: dir,
@@ -279,6 +284,41 @@ mod tests {
             .unwrap_or_default();
         let connection = if close { "Connection: close\r\n" } else { "" };
         format!("GET {path} HTTP/1.1\r\nHost: 192.168.1.10:8766\r\n{auth}{connection}\r\n")
+    }
+
+    /// Reads until the server closes the connection; false when it is still open after `within`.
+    async fn closed_within<S: tokio::io::AsyncRead + Unpin>(
+        stream: &mut S,
+        within: Duration,
+    ) -> bool {
+        let mut buf = [0u8; 4096];
+        tokio::time::timeout(within, async {
+            loop {
+                match stream.read(&mut buf).await {
+                    Ok(0) | Err(_) => return,
+                    Ok(_) => {}
+                }
+            }
+        })
+        .await
+        .is_ok()
+    }
+
+    #[tokio::test]
+    async fn a_client_that_never_finishes_its_headers_is_disconnected() {
+        let wifi = start_with(HANDSHAKE_TIMEOUT, Duration::from_millis(500)).await;
+        let mut tls = connect(&wifi, &rustls::version::TLS13).await;
+        tls.write_all(b"GET /api/state HT").await.unwrap();
+        assert!(closed_within(&mut tls, Duration::from_secs(5)).await);
+    }
+
+    #[tokio::test]
+    async fn an_idle_kept_alive_connection_is_closed() {
+        let wifi = start_with(HANDSHAKE_TIMEOUT, Duration::from_millis(500)).await;
+        let mut tls = connect(&wifi, &rustls::version::TLS13).await;
+        let answer = head(&mut tls, &get("/api/state", Some(KEY), false)).await;
+        assert!(answer.starts_with("HTTP/1.1 200"), "{answer}");
+        assert!(closed_within(&mut tls, Duration::from_secs(5)).await);
     }
 
     #[tokio::test]

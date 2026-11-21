@@ -154,19 +154,72 @@ pub async fn serve_wifi(
     serve_wifi_on(listener, state, grace).await
 }
 
+/// Kestrel's `RequestHeadersTimeout`: the time a Wi-Fi connection gets to send a request's headers, the idle time of a
+/// kept-alive connection included, so connections a phone abandoned (left the network) or a client never finishes are
+/// closed.
+#[cfg(feature = "tls")]
+pub const WIFI_HEADERS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 #[cfg(feature = "tls")]
 pub(crate) async fn serve_wifi_on(
     listener: tls::TlsListener,
     state: AppState,
     grace: std::time::Duration,
 ) -> std::io::Result<()> {
+    serve_wifi_with(listener, state, grace, WIFI_HEADERS_TIMEOUT).await
+}
+
+#[cfg(feature = "tls")]
+pub(crate) async fn serve_wifi_with(
+    mut listener: tls::TlsListener,
+    state: AppState,
+    grace: std::time::Duration,
+    headers_timeout: std::time::Duration,
+) -> std::io::Result<()> {
+    use axum::serve::Listener;
+    use hyper_util::rt::{TokioIo, TokioTimer};
     let stop = state.stop.clone();
-    let app = build_wifi_router(state).into_make_service();
-    let server = axum::serve(listener, app).with_graceful_shutdown({
-        let stop = stop.clone();
-        async move { stop.stopped().await }
-    });
-    drain(server, &stop, grace).await
+    let app = build_wifi_router(state);
+    let mut http = hyper::server::conn::http1::Builder::new();
+    http.timer(TokioTimer::new())
+        .header_read_timeout(headers_timeout);
+    // `closing` tells the connections to finish; `open` is held by each, so its sender's `closed` waits for them all
+    let (closing, closing_rx) = tokio::sync::watch::channel(());
+    let (open, open_rx) = tokio::sync::watch::channel(());
+    loop {
+        let (io, _) = tokio::select! {
+            connection = listener.accept() => connection,
+            _ = stop.stopped() => break,
+        };
+        let service = hyper_util::service::TowerToHyperService::new(app.clone());
+        let connection = http
+            .serve_connection(TokioIo::new(io), service)
+            .with_upgrades();
+        let (mut closing, held) = (closing_rx.clone(), open_rx.clone());
+        tokio::spawn(async move {
+            let mut connection = std::pin::pin!(connection);
+            tokio::select! {
+                _ = connection.as_mut() => {}
+                _ = closing.changed() => {
+                    connection.as_mut().graceful_shutdown();
+                    let _ = connection.await;
+                }
+            }
+            drop(held);
+        });
+    }
+    drop(listener);
+    let _ = closing.send(());
+    drop(open_rx);
+    drain(
+        async move {
+            open.closed().await;
+            Ok(())
+        },
+        &stop,
+        grace,
+    )
+    .await
 }
 
 /// Runs `server` (with its graceful shutdown on [`Stop`]) and gives up on the connections still open `grace` after

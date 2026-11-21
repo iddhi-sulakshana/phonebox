@@ -30,6 +30,7 @@ fn main() -> ExitCode {
         println!("{}", app_paths::install_dir().display());
         return ExitCode::SUCCESS;
     }
+    phonebox::file_limit::raise();
     // single instance: a second launch opens the running instance's settings page and exits; after a restart the
     // previous instance may still be shutting down, so wait for it briefly
     let wait = if args.iter().any(|a| a == "--restart") {

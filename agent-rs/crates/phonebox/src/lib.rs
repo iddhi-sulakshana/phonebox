@@ -30,6 +30,7 @@ pub mod docker_monitor;
 pub mod dotnet_text;
 pub mod drm_usage;
 pub mod feeds;
+pub mod file_limit;
 pub mod file_logger;
 pub mod github_monitor;
 pub mod gpus;

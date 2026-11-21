@@ -34,8 +34,9 @@ regex = "1"
 # outbound HTTP; TLS (rustls) comes with the first plan that needs it
 reqwest = { version = "0.12", default-features = false, features = ["stream", "gzip", "deflate", "brotli"] }
 # the quota checks' client (QuotaMonitor): HTTP/1.1 over its own IPv4-first connect, TLS from hyper-rustls (feature `tls`)
-hyper = { version = "1", features = ["client", "http1"] }
-hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
+# the Wi-Fi port is served by hyper directly, for its header timeout
+hyper = { version = "1", features = ["client", "http1", "server"] }
+hyper-util = { version = "0.1", features = ["client-legacy", "http1", "server", "service", "tokio"] }
 http = "1"
 http-body-util = "0.1"
 hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "ring", "tls12"], optional = true }
