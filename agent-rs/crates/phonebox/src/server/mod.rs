@@ -119,6 +119,8 @@ pub struct AppState {
     pub sources: Arc<crate::state::StateSources>,
     /// The live stream's "state" frame, built once for all streams that wake on the same second.
     pub frames: Arc<crate::state_frame_cache::StateFrameCache>,
+    /// The PC monitor (`pc` in the state); main starts it and puts the same one in `sources`.
+    pub system: Arc<crate::system_monitor::SystemMonitor>,
 }
 
 impl AppState {
@@ -145,6 +147,7 @@ impl AppState {
         );
         AppState {
             adb,
+            system: crate::system_monitor::SystemMonitor::new(cfg.clone()),
             cfg,
             endpoint,
             push,

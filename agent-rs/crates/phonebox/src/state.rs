@@ -10,6 +10,12 @@ pub trait StateSource: Send + Sync {
     fn snapshot(&self) -> Value;
 }
 
+impl<T: StateSource + ?Sized> StateSource for std::sync::Arc<T> {
+    fn snapshot(&self) -> Value {
+        (**self).snapshot()
+    }
+}
+
 /// A part that always answers the same JSON.
 pub struct Fixed(pub Value);
 
@@ -35,6 +41,12 @@ pub struct StateSources {
 }
 
 impl StateSources {
+    /// `pc` from the PC monitor.
+    pub fn with_pc(mut self, pc: Box<dyn StateSource>) -> StateSources {
+        self.pc = pc;
+        self
+    }
+
     /// Before the monitors are ported: each part answers what the C# agent answers on a headless Linux machine before
     /// its monitors have data (`state_empty.json`, recorded from the C# agent with the parity fixture).
     pub fn phase1() -> StateSources {

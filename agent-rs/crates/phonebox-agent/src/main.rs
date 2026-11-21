@@ -53,12 +53,11 @@ fn main() -> ExitCode {
     let _ = log::init(&app_paths::log_path());
 
     let push = PushStore::new(&app_paths::config_dir().join("data.json"));
-    let state = AppState::new(
-        cfg,
-        endpoint,
-        push.clone(),
-        Arc::new(phonebox::state::StateSources::phase1()),
-    );
+    // the monitors the state reads; serve starts them
+    let system = phonebox::system_monitor::SystemMonitor::new(cfg.clone());
+    let sources = phonebox::state::StateSources::phase1().with_pc(Box::new(system.clone()));
+    let mut state = AppState::new(cfg, endpoint, push.clone(), Arc::new(sources));
+    state.system = system;
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
     let result = runtime.block_on(serve(state, config_path));
     push.dispose();
@@ -90,6 +89,7 @@ async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Res
     let port = state.endpoint.port;
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
     state.adb.start(); // the USB tunnel to the phone
+    state.system.start(state.stop.clone());
     log::info(
         "PhoneBoxAgent",
         &format!(

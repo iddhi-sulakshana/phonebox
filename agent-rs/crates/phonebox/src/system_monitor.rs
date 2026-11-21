@@ -560,6 +560,444 @@ pub fn network_rates(
     (received / seconds, sent / seconds)
 }
 
+/// `PcSnapshot`: what `pc` in the state holds, in the C# record's order.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PcSnapshot {
+    pub cpu: Option<f64>,
+    pub cpu_temp: Option<f64>,
+    pub cpu_name: String,
+    pub ram_used_gb: f64,
+    pub ram_total_gb: f64,
+    pub gpu: Option<crate::gpus::GpuInfo>,
+    pub net_down_bps: f64,
+    pub net_up_bps: f64,
+    pub disks: Vec<DiskInfo>,
+    pub uptime_sec: i64,
+    pub gpus: Vec<crate::gpus::GpuInfo>,
+}
+
+/// What the GPU, temperature and disk loops found last; the sampling loop composes `pc` from it.
+#[derive(Default)]
+struct Found {
+    // GPU sources, highest priority first: nvidia-smi, LibreHardwareMonitor, the OS (D3DKMT + counters / sysfs / ioreg)
+    nvidia: Option<Vec<crate::gpus::GpuInfo>>,
+    lhm: Option<Vec<crate::gpus::GpuInfo>>,
+    os: Option<Vec<crate::gpus::GpuInfo>>,
+    cpu_temp: Option<f64>,
+    apple_gpu_temp: Option<f64>, // macOS: the GPU's temperature from the SMC, added to the ioreg GPU
+}
+
+/// Samples CPU, RAM, network, disk and GPU metrics once a second (`SystemMonitor`).
+pub struct SystemMonitor {
+    cfg: std::sync::Arc<crate::config::store::ConfigStore>,
+    snap: std::sync::Mutex<Option<PcSnapshot>>,
+    found: std::sync::Mutex<Found>,
+}
+
+/// Runs `f` until `stop`, sleeping what it returns between rounds.
+async fn every<F, Fut>(stop: &crate::server::Stop, first: std::time::Duration, mut f: F)
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = std::time::Duration>,
+{
+    let mut wait = first;
+    loop {
+        tokio::select! {
+            _ = stop.stopped() => return,
+            _ = tokio::time::sleep(wait) => {}
+        }
+        wait = f().await;
+    }
+}
+
+impl SystemMonitor {
+    pub fn new(
+        cfg: std::sync::Arc<crate::config::store::ConfigStore>,
+    ) -> std::sync::Arc<SystemMonitor> {
+        std::sync::Arc::new(SystemMonitor {
+            cfg,
+            snap: Default::default(),
+            found: Default::default(),
+        })
+    }
+
+    pub fn snapshot(&self) -> Option<PcSnapshot> {
+        self.snap.lock().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+
+    fn found(&self) -> std::sync::MutexGuard<'_, Found> {
+        self.found.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Starts every loop (`ExecuteAsync`, `GpuLoop`, `CpuTempLoop`); each ends on `stop`.
+    pub fn start(
+        self: &std::sync::Arc<Self>,
+        stop: crate::server::Stop,
+    ) -> Vec<tokio::task::JoinHandle<()>> {
+        let mut tasks = vec![self.start_sampling(stop.clone())];
+        if cfg!(target_os = "macos") {
+            tasks.push(tokio::spawn(self.clone().apple_gpu_loop(stop.clone())));
+        } else {
+            tasks.push(tokio::spawn(self.clone().os_gpu_loop(stop.clone())));
+            tasks.push(tokio::spawn(self.clone().nvidia_loop(stop.clone())));
+        }
+        tasks.push(tokio::spawn(self.clone().cpu_temp_loop(stop)));
+        tasks
+    }
+
+    /// Only the once-a-second sampling loop: what a machine without GPU or temperature sources gets.
+    pub fn start_sampling(
+        self: &std::sync::Arc<Self>,
+        stop: crate::server::Stop,
+    ) -> tokio::task::JoinHandle<()> {
+        let me = self.clone();
+        tokio::spawn(async move {
+            let chosen = {
+                let cfg = me.cfg.clone();
+                move || cfg.get().ping.adapters.clone()
+            };
+            let c = chosen.clone();
+            let Ok((cpu_name, cpu0, net0)) = tokio::task::spawn_blocking(move || {
+                (read_cpu_name(), cpu_times(), net_bytes(&c()))
+            })
+            .await
+            else {
+                return;
+            };
+            let mut prev = (cpu0, net0, std::time::Instant::now());
+            let mut disks: Vec<DiskInfo> = Vec::new();
+            let mut tick = 0u64;
+            loop {
+                tokio::select! {
+                    _ = stop.stopped() => return,
+                    _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {}
+                }
+                let (me2, cpu_name, chosen) = (me.clone(), cpu_name.clone(), chosen.clone());
+                let (p, d, n) = (prev.clone(), disks.clone(), tick);
+                let round = tokio::task::spawn_blocking(move || {
+                    let ((idle0, total0), net0, t0) = p;
+                    let (idle1, total1) = cpu_times();
+                    let total = total1 - total0;
+                    let cpu = (total > 0).then(|| {
+                        (100.0 * (total - (idle1 - idle0)) as f64 / total as f64).clamp(0.0, 100.0)
+                    });
+                    let net1 = net_bytes(&chosen());
+                    let t1 = std::time::Instant::now();
+                    let secs = (t1 - t0).as_secs_f64().max(0.001);
+                    let (down, up) = network_rates(&net0, &net1, secs);
+                    let disks = if n % 15 == 0 { read_disks() } else { d };
+                    let (mem_used, mem_total) = memory();
+                    let (gpus, cpu_temp) = {
+                        let f = me2.found();
+                        (
+                            crate::gpus::compose(&[
+                                f.nvidia.as_deref(),
+                                f.lhm.as_deref(),
+                                f.os.as_deref(),
+                            ]),
+                            f.cpu_temp,
+                        )
+                    };
+                    *me2.snap.lock().unwrap_or_else(|e| e.into_inner()) = Some(PcSnapshot {
+                        cpu: cpu.map(|c| round_dotnet(c, 1)),
+                        cpu_temp,
+                        cpu_name,
+                        ram_used_gb: round_dotnet(mem_used / GB, 1),
+                        ram_total_gb: round_dotnet(mem_total / GB, 1),
+                        gpu: gpus.first().cloned(),
+                        net_down_bps: round_dotnet(down, 0),
+                        net_up_bps: round_dotnet(up, 0),
+                        disks: disks.clone(),
+                        uptime_sec: uptime_sec(),
+                        gpus,
+                    });
+                    (((idle1, total1), net1, t1), disks)
+                })
+                .await;
+                if let Ok((p, d)) = round {
+                    prev = p;
+                    disks = d;
+                }
+                tick += 1;
+            }
+        })
+    }
+
+    /// Keeps nvidia-smi running and reads one line per GPU per second; restarts it 10 s after it ends or fails.
+    async fn nvidia_loop(self: std::sync::Arc<Self>, stop: crate::server::Stop) {
+        loop {
+            let _ = self.nvidia_run(&stop).await;
+            self.found().nvidia = None;
+            tokio::select! {
+                _ = stop.stopped() => return,
+                _ = tokio::time::sleep(std::time::Duration::from_secs(10)) => {}
+            }
+        }
+    }
+
+    async fn nvidia_run(&self, stop: &crate::server::Stop) -> std::io::Result<()> {
+        use tokio::io::AsyncBufReadExt;
+        fn command(args: &[&str]) -> tokio::process::Command {
+            let mut c = tokio::process::Command::new("nvidia-smi");
+            c.args(args)
+                .current_dir(crate::app_paths::neutral_cwd())
+                .stdin(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .kill_on_drop(true);
+            #[cfg(windows)]
+            c.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+            c
+        }
+        let names_out = command(&[
+            "--query-gpu=index,name,driver_version",
+            "--format=csv,noheader",
+        ])
+        .output()
+        .await?;
+        let names = crate::gpus::parse_nvidia_names(&String::from_utf8_lossy(&names_out.stdout));
+        let mut child = command(&[
+            "--query-gpu=index,utilization.gpu,temperature.gpu,power.draw,power.limit,memory.used,memory.total,fan.speed,clocks.gr,clocks.mem",
+            "--format=csv,noheader,nounits",
+            "-lms",
+            "1000",
+        ])
+        .stdout(std::process::Stdio::piped())
+        .spawn()?;
+        let Some(out) = child.stdout.take() else {
+            return Ok(());
+        };
+        let mut lines = tokio::io::BufReader::new(out).lines();
+        let mut cards = std::collections::BTreeMap::new();
+        loop {
+            tokio::select! {
+                _ = stop.stopped() => return Ok(()),
+                line = lines.next_line() => match line? {
+                    None => return Ok(()),
+                    Some(line) => {
+                        if let Some((index, gpu)) = crate::gpus::parse_nvidia_line(&line, &names) {
+                            cards.insert(index, gpu);
+                            self.found().nvidia = Some(cards.values().cloned().collect());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Every vendor's GPU through the OS: Windows' graphics kernel and GPU counters, Linux sysfs (amdgpu, i915/xe).
+    async fn os_gpu_loop(self: std::sync::Arc<Self>, stop: crate::server::Stop) {
+        #[cfg(windows)]
+        let mut win = Some(crate::windows_gpu::WindowsGpu::new());
+        let mut failures = 0u32;
+        loop {
+            #[cfg(windows)]
+            let (sample, back) = {
+                let g = win.take();
+                tokio::task::spawn_blocking(move || {
+                    let mut g = g.unwrap_or_default();
+                    let r = g.sample();
+                    (r, Some(g))
+                })
+                .await
+                .unwrap_or_else(|e| (Err(e.to_string()), None))
+            };
+            #[cfg(windows)]
+            {
+                win = back;
+            }
+            #[cfg(not(windows))]
+            let sample: Result<Vec<crate::gpus::GpuInfo>, String> =
+                tokio::task::spawn_blocking(|| {
+                    crate::gpus::read_sysfs(
+                        std::path::Path::new("/sys/class/drm"),
+                        None,
+                        std::path::Path::new("/proc"),
+                        None,
+                    )
+                })
+                .await
+                .map_err(|e| e.to_string());
+            let (list, log, wait) = os_gpu_step(sample, &mut failures);
+            if let Some(message) = log {
+                crate::log::warn("SystemMonitor", &message);
+            }
+            self.found().os = list;
+            tokio::select! {
+                _ = stop.stopped() => return,
+                _ = tokio::time::sleep(wait) => {}
+            }
+        }
+    }
+
+    /// macOS has no nvidia-smi; the GPU's load and memory come from the IOAccelerator entry of ioreg.
+    async fn apple_gpu_loop(self: std::sync::Arc<Self>, stop: crate::server::Stop) {
+        let me = self.clone();
+        every(&stop, std::time::Duration::ZERO, || {
+            let me = me.clone();
+            async move {
+                let text = tokio::task::spawn_blocking(|| {
+                    crate::unix::sh::run_with_timeout(
+                        5000,
+                        "ioreg",
+                        &["-r", "-d", "1", "-w", "0", "-c", "IOAccelerator"],
+                    )
+                    .map(|t| (t, memory().1))
+                })
+                .await
+                .ok()
+                .flatten();
+                let temp = me.found().apple_gpu_temp;
+                me.found().os = text
+                    .and_then(|(t, total)| parse_apple_gpu(&t, total))
+                    .map(|g| vec![crate::gpus::GpuInfo { temp, ..g }]);
+                std::time::Duration::from_secs(2)
+            }
+        })
+        .await;
+    }
+
+    /// CPU temperature: Linux hwmon; macOS on Apple silicon the SMC (CPU and GPU); Windows LibreHardwareMonitor's web
+    /// server (port 8085), whose answer carries the GPU sensors too.
+    async fn cpu_temp_loop(self: std::sync::Arc<Self>, stop: crate::server::Stop) {
+        if cfg!(target_os = "macos") {
+            return self.apple_temp_loop(stop).await;
+        }
+        if cfg!(windows) {
+            return self.lhm_loop(stop).await;
+        }
+        let me = self.clone();
+        every(&stop, std::time::Duration::ZERO, || {
+            let me = me.clone();
+            async move {
+                let t = tokio::task::spawn_blocking(crate::unix::unix_system::cpu_temp)
+                    .await
+                    .ok()
+                    .flatten();
+                me.found().cpu_temp = t;
+                std::time::Duration::from_secs(if t.is_none() { 30 } else { 2 })
+            }
+        })
+        .await;
+    }
+
+    async fn lhm_loop(self: std::sync::Arc<Self>, stop: crate::server::Stop) {
+        let Ok(http) = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_millis(600))
+            .build()
+        else {
+            return;
+        };
+        let me = self.clone();
+        every(&stop, std::time::Duration::ZERO, || {
+            let (me, http) = (me.clone(), http.clone());
+            async move {
+                let doc = async {
+                    http.get("http://127.0.0.1:8085/data.json")
+                        .send()
+                        .await?
+                        .text()
+                        .await
+                }
+                .await;
+                match doc
+                    .ok()
+                    .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+                {
+                    Some(root) => {
+                        let mut f = me.found();
+                        f.cpu_temp = find_cpu_temp(&root);
+                        f.lhm = Some(crate::gpus::parse_lhm(&root));
+                        std::time::Duration::from_secs(2)
+                    }
+                    None => {
+                        let mut f = me.found();
+                        (f.cpu_temp, f.lhm) = (None, None);
+                        std::time::Duration::from_secs(30)
+                    }
+                }
+            }
+        })
+        .await;
+    }
+
+    /// macOS: CPU and GPU temperature from the SMC every 2 s. Without an SMC or its temperature keys it stops and both
+    /// stay null; a failed read clears them and opens the SMC again 30 s later.
+    async fn apple_temp_loop(self: std::sync::Arc<Self>, stop: crate::server::Stop) {
+        let mut smc: Option<crate::unix::apple_smc::AppleSmc> = None;
+        loop {
+            let held = smc.take();
+            let round = tokio::task::spawn_blocking(move || {
+                let smc = held.or_else(crate::unix::apple_smc::AppleSmc::open)?;
+                let reading = smc.read();
+                Some((smc, reading))
+            })
+            .await
+            .ok()
+            .flatten();
+            let wait = match round {
+                None => {
+                    crate::log::info(
+                        "SystemMonitor",
+                        "CPU temperature: no SMC temperature sensors on this Mac",
+                    );
+                    return;
+                }
+                Some((open, Ok((cpu, gpu)))) => {
+                    (self.found().cpu_temp, self.found().apple_gpu_temp) = (cpu, gpu);
+                    smc = Some(open);
+                    2
+                }
+                Some((_, Err(_))) => {
+                    (self.found().cpu_temp, self.found().apple_gpu_temp) = (None, None);
+                    30
+                }
+            };
+            tokio::select! {
+                _ = stop.stopped() => return,
+                _ = tokio::time::sleep(std::time::Duration::from_secs(wait)) => {}
+            }
+        }
+    }
+}
+
+impl crate::state::StateSource for SystemMonitor {
+    fn snapshot(&self) -> serde_json::Value {
+        self.snapshot().map_or(serde_json::Value::Null, |s| {
+            serde_json::to_value(s).unwrap_or_default()
+        })
+    }
+}
+
+/// One round of the OS GPU loop: the sample (Err when it failed), the failures so far → what to publish, whether to log
+/// the failure (only the first after a success), and how long to wait (2 s with GPUs, 60 s without).
+pub fn os_gpu_step(
+    sample: Result<Vec<crate::gpus::GpuInfo>, String>,
+    failures: &mut u32,
+) -> (
+    Option<Vec<crate::gpus::GpuInfo>>,
+    Option<String>,
+    std::time::Duration,
+) {
+    let (list, log) = match sample {
+        Ok(list) => {
+            *failures = 0;
+            (Some(list), None)
+        }
+        Err(e) => {
+            *failures += 1;
+            (None, (*failures == 1).then(|| format!("gpu: {e}")))
+        }
+    };
+    // nothing to read (no GPU driver, a VM): look again now and then
+    let wait = if list.as_ref().is_some_and(|l| !l.is_empty()) {
+        2
+    } else {
+        60
+    };
+    (list, log, std::time::Duration::from_secs(wait))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -945,5 +1383,106 @@ mod tests {
         let g = parse_apple_gpu("\"Device Utilization %\"=9", 0.0).unwrap();
         assert_eq!(g.util, Some(9.0));
         assert_eq!((g.vram_used, g.vram_total), (None, None));
+    }
+
+    // Review Focus 1: no GPU, no temperature sensor, no nvidia-smi (a VM): pc is still published every second.
+    #[tokio::test]
+    async fn a_machine_without_gpu_or_temperature_sources_still_publishes_pc() {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = std::sync::Arc::new(crate::config::store::ConfigStore::new(
+            dir.path().join("config.json"),
+        ));
+        let monitor = SystemMonitor::new(cfg);
+        let stop = crate::server::Stop::default();
+        let task = monitor.start_sampling(stop.clone());
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(4);
+        while monitor.snapshot().is_none() && std::time::Instant::now() < end {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        let pc = monitor.snapshot().expect("no pc within 4 s");
+        assert_eq!(
+            (pc.gpu.clone(), pc.gpus.len(), pc.cpu_temp),
+            (None, 0, None)
+        );
+        assert!(
+            !pc.cpu_name.is_empty() && pc.ram_total_gb > 0.0 && pc.uptime_sec > 0,
+            "{pc:?}"
+        );
+        assert!(pc.cpu.is_none_or(|c| (0.0..=100.0).contains(&c)));
+        let json = crate::state::StateSource::snapshot(&*monitor);
+        assert_eq!(json["gpu"], serde_json::Value::Null);
+        stop.stop();
+        tokio::time::timeout(std::time::Duration::from_secs(3), task)
+            .await
+            .expect("the loop did not end")
+            .unwrap();
+    }
+
+    #[test]
+    fn gpu_failures_are_logged_once_until_a_sample_works() {
+        let gpu = crate::gpus::GpuInfo {
+            name: "AMD GPU".into(),
+            ..Default::default()
+        };
+        let mut failures = 0;
+        let (list, log, wait) = os_gpu_step(Err("no access".into()), &mut failures);
+        assert_eq!(
+            (list, log.as_deref(), wait.as_secs()),
+            (None, Some("gpu: no access"), 60)
+        );
+        let (_, log, _) = os_gpu_step(Err("no access".into()), &mut failures);
+        assert_eq!(log, None);
+        let (list, log, wait) = os_gpu_step(Ok(vec![gpu.clone()]), &mut failures);
+        assert_eq!((list, log, wait.as_secs()), (Some(vec![gpu]), None, 2));
+        let (list, _, wait) = os_gpu_step(Ok(vec![]), &mut failures); // nothing to read (a VM): look again later
+        assert_eq!((list, wait.as_secs()), (Some(vec![]), 60));
+        let (_, log, _) = os_gpu_step(Err("gone".into()), &mut failures);
+        assert_eq!(log.as_deref(), Some("gpu: gone"));
+    }
+
+    #[test]
+    fn pc_json_has_the_csharp_keys_in_order() {
+        let pc = PcSnapshot {
+            cpu: Some(12.5),
+            cpu_temp: None,
+            cpu_name: "CPU".into(),
+            ram_used_gb: 3.0,
+            ram_total_gb: 16.0,
+            gpu: None,
+            net_down_bps: 0.0,
+            net_up_bps: 10.0,
+            disks: vec![DiskInfo {
+                name: "/".into(),
+                used_gb: 10.0,
+                total_gb: 100.0,
+            }],
+            uptime_sec: 5,
+            gpus: vec![],
+        };
+        let v = serde_json::to_value(&pc).unwrap();
+        let keys: Vec<&String> = v.as_object().unwrap().keys().collect();
+        assert_eq!(
+            keys,
+            [
+                "cpu",
+                "cpuTemp",
+                "cpuName",
+                "ramUsedGb",
+                "ramTotalGb",
+                "gpu",
+                "netDownBps",
+                "netUpBps",
+                "disks",
+                "uptimeSec",
+                "gpus"
+            ]
+        );
+        assert_eq!(v["cpuTemp"], serde_json::Value::Null);
+        assert_eq!(
+            v["disks"][0],
+            serde_json::json!({"name": "/", "usedGb": 10.0, "totalGb": 100.0})
+        );
+        let gpu = serde_json::to_value(crate::gpus::GpuInfo::default()).unwrap();
+        assert_eq!(gpu.as_object().unwrap().len(), 21); // every GpuInfo field is written, nulls too
     }
 }
