@@ -164,6 +164,22 @@ pub fn icon_entry(ico: &[u8], size: u32) -> Option<(usize, usize)> {
         .map(|e| (e.offset, e.size))
 }
 
+/// Opens a web page in the default browser (the second instance opens the settings this way); failures are ignored.
+/// Windows uses the shell, as C#'s `UseShellExecute`: a GUI program starting `cmd /C start` would flash a console.
+pub fn open_url(url: &str) {
+    #[cfg(windows)]
+    self::windows::open_url(url);
+    #[cfg(not(windows))]
+    {
+        let opener = if cfg!(target_os = "macos") {
+            "open"
+        } else {
+            "xdg-open"
+        };
+        let _ = std::process::Command::new(opener).arg(url).spawn();
+    }
+}
+
 /// The running tray. [`Tray::wait`] lets its thread finish removing the icon before the process ends: an icon a
 /// process leaves behind stays in the notification area until the mouse passes over it.
 pub struct Tray {

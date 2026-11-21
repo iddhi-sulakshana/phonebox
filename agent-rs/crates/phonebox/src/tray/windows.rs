@@ -365,6 +365,14 @@ fn quoted(path: &Path) -> String {
     format!("\"{}\"", path.display())
 }
 
+/// [`super::open_url`]: the shell, with COM ready on this thread as it expects.
+pub(super) fn open_url(url: &str) {
+    let _ = with_com(|| {
+        shell_open(url, "");
+        Ok(())
+    });
+}
+
 /// `Process.Start` with `UseShellExecute = true`: a URL opens in the browser; failures are ignored, as in C#.
 fn shell_open(file: &str, parameters: &str) {
     let file = HSTRING::from(file);

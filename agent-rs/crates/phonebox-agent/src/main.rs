@@ -1,6 +1,9 @@
 //! Entry point of `PhoneBoxAgent`; all behavior lives in the `phonebox` library crate. The order follows the C#
 //! agent's `Program.cs`.
 
+// Windows: no console window (C#'s WinExe); the agent lives in the notification area. Tests keep the console.
+#![cfg_attr(all(windows, not(test)), windows_subsystem = "windows")]
+
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
@@ -37,7 +40,7 @@ fn main() -> ExitCode {
     let Some(_instance) =
         single_instance::acquire(&app_paths::local_dir(), &endpoint.mutex_name(), wait)
     else {
-        open_in_browser(&endpoint.settings_url());
+        phonebox::tray::open_url(&endpoint.settings_url());
         return ExitCode::SUCCESS;
     };
 
@@ -51,14 +54,12 @@ fn main() -> ExitCode {
         );
     }
 
-    let custom = args.iter().skip_while(|a| *a != "--config").nth(1).cloned();
-    if custom.is_none() {
+    let (ensure_default, custom) = config_choice(&args);
+    if ensure_default {
         let _ = app_paths::ensure_config();
     }
     // absolute from here on: files kept next to the config need a folder
-    let config_path = custom
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(app_paths::config_path);
+    let config_path = custom.unwrap_or_else(app_paths::config_path);
     let config_path = std::path::absolute(&config_path).unwrap_or(config_path);
     app_paths::restrict_config(&config_path);
     let cfg = Arc::new(ConfigStore::new(config_path.clone()));
@@ -185,13 +186,26 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// Whether to write the default settings file, and the `--config` file: C# skips the default whenever the flag is there,
+/// even last with no file after it (then the default path is used without the default content).
+fn config_choice(args: &[String]) -> (bool, Option<std::path::PathBuf>) {
+    let custom = args
+        .iter()
+        .skip_while(|a| *a != "--config")
+        .nth(1)
+        .map(std::path::PathBuf::from);
+    (!args.iter().any(|a| a == "--config"), custom)
+}
+
 async fn serve(
     state: AppState,
     config_path: std::path::PathBuf,
     tray: &mut Option<phonebox::tray::Tray>,
 ) -> std::io::Result<()> {
     let port = state.endpoint.port;
-    let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
+        .await
+        .inspect_err(|e| log_bind_failure(&format!("http://127.0.0.1:{port}"), e))?;
     // Wi-Fi / Tailscale: HTTPS on every IPv4 address with the pinned certificate; a port that cannot be bound ends the
     // agent, as in C#
     #[cfg(feature = "tls")]
@@ -199,7 +213,10 @@ async fn serve(
         Some(cert) => {
             let config =
                 phonebox::server::tls::server_config(cert).map_err(std::io::Error::other)?;
-            let tcp = tokio::net::TcpListener::bind(("0.0.0.0", state.wifi.port)).await?;
+            let wifi_port = state.wifi.port;
+            let tcp = tokio::net::TcpListener::bind(("0.0.0.0", wifi_port))
+                .await
+                .inspect_err(|e| log_bind_failure(&format!("https://0.0.0.0:{wifi_port}"), e))?;
             Some((tcp, config))
         }
         None => None,
@@ -264,30 +281,86 @@ async fn serve(
     phonebox::server::serve(listener, state, grace).await
 }
 
-/// Ctrl+C, or the SIGTERM launchd / systemd send to stop the agent.
+/// The `crit` line C#'s Kestrel writes before the agent ends on a port it cannot bind; without it a second agent (a C#
+/// one keeps another lock) would end without a word in agent.log.
+fn log_bind_failure(address: &str, e: &std::io::Error) {
+    let reason = if e.kind() == std::io::ErrorKind::AddrInUse {
+        "address already in use".to_string()
+    } else {
+        e.to_string()
+    };
+    log::log(
+        phonebox::file_logger::Level::Critical,
+        "PhoneBoxAgent",
+        &format!("Unable to start the server. | Failed to bind to address {address}: {reason}."),
+    );
+}
+
+/// Ctrl+C, the SIGTERM launchd / systemd send to stop the agent, or SIGQUIT (.NET's console lifetime stops on all
+/// three).
 async fn shutdown_signal() {
     #[cfg(unix)]
     {
-        let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .expect("SIGTERM handler");
+        use tokio::signal::unix::{SignalKind, signal};
+        let mut term = signal(SignalKind::terminate()).expect("SIGTERM handler");
+        let mut quit = signal(SignalKind::quit()).expect("SIGQUIT handler");
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {}
             _ = term.recv() => {}
+            _ = quit.recv() => {}
         }
     }
     #[cfg(not(unix))]
     let _ = tokio::signal::ctrl_c().await;
 }
 
-fn open_in_browser(url: &str) {
-    let result = if cfg!(target_os = "macos") {
-        std::process::Command::new("open").arg(url).spawn()
-    } else if cfg!(windows) {
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "", url])
-            .spawn()
-    } else {
-        std::process::Command::new("xdg-open").arg(url).spawn()
-    };
-    let _ = result;
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(list: &[&str]) -> Vec<String> {
+        list.iter().map(|a| a.to_string()).collect()
+    }
+
+    // survey b§3.2 item 14: C# skips the default settings file whenever the flag is there (`args.Contains`)
+    #[test]
+    fn a_trailing_config_flag_creates_no_config() {
+        assert_eq!(
+            config_choice(&args(&["--port", "9000", "--config"])),
+            (false, None)
+        );
+        assert_eq!(
+            config_choice(&args(&["--config", "x.json"])),
+            (false, Some(std::path::PathBuf::from("x.json")))
+        );
+        assert_eq!(config_choice(&args(&["--restart"])), (true, None));
+    }
+
+    #[tokio::test]
+    async fn a_busy_local_port_is_written_to_the_log() {
+        let dir = tempfile::tempdir().unwrap();
+        let log_path = dir.path().join("agent.log");
+        log::init(&log_path).unwrap();
+        let busy = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = busy.local_addr().unwrap().port();
+        let config_path = dir.path().join("config.json");
+        let cfg = Arc::new(ConfigStore::new(config_path.clone()));
+        let push = PushStore::new(&dir.path().join("data.json"));
+        let state = AppState::new(
+            cfg,
+            AgentEndpoint { port },
+            push,
+            Arc::new(phonebox::state::StateSources::phase1()),
+        );
+        let mut tray = None;
+        let error = serve(state, config_path, &mut tray).await.unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::AddrInUse);
+        assert!(tray.is_none(), "nothing starts on a port that is taken");
+        let text = std::fs::read_to_string(&log_path).unwrap();
+        let line = format!(
+            " crit PhoneBoxAgent: Unable to start the server. | Failed to bind to address http://127.0.0.1:{port}: \
+             address already in use.\n"
+        );
+        assert!(text.contains(&line), "{text}");
+    }
 }

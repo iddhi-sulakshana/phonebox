@@ -1,0 +1,4 @@
+# Windows: the C runtime is linked in, so the agent runs without the Visual C++ redistributable (the C# build was
+# self-contained). A RUSTFLAGS variable would replace this, so the workflows set none.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
