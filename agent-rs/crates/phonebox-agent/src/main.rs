@@ -166,6 +166,7 @@ async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Res
     state.quotas.start(state.stop.clone()); // usage every 30 s, the overview every 5 s
     state.docker.start(state.stop.clone()); // only while the phone asks
     state.obs.start(state.stop.clone()); // one connection while OBS is enabled, polled every 2 s
+    state.discord.start(state.stop.clone()); // Discord's local RPC pipe while Discord is enabled, polled every 2 s
     log::info(
         "PhoneBoxAgent",
         &format!(

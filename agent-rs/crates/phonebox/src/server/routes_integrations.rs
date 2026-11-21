@@ -24,6 +24,46 @@ pub fn routes() -> Router<AppState> {
         .route("/api/obs-test", post(obs_test))
         .route("/api/controls/obs", get(obs_deck))
         .route("/api/controls/obs/{action}", post(obs_deck_act))
+        .route("/api/discord", get(discord))
+        .route("/api/discord/img", get(discord_image))
+        .route("/api/discord/{action}", post(discord_act))
+}
+
+/// The Discord widget: `{"enabled","snapshot","control"}`; buttons only if a widget allows control.
+async fn discord(State(s): State<AppState>) -> Response {
+    let cfg = s.cfg.get();
+    json_response(
+        StatusCode::OK,
+        &json!({ "enabled": cfg.discord.enabled, "snapshot": s.discord.snapshot(),
+            "control": crate::discord_monitor::control_allowed(&cfg) }),
+    )
+}
+
+/// Ids go in the query string: the Android app lets image requests through by exact path. All three are required.
+async fn discord_image(State(s): State<AppState>, Query(q): QueryList) -> Response {
+    let (Some(kind), Some(id), Some(hash)) = (
+        query::value(&q, "kind"),
+        query::value(&q, "id"),
+        query::value(&q, "hash"),
+    ) else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    match s.discord.image(&kind, &id, &hash).await {
+        Some((bytes, mime)) => ([(axum::http::header::CONTENT_TYPE, mime)], bytes).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+async fn discord_act(
+    State(s): State<AppState>,
+    Path(action): Path<String>,
+    Query(q): QueryList,
+) -> Response {
+    let channel = query::value(&q, "channel");
+    match s.discord.act(&action, channel.as_deref()).await {
+        None => json_response(StatusCode::OK, &json!({ "ok": true })),
+        Some(error) => json_response(StatusCode::BAD_REQUEST, &json!({ "error": error })),
+    }
 }
 
 /// The OBS widget: `{"enabled","snapshot","control"}`.
@@ -307,6 +347,82 @@ mod tests {
         assert_eq!(
             send(&wifi, "POST", "/api/obs-test", &[key]).await.status(),
             403
+        );
+    }
+
+    #[tokio::test]
+    async fn the_discord_routes_answer_with_their_shapes() {
+        let (_d, s) = test_state();
+        let app = crate::server::build_router(s.clone());
+        let r = json_of(send(&app, "GET", "/api/discord", &[LOCAL]).await).await;
+        assert_eq!(
+            r,
+            json!({"enabled": false, "snapshot": {"connected": false, "error": null, "user": null, "muted": false,
+                "deafened": false, "channelId": null, "channelName": null, "channelKind": null, "members": [],
+                "channels": [], "notifications": []}, "control": false})
+        );
+        let res = send(&app, "POST", "/api/discord/mute", &[LOCAL]).await;
+        assert_eq!(res.status(), 400);
+        assert_eq!(
+            json_of(res).await,
+            json!({"error": "controlling Discord is turned off in the widget's settings"})
+        );
+        // all three ids are required; an image the agent never reported is not fetched
+        let res = send(&app, "GET", "/api/discord/img?kind=user&id=1", &[LOCAL]).await;
+        assert_eq!(res.status(), 400);
+        assert!(
+            to_bytes(res.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+        let res = send(
+            &app,
+            "GET",
+            "/api/discord/img?kind=user&id=1&hash=",
+            &[LOCAL],
+        )
+        .await;
+        assert_eq!(res.status(), 404);
+        assert!(
+            to_bytes(res.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn the_phone_reaches_the_discord_widget_over_wifi() {
+        let (_d, s) = test_state();
+        s.cfg
+            .save(
+                r#"{"lan":{"enabled":true,"port":8766,"token":"phone-key"}}"#,
+                None,
+            )
+            .unwrap();
+        let wifi = crate::server::build_wifi_router(s);
+        let key = ("authorization", "Bearer phone-key");
+        assert_eq!(
+            send(&wifi, "GET", "/api/discord", &[key]).await.status(),
+            200
+        );
+        assert_eq!(
+            send(
+                &wifi,
+                "GET",
+                "/api/discord/img?kind=guild&id=1&hash=a",
+                &[key]
+            )
+            .await
+            .status(),
+            404
+        );
+        assert_eq!(
+            send(&wifi, "POST", "/api/discord/leave", &[key])
+                .await
+                .status(),
+            400
         );
     }
 
