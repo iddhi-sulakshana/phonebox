@@ -11,6 +11,8 @@ mod routes_system;
 pub mod static_files;
 #[cfg(test)]
 mod tests_task10;
+#[cfg(feature = "tls")]
+pub mod tls;
 
 use std::sync::atomic::AtomicI64;
 use std::sync::{Arc, Mutex};
@@ -111,13 +113,48 @@ pub async fn serve(
     state: AppState,
     grace: std::time::Duration,
 ) -> std::io::Result<()> {
-    use std::future::IntoFuture;
     let stop = state.stop.clone();
     let app = axum::ServiceExt::<axum::extract::Request>::into_make_service(build_router(state));
     let server = axum::serve(listener, app).with_graceful_shutdown({
         let stop = stop.clone();
         async move { stop.stopped().await }
     });
+    drain(server, &stop, grace).await
+}
+
+/// The Wi-Fi port (HTTPS with the pinned certificate), until [`Stop::stop`] as [`serve`].
+#[cfg(feature = "tls")]
+pub async fn serve_wifi(
+    listener: tokio::net::TcpListener,
+    config: Arc<rustls::ServerConfig>,
+    state: AppState,
+    grace: std::time::Duration,
+) -> std::io::Result<()> {
+    let listener = tls::TlsListener::new(listener, config, tls::HANDSHAKE_TIMEOUT)?;
+    serve_wifi_on(listener, state, grace).await
+}
+
+#[cfg(feature = "tls")]
+pub(crate) async fn serve_wifi_on(
+    listener: tls::TlsListener,
+    state: AppState,
+    grace: std::time::Duration,
+) -> std::io::Result<()> {
+    let stop = state.stop.clone();
+    let app = build_wifi_router(state).into_make_service();
+    let server = axum::serve(listener, app).with_graceful_shutdown({
+        let stop = stop.clone();
+        async move { stop.stopped().await }
+    });
+    drain(server, &stop, grace).await
+}
+
+/// Runs `server` (with its graceful shutdown on [`Stop`]) and gives up on the connections still open `grace` after
+/// the stop.
+async fn drain<F>(server: F, stop: &Stop, grace: std::time::Duration) -> std::io::Result<()>
+where
+    F: std::future::IntoFuture<Output = std::io::Result<()>>,
+{
     tokio::select! {
         result = server.into_future() => result,
         _ = async { stop.stopped().await; tokio::time::sleep(grace).await } => {

@@ -128,6 +128,22 @@ fn main() -> ExitCode {
 async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Result<()> {
     let port = state.endpoint.port;
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
+    // Wi-Fi / Tailscale: HTTPS on every IPv4 address with the pinned certificate; a port that cannot be bound ends the
+    // agent, as in C#
+    #[cfg(feature = "tls")]
+    let wifi = match &state.wifi.cert {
+        Some(cert) => {
+            let config =
+                phonebox::server::tls::server_config(cert).map_err(std::io::Error::other)?;
+            let tcp = tokio::net::TcpListener::bind(("0.0.0.0", state.wifi.port)).await?;
+            Some((tcp, config))
+        }
+        None => None,
+    };
+    #[cfg(not(feature = "tls"))]
+    if state.wifi.cert.is_some() {
+        log::warn("PhoneBoxAgent", "this build has no TLS: Wi-Fi stays off");
+    }
     state.adb.start(); // the USB tunnel to the phone
     state.system.start(state.stop.clone());
     state.ping.start(state.stop.clone());
@@ -147,7 +163,19 @@ async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Res
         shutdown_signal().await;
         stop.stop();
     });
-    phonebox::server::serve(listener, state, Duration::from_secs(30)).await
+    let grace = Duration::from_secs(30);
+    #[cfg(feature = "tls")]
+    if let Some((tcp, config)) = wifi {
+        log::info(
+            "PhoneBoxAgent",
+            &format!("Wi-Fi ready on https://0.0.0.0:{}", state.wifi.port),
+        );
+        let local = phonebox::server::serve(listener, state.clone(), grace);
+        let wifi = phonebox::server::serve_wifi(tcp, config, state, grace);
+        let (local, wifi) = tokio::join!(local, wifi);
+        return local.and(wifi);
+    }
+    phonebox::server::serve(listener, state, grace).await
 }
 
 /// Ctrl+C, or the SIGTERM launchd / systemd send to stop the agent.
