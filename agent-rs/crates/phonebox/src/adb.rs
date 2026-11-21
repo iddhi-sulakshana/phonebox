@@ -891,13 +891,13 @@ mod tests {
         let adb = AdbReverse::spawn_with(Arc::new(fake.clone()), cfg, 8765);
         tokio::time::sleep(Duration::from_secs(5)).await;
         assert!(!adb.connected());
-        fake.devices(&["8UE5T17A26006928"]); // plugged in
+        fake.devices(&["AB12C34D56789012"]); // plugged in
         tokio::time::sleep(Duration::from_secs(5)).await;
         assert!(adb.connected());
         assert!(
             fake.calls()
                 .iter()
-                .any(|c| c == "-s 8UE5T17A26006928 reverse tcp:8765 tcp:8765")
+                .any(|c| c == "-s AB12C34D56789012 reverse tcp:8765 tcp:8765")
         );
         fake.fail_all("adb: not found"); // adb gone / server killed
         tokio::time::sleep(Duration::from_secs(5)).await;
@@ -1066,7 +1066,7 @@ mod tests {
     #[tokio::test]
     async fn a_wifi_phone_that_refuses_a_reverse_rule_does_not_end_the_round() {
         let wifi = "192.168.1.5:5555";
-        let usb = "8UE5T17A26006928";
+        let usb = "AB12C34D56789012";
         let fake = FakeAdb::with(|f| {
             f.devices = vec![wifi.into(), usb.into()];
             f.rule_refused = Some(wifi.into());
@@ -1101,11 +1101,11 @@ mod tests {
         for serial in [
             "192.168.1.5:5555",
             "[fe80::1]:5555",
-            "adb-8UE5T17A26006928-AbCdEf._adb-tls-connect._tcp",
+            "adb-AB12C34D56789012-AbCdEf._adb-tls-connect._tcp",
         ] {
             assert!(over_network(serial), "{serial}");
         }
-        for serial in ["8UE5T17A26006928", "emulator-5554", "R58M123ABC"] {
+        for serial in ["AB12C34D56789012", "emulator-5554", "R58M123ABC"] {
             assert!(!over_network(serial), "{serial}");
         }
     }

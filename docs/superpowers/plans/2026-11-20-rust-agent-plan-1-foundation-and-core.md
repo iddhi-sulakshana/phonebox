@@ -528,10 +528,10 @@ async fn survives_missing_adb_and_unplug() {
     let adb = AdbReverse::spawn_with(fake.clone(), test_cfg());
     tokio::time::advance(Duration::from_secs(5)).await;
     assert!(!adb.connected());
-    fake.devices(&["8UE5T17A26006928"]);                 // plugged in
+    fake.devices(&["AB12C34D56789012"]);                 // plugged in
     tokio::time::advance(Duration::from_secs(5)).await;
     assert!(adb.connected());
-    assert!(fake.calls().iter().any(|c| c == "-s 8UE5T17A26006928 reverse tcp:8765 tcp:8765"));
+    assert!(fake.calls().iter().any(|c| c == "-s AB12C34D56789012 reverse tcp:8765 tcp:8765"));
     fake.fail_all("adb: not found");                     // adb gone / server killed
     tokio::time::advance(Duration::from_secs(5)).await;
     assert!(!adb.connected());
