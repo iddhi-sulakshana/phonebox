@@ -34,6 +34,7 @@ try {
     foreach ($case in $scenarios) {
         $prevLocal = $env:LOCALAPPDATA
         $prevPath = $env:PATH
+        $prevTarget = $env:CARGO_TARGET_DIR
         $appBox = Join-Path $fixture 'appbox'
         New-Item -ItemType Directory -Path $appBox | Out-Null
         $state = @{ Order = [System.Collections.Generic.List[string]]::new(); LaunchFails = $case.LaunchFails }
@@ -41,17 +42,21 @@ try {
         try {
             $env:LOCALAPPDATA = $appBox
             $env:PATH = $appBox
+            # the fake build below writes here, never into the real agent-rs\target
+            $env:CARGO_TARGET_DIR = Join-Path $appBox 'target'
             function global:Get-Command {
                 param([string]$Name, $ErrorAction)
-                if ($Name -eq 'dotnet') { return [pscustomobject]@{ Name = 'dotnet'; Source = 'dotnet' } }
+                if ($Name -eq 'cargo') { return [pscustomobject]@{ Name = 'cargo'; Source = 'cargo' } }
                 if ($Name -eq 'adb') { $state.Order.Add('apk'); return $null }
                 Microsoft.PowerShell.Core\Get-Command @PSBoundParameters
             }
-            function global:dotnet {
-                $outIdx = [Array]::IndexOf($args, '-o')
-                $stageDir = $args[$outIdx + 1]
-                New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
-                Set-Content -LiteralPath (Join-Path $stageDir 'PhoneBoxAgent.exe') -Value 'staged' -Encoding ascii
+            # the agent is the Rust build: a stray dotnet call fails at once
+            function global:dotnet { throw 'dotnet is not used any more' }
+            function global:cargo {
+                if (-not "$env:CARGO_TARGET_DIR".StartsWith($appBox)) { throw "cargo stub: CARGO_TARGET_DIR is '$env:CARGO_TARGET_DIR', not a folder of the test" }
+                $release = Join-Path $env:CARGO_TARGET_DIR 'release'
+                New-Item -ItemType Directory -Path $release -Force | Out-Null
+                Set-Content -LiteralPath (Join-Path $release 'PhoneBoxAgent.exe') -Value 'built' -Encoding ascii
                 $global:LASTEXITCODE = 0
             }
             function global:Get-Process { param([string[]]$Name, $ErrorAction) $state.Order.Add('stop'); return @() }
@@ -74,7 +79,8 @@ try {
         } finally {
             $env:LOCALAPPDATA = $prevLocal
             $env:PATH = $prevPath
-            foreach ($fn in 'Get-Command','dotnet','Get-Process','Start-Sleep','Remove-Item','Start-Process','Invoke-RestMethod','Write-Host','Write-Warning') {
+            $env:CARGO_TARGET_DIR = $prevTarget
+            foreach ($fn in 'Get-Command','dotnet','cargo','Get-Process','Start-Sleep','Remove-Item','Start-Process','Invoke-RestMethod','Write-Host','Write-Warning') {
                 Microsoft.PowerShell.Management\Remove-Item "Function:\global:$fn" -ErrorAction SilentlyContinue
             }
             Microsoft.PowerShell.Management\Remove-Item -LiteralPath $appBox -Recurse -Force -ErrorAction SilentlyContinue

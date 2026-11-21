@@ -3,7 +3,9 @@
   Installs (or updates) PhoneBox on this computer and, optionally, on the connected phone.
 
 .DESCRIPTION
-  1. Publishes the agent to a temporary staging folder.
+  Needs Rust (https://rustup.rs) to build the agent from agent-rs\.
+  1. Builds the agent with cargo and stages it (with its third-party notices) in a temporary folder; a failed build
+     leaves the installed agent alone.
   2. Stops a running agent and installs the staged build in %LOCALAPPDATA%\PhoneBox\app.
   3. Optionally adds a Start-with-Windows shortcut.
   4. Optionally installs the panel APK on the connected phone: the newest of dist\ and the last build, rebuilt
@@ -26,15 +28,34 @@ $root = Split-Path $PSScriptRoot
 $app = Join-Path $env:LOCALAPPDATA 'PhoneBox\app'
 $exe = Join-Path $app 'PhoneBoxAgent.exe'
 
-if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { throw '.NET 10 SDK is required: winget install Microsoft.DotNet.SDK.10' }
-$stage = Join-Path ([IO.Path]::GetTempPath()) ('phonebox-publish-' + [guid]::NewGuid().ToString('N'))
+if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) { throw 'Rust is required (cargo): https://rustup.rs' }
+# cargo builds into CARGO_TARGET_DIR (relative to the current folder) or agent-rs\target; passed on as an absolute
+# path, it puts the build where this script looks for it, whatever a cargo config file says
+$target = if ($env:CARGO_TARGET_DIR) { $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($env:CARGO_TARGET_DIR) } else { Join-Path $root 'agent-rs/target' }
+$built = Join-Path $target 'release/PhoneBoxAgent.exe'
+$notices = Join-Path $root 'agent-rs/THIRD-PARTY-NOTICES.txt'
+$stage = Join-Path ([IO.Path]::GetTempPath()) ('phonebox-install-' + [guid]::NewGuid().ToString('N'))
 try {
-    Write-Host '==> Publishing agent'
-    dotnet publish (Join-Path $root 'agent\PhoneBox.Agent') -c Release -f net10.0-windows10.0.19041.0 -o $stage --nologo -v q --disable-build-servers
-    if ($LASTEXITCODE) { throw "dotnet publish failed (exit code $LASTEXITCODE); the installed agent was not updated" }
-    if (-not (Test-Path -LiteralPath (Join-Path $stage 'PhoneBoxAgent.exe') -PathType Leaf)) {
-        throw 'publish failed: staged agent executable not found'
+    Write-Host '==> Building agent'
+    # in agent-rs, so cargo uses its rust-toolchain.toml and .cargo\config.toml (which links the C runtime in)
+    $oldTarget = $env:CARGO_TARGET_DIR
+    Push-Location (Join-Path $root 'agent-rs')
+    # Windows PowerShell 5.1 turns cargo's progress lines on a redirected stderr into errors under 'Stop'
+    $ErrorActionPreference = 'Continue'
+    try {
+        $env:CARGO_TARGET_DIR = $target
+        cargo build --release --locked --manifest-path (Join-Path $root 'agent-rs/Cargo.toml') -p phonebox-agent
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = 'Stop'
+        $env:CARGO_TARGET_DIR = $oldTarget
+        Pop-Location
     }
+    if ($code) { throw "cargo build failed (exit code $code); the installed agent was not updated" }
+    if (-not (Test-Path -LiteralPath $built -PathType Leaf)) { throw "build failed: $built not found; the installed agent was not updated" }
+    New-Item -ItemType Directory -Path $stage | Out-Null
+    Copy-Item -LiteralPath $built -Destination $stage
+    if (Test-Path -LiteralPath $notices -PathType Leaf) { Copy-Item -LiteralPath $notices -Destination $stage }
 
     Write-Host '==> Stopping running agent'
     Get-Process PhoneBoxAgent, DeskAgent -ErrorAction SilentlyContinue | Stop-Process -Force

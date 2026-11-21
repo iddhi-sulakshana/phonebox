@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# PhoneBox installer for Linux and macOS.
+# PhoneBox installer for Linux and macOS, from a source checkout: builds the agent (agent-rs/) and installs it.
 #
 #   ./scripts/install.sh                 # build and install the agent, then start it
 #   ./scripts/install.sh --autostart     # ... and start it at login (systemd user service / launchd agent)
 #   ./scripts/install.sh --apk           # ... and install the panel app on the connected phone
 #   ./scripts/install.sh --serial <id>   # pick the phone when several devices are connected
 #
-# Needs the .NET 10 SDK (https://dotnet.microsoft.com/download) and adb:
+# Needs Rust (https://rustup.rs) and adb:
 #   Ubuntu/Debian: sudo apt install adb       Fedora: sudo dnf install android-tools       macOS: brew install android-platform-tools
 # Optional, for more widgets on Linux: playerctl (now playing), wireplumber or pulseaudio-utils (volume), xprintidle.
 set -euo pipefail
@@ -25,7 +25,7 @@ while [ $# -gt 0 ]; do
       serial="$2"
       shift
       ;;
-    -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
   shift
@@ -43,21 +43,20 @@ case "$(uname -m)" in
 esac
 rid="$os-$arch"
 
-command -v dotnet >/dev/null || { echo ".NET 10 SDK is required: https://dotnet.microsoft.com/download" >&2; exit 1; }
-
-# the service files below need DOTNET_ROOT; Homebrew keeps the runtime in libexec, not next to the dotnet link
-if [ -z "${DOTNET_ROOT:-}" ]; then
-  if command -v brew >/dev/null && [ -d "$(brew --prefix dotnet 2>/dev/null)/libexec" ]; then
-    export DOTNET_ROOT="$(brew --prefix dotnet)/libexec"
-  else
-    export DOTNET_ROOT="$(dirname "$(readlink -f "$(command -v dotnet)" 2>/dev/null || command -v dotnet)")"
-  fi
-fi
+command -v cargo >/dev/null || { echo "Rust is required (cargo): https://rustup.rs" >&2; exit 1; }
 
 echo "==> Building the agent ($rid)"
+# cargo builds into CARGO_TARGET_DIR (relative to the current folder) or agent-rs/target; passed on as an absolute
+# path, it puts the build where this script looks for it, whatever a cargo config file says
+target="${CARGO_TARGET_DIR:-$root/agent-rs/target}"
+case "$target" in /*) ;; *) target="$PWD/$target" ;; esac
+# run in agent-rs, so cargo uses its rust-toolchain.toml and .cargo/config.toml
+(cd "$root/agent-rs" && CARGO_TARGET_DIR="$target" cargo build --release --locked --manifest-path "$root/agent-rs/Cargo.toml" -p phonebox-agent)
+[ -f "$target/release/PhoneBoxAgent" ] || { echo "The build left no agent at $target/release/PhoneBoxAgent" >&2; exit 1; }
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
-dotnet publish "$root/agent/PhoneBox.Agent" -c Release -f net10.0 -r "$rid" --self-contained false -o "$tmp" --nologo -v q
+cp "$target/release/PhoneBoxAgent" "$tmp/"
+if [ -f "$root/agent-rs/THIRD-PARTY-NOTICES.txt" ]; then cp "$root/agent-rs/THIRD-PARTY-NOTICES.txt" "$tmp/"; fi
 app="$("$tmp/PhoneBoxAgent" --print-install-dir)"
 
 systemd_quote() {
@@ -67,7 +66,7 @@ systemd_quote() {
 xml_escape() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
 
 if [ "$autostart" = 1 ] && [ "$os" = linux ]; then
-  case "$app$DOTNET_ROOT${XDG_DATA_HOME:-}${XDG_CONFIG_HOME:-}" in
+  case "$app${XDG_DATA_HOME:-}${XDG_CONFIG_HOME:-}" in
     *'$'*|*'
 '*) echo 'The install or settings path is unsuitable for systemd autostart.' >&2; exit 1 ;;
   esac
@@ -94,7 +93,7 @@ if [ "$autostart" = 1 ]; then
     unit="$HOME/.config/systemd/user/phonebox.service"
     mkdir -p "$(dirname "$unit")"
     env_lines=""
-    for name in DOTNET_ROOT XDG_DATA_HOME XDG_CONFIG_HOME; do
+    for name in XDG_DATA_HOME XDG_CONFIG_HOME; do
       if [ -n "${!name:-}" ]; then
         env_lines="${env_lines}Environment=$(systemd_quote "$name=${!name}")
 "
@@ -128,7 +127,6 @@ EOF
   <key>ProgramArguments</key><array><string>$(xml_escape "$app/PhoneBoxAgent")</string></array>
   <key>EnvironmentVariables</key><dict>
     <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
-    <key>DOTNET_ROOT</key><string>$(xml_escape "$DOTNET_ROOT")</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
