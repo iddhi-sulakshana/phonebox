@@ -4,6 +4,7 @@
 pub mod leases;
 pub mod midi;
 pub mod models;
+pub mod tasks;
 
 /// `OscPacket`: an OSC message with one float argument (address and type tag padded with NULs to 4 bytes, the float
 /// big-endian).

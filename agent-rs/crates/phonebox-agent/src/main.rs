@@ -123,8 +123,11 @@ fn main() -> ExitCode {
     // the rules and the charge guard use the monitors put in above; /api/state reads the same engine
     let state = state.rewire();
     rules.set(state.rules.clone());
+    let tasks = state.tasks.clone();
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
     let result = runtime.block_on(serve(state, config_path));
+    // the deck's task and server programs end with the agent (at most 8 s)
+    tasks.stop_all(std::time::Duration::from_secs(8));
     push.dispose();
     log::dispose();
     drop(_instance); // the next instance takes over the lock
