@@ -72,5 +72,32 @@ class DiffTests(unittest.TestCase):
         self.assertEqual(parity.fill("http://127.0.0.1:{port}", {"port": 18765}), "http://127.0.0.1:18765")
 
 
+    def test_placeholders_use_each_agents_wifi_port(self):
+        self.assertEqual(parity.fill("{port}/{lanport}", {"port": 1, "lanport": 2}), "1/2")
+
+    def test_shape_pointers_hide_scalar_values_too(self):
+        entry = {"name": "pair start", "compare": "json", "shape": ["/link", "/expiresAt"]}
+        a = resp(body=b'{"link": "https://a", "expiresAt": 1, "attempt": 1}')
+        b = resp(body=b'{"link": "https://b", "expiresAt": 2, "attempt": 1}')
+        self.assertEqual(parity.diff(entry, a, b), [])
+        # the keys and the values outside the pointers still count
+        self.assertEqual(len(parity.diff(entry, a, resp(body=b'{"expiresAt": 2, "attempt": 1}'))), 1)
+        self.assertEqual(len(parity.diff(entry, a, resp(body=b'{"link": "x", "expiresAt": 2, "attempt": 2}'))), 1)
+
+
+class ConfigTests(unittest.TestCase):
+    def test_a_wifi_fixture_gets_each_agents_wifi_port(self):
+        text = '{\n  "lan": { "enabled": true, "port": 8766, "token": "t" },\n  "x": 1\n}\n'
+        out = parity.prepare_config(text, 19000)
+        self.assertEqual(parity.json.loads(out)["lan"], {"enabled": True, "port": 19000, "token": "t"})
+        self.assertEqual(parity.json.loads(out)["x"], 1)
+        self.assertTrue(parity.wifi_enabled(text))
+
+    def test_a_fixture_without_wifi_is_copied_as_it_is(self):
+        for text in ('{ "lan": { "enabled": false, "port": 8766 } }', '{"deviceSerial": "x"}'):
+            self.assertEqual(parity.prepare_config(text, 19000), text)
+            self.assertFalse(parity.wifi_enabled(text))
+
+
 if __name__ == "__main__":
     unittest.main()

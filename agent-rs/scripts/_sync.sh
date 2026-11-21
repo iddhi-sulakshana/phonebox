@@ -6,6 +6,8 @@ REMOTE_HOST="${PHONEBOX_TEST_HOST:-hetzner-iddhi}"
 REMOTE_DIR="/root/work/phonebox"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 sync_tree() {
+  # sourced from a shell without BASH_SOURCE (zsh), ROOT would be a folder far above the repository: never sync that
+  [ -f "$ROOT/agent-rs/scripts/_sync.sh" ] && [ -d "$ROOT/.git" ] || { echo "refusing to sync: $ROOT is not the repository" >&2; return 1; }
   ssh "$REMOTE_HOST" "mkdir -p $REMOTE_DIR"
   # excluded paths are also protected from --delete on the server, so its build caches survive
   rsync -az --delete \

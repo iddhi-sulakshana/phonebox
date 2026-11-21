@@ -5,7 +5,10 @@
 #   - /api/apps (support, the open permission, and every app's id and name, in order),
 #   - one app icon from the Rust agent (a PNG),
 #   - /api/volume set to the current level when not muted (no audible change), answered with that level,
-#   - /api/shortcuts/test with /usr/bin/true on both agents.
+#   - /api/shortcuts/test with /usr/bin/true on both agents,
+#   - Wi-Fi (when the installed agent has it on): the Rust agent reads the installed agent's lan-cert.pfx (copied) and
+#     serves it on a spare port; /api/pair matches the installed agent's (pc, fingerprint, key, hosts), the served
+#     certificate has that fingerprint, and the phone key opens /api/state over HTTPS.
 # It never controls media, sends keys or opens apps.
 #
 #   agent-rs/scripts/mac-desk-check.sh
@@ -38,14 +41,25 @@ cleanup() {
 }
 trap cleanup EXIT
 
+free_port() { python3 -I -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
+PORT="$(free_port)"
+LANPORT="$(free_port)"
 install -m 600 /dev/null "$WORK/config.json"
-python3 -I - "$CONFIG" "$WORK/config.json" <<'PY'
+python3 -I - "$CONFIG" "$WORK/config.json" "$LANPORT" <<'PY'
 import json, sys
 cfg = json.load(open(sys.argv[1], encoding="utf-8"))
 cfg["deviceSerial"] = "phonebox-desk-check-no-phone"  # the Rust agent must not touch the phone's reverse rule
+if isinstance(cfg.get("lan"), dict) and cfg["lan"].get("enabled"):
+    cfg["lan"]["port"] = int(sys.argv[3])  # the installed agent keeps its own Wi-Fi port
 open(sys.argv[2], "w", encoding="utf-8").write(json.dumps(cfg))
 PY
-PORT="$(python3 -I -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
+CERT="$(dirname "$CONFIG")/lan-cert.pfx"
+WIFI=""
+if python3 -I -c 'import json, sys; sys.exit(0 if (json.load(open(sys.argv[1])).get("lan") or {}).get("enabled") else 1)' "$CONFIG" \
+  && [ -f "$CERT" ]; then
+  WIFI=1
+  install -m 600 "$CERT" "$WORK/lan-cert.pfx" # next to the copied config, where the agent looks for it
+fi
 mkdir -p "$WORK/home"
 echo "== starting the Rust agent on port $PORT"
 HOME="$WORK/home" "$ROOT/agent-rs/target/release/PhoneBoxAgent" --config "$WORK/config.json" --port "$PORT" \
@@ -188,5 +202,39 @@ C_CODE="$(test_run "$INSTALLED")"
 R_CODE="$(test_run "$PORT")"
 [ "$C_CODE" = "$R_CODE" ] && [ "$R_CODE" = 200 ] || { echo "   C# answered $C_CODE, Rust $R_CODE"; exit 1; }
 echo "   both 200"
+
+if [ -n "$WIFI" ]; then
+  echo "== Wi-Fi: the installed agent's certificate and key, served by the Rust agent on port $LANPORT"
+  fetch "$INSTALLED" /api/pair >"$WORK/csharp-pair.json"
+  fetch "$PORT" /api/pair >"$WORK/rust-pair.json"
+  chmod 600 "$WORK/csharp-pair.json" "$WORK/rust-pair.json"
+  python3 -I - "$WORK" "$LANPORT" <<'PY'
+import json, sys
+from pathlib import Path
+work, lanport = Path(sys.argv[1]), int(sys.argv[2])
+c = json.loads((work / "csharp-pair.json").read_text(encoding="utf-8"))
+r = json.loads((work / "rust-pair.json").read_text(encoding="utf-8"))
+problems = [f"{k} differs" for k in ("enabled", "pc", "fingerprint", "token", "hosts") if c.get(k) != r.get(k)]
+if list(c.keys()) != list(r.keys()):
+    problems.append(f"keys {list(c.keys())} != {list(r.keys())}")
+if r.get("port") != lanport:
+    problems.append(f"port {r.get('port')} != {lanport}")
+if problems or not r.get("enabled"):
+    sys.exit("   DIFFERENT /api/pair: " + "; ".join(problems or ["Wi-Fi is off in the Rust agent"]))
+# the key goes to curl in a header file, never on a command line or in the output
+(work / "auth").write_text(f"Authorization: Bearer {r['token']}\n", encoding="utf-8")
+(work / "auth").chmod(0o600)
+(work / "fingerprint").write_text(r["fingerprint"], encoding="utf-8")
+print(f"   /api/pair matches: pc {r['pc']}, fingerprint {r['fingerprint'][:16]}..., the same key, hosts {r['hosts']}")
+PY
+  SERVED="$(openssl s_client -connect "127.0.0.1:$LANPORT" -servername phonebox </dev/null 2>/dev/null \
+    | openssl x509 -outform der 2>/dev/null | shasum -a 256 | cut -d' ' -f1)"
+  [ "$SERVED" = "$(cat "$WORK/fingerprint")" ] || { echo "   the served certificate is not the installed one ($SERVED)"; exit 1; }
+  echo "   the Wi-Fi port serves that certificate"
+  CODE="$(curl -sk --max-time 10 -o /dev/null -w '%{http_code}' -H @"$WORK/auth" "https://127.0.0.1:$LANPORT/api/state")"
+  NOKEY="$(curl -sk --max-time 10 -o /dev/null -w '%{http_code}' "https://127.0.0.1:$LANPORT/api/state")"
+  [ "$CODE" = 200 ] && [ "$NOKEY" = 403 ] || { echo "   over HTTPS: $CODE with the phone key, $NOKEY without"; exit 1; }
+  echo "   over HTTPS: 200 with the phone key, 403 without"
+fi
 
 echo "desk controls match"

@@ -1,0 +1,189 @@
+[
+  {
+    "name": "pair: what the phone stores (same certificate read: same fingerprint)",
+    "path": "/api/pair",
+    "ignore": [
+      "/port"
+    ]
+  },
+  {
+    "name": "lan status",
+    "path": "/api/lan",
+    "ignore": [
+      "/port"
+    ]
+  },
+  {
+    "name": "pair status before",
+    "path": "/api/pair/status"
+  },
+  {
+    "name": "pair start",
+    "method": "POST",
+    "path": "/api/pair/start",
+    "shape": [
+      "/expiresAt",
+      "/port",
+      "/link",
+      "/qr",
+      "/app",
+      "/appQr"
+    ]
+  },
+  {
+    "name": "pair cancel without attempt",
+    "method": "POST",
+    "path": "/api/pair/cancel",
+    "compare": "status"
+  },
+  {
+    "name": "pair cancel with a bad attempt",
+    "method": "POST",
+    "path": "/api/pair/cancel?attempt=x",
+    "compare": "status"
+  },
+  {
+    "name": "pair cancel",
+    "method": "POST",
+    "path": "/api/pair/cancel?attempt=1"
+  },
+  {
+    "name": "local claim with a wrong code",
+    "method": "POST",
+    "path": "/api/pair/claim",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"code\":\"wrong\"}"
+  },
+  {
+    "name": "pair status after",
+    "path": "/api/pair/status"
+  },
+  {
+    "name": "wifi: no key",
+    "wifi": true,
+    "path": "/api/state"
+  },
+  {
+    "name": "wifi: the phone key",
+    "wifi": true,
+    "path": "/api/state",
+    "wait": 2,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A",
+      "X-PhoneBox-App": "0.9.22"
+    },
+    "ignore": [
+      "/ts",
+      "/cfgVersion",
+      "/host",
+      "/pushVersion",
+      "/pc",
+      "/ping"
+    ],
+    "shape": [
+      "/media",
+      "/audio",
+      "/toggles"
+    ]
+  },
+  {
+    "name": "wifi: phone config",
+    "wifi": true,
+    "path": "/api/config",
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    },
+    "ignore": [
+      "/version"
+    ]
+  },
+  {
+    "name": "wifi: the webhook key opens no panel API",
+    "wifi": true,
+    "path": "/api/state",
+    "headers": {
+      "Authorization": "Bearer parityWebhookKey000000000000000000000000000"
+    }
+  },
+  {
+    "name": "wifi: the webhook key in the query opens no panel API",
+    "wifi": true,
+    "path": "/api/state?token=parityWebhookKey000000000000000000000000000"
+  },
+  {
+    "name": "wifi: an Origin",
+    "wifi": true,
+    "path": "/api/state",
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A",
+      "Origin": "https://evil.example"
+    }
+  },
+  {
+    "name": "wifi: lower-case bearer",
+    "wifi": true,
+    "path": "/api/state",
+    "headers": {
+      "Authorization": "bearer parityPhoneKey0000000000000000000000000000A"
+    }
+  },
+  {
+    "name": "wifi: settings stay local",
+    "wifi": true,
+    "path": "/api/settings",
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    }
+  },
+  {
+    "name": "wifi: pairing stays local",
+    "wifi": true,
+    "path": "/api/pair",
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    }
+  },
+  {
+    "name": "wifi: lan status stays local",
+    "wifi": true,
+    "path": "/api/lan",
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    }
+  },
+  {
+    "name": "wifi: no /agent/api rewrite",
+    "wifi": true,
+    "path": "/agent/api/state",
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    }
+  },
+  {
+    "name": "wifi: keyless claim with a wrong code",
+    "wifi": true,
+    "method": "POST",
+    "path": "/api/pair/claim",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"code\":\"wrong\"}"
+  },
+  {
+    "name": "wifi: keyless claim that is not JSON",
+    "wifi": true,
+    "method": "POST",
+    "path": "/api/pair/claim",
+    "headers": {
+      "Content-Type": "text/plain"
+    },
+    "body": "code=wrong"
+  },
+  {
+    "name": "wifi: a claim needs POST",
+    "wifi": true,
+    "path": "/api/pair/claim"
+  }
+]

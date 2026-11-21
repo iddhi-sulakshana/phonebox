@@ -1,0 +1,11 @@
+{
+  "deviceSerial": "parity-none",
+  "updates": { "auto": false, "repo": "iddhi-sulakshana/phonebox" },
+  "lan": {
+    "enabled": true,
+    "port": 8766,
+    "token": "parityPhoneKey0000000000000000000000000000A",
+    "webhookToken": "parityWebhookKey000000000000000000000000000"
+  },
+  "weather": { "city": "Colombo", "lat": 6.9271, "lon": 79.8612, "unit": "celsius" }
+}

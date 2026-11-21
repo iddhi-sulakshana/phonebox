@@ -20,17 +20,24 @@ Corpus: a JSON list of requests. Fields:
   compare   "json" (default), "bytes" or "status"
   config_version  true: send X-Config-Version with the value GET /api/settings just returned on that agent
   config_file     true: also compare the agents' config.json files byte for byte after the request
+  wifi      true: send over HTTPS to the agent's Wi-Fi port (without verifying the certificate; its SHA-256 is compared
+            as the pseudo-header x-peer-fingerprint); "{lanport}" becomes each agent's Wi-Fi port
+
+A fixture with Wi-Fi on ("lan": {"enabled": true}) gives each agent its own Wi-Fi port in its copy of the config and
+the fixture certificate (fixtures/lan-cert.pfx, or --fixture-cert) next to it, so both serve the same certificate.
 """
 from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import http.client
 import json
 import os
 import shlex
 import shutil
 import socket
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -41,7 +48,7 @@ from pathlib import Path
 # Response headers that are part of the contract (security and caching); compared whenever either side sends one.
 CONTRACT_HEADERS = (
     "content-type", "cache-control", "x-frame-options", "x-content-type-options", "content-security-policy",
-    "x-config-version-present",
+    "x-config-version-present", "x-peer-fingerprint",
 )
 
 
@@ -57,6 +64,20 @@ def fill(text: str, values: dict) -> str:
     for key, value in values.items():
         text = text.replace("{" + key + "}", str(value))
     return text
+
+
+def wifi_enabled(config_text: str) -> bool:
+    lan = json.loads(config_text).get("lan")
+    return isinstance(lan, dict) and lan.get("enabled") is True
+
+
+def prepare_config(config_text: str, lan_port: int) -> str:
+    """The agent's copy of the fixture: with Wi-Fi on it gets the agent's own Wi-Fi port; otherwise it is unchanged."""
+    if not wifi_enabled(config_text):
+        return config_text
+    cfg = json.loads(config_text)
+    cfg["lan"]["port"] = lan_port
+    return json.dumps(cfg, indent=2) + "\n"
 
 
 def _remove(doc, parts: list[str]):
@@ -112,7 +133,7 @@ def _shape(doc, parts: list[str]):
     for k in keys:
         if rest:
             _shape(doc[k], rest)
-        elif isinstance(doc[k], (dict, list)):
+        else:
             doc[k] = shape_of(doc[k])
 
 
@@ -182,14 +203,23 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
-def request(port: int, entry: dict, extra_headers: dict | None = None) -> Response:
-    values = {"port": port}
-    headers = {"Host": f"127.0.0.1:{port}"}
+def request(port: int, entry: dict, extra_headers: dict | None = None, lan_port: int | None = None) -> Response:
+    values = {"port": port, "lanport": lan_port}
+    wifi = bool(entry.get("wifi"))
+    target = lan_port if wifi else port
+    headers = {"Host": f"127.0.0.1:{target}"}
     headers.update({k: fill(v, values) for k, v in (entry.get("headers") or {}).items()})
     headers.update(extra_headers or {})
     body = entry.get("body")
     data = None if body is None else fill(body, values).encode()
-    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=15)
+    if wifi:
+        # the phone pins the certificate's fingerprint; here both agents' fingerprints are compared instead
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        conn = http.client.HTTPSConnection("127.0.0.1", target, timeout=15, context=context)
+    else:
+        conn = http.client.HTTPConnection("127.0.0.1", target, timeout=15)
     try:
         conn.putrequest(entry.get("method", "GET"), fill(entry["path"], values), skip_host=True, skip_accept_encoding=True)
         for k, v in headers.items():
@@ -200,6 +230,8 @@ def request(port: int, entry: dict, extra_headers: dict | None = None) -> Respon
         r = conn.getresponse()
         hdrs = {k.lower(): v for k, v in r.getheaders()}
         hdrs.pop("date", None)
+        if wifi:
+            hdrs["x-peer-fingerprint"] = hashlib.sha256(conn.sock.getpeercert(binary_form=True)).hexdigest()
         if "x-config-version" in hdrs:
             hdrs["x-config-version-present"] = "yes"
         return Response(r.status, hdrs, r.read())
@@ -208,12 +240,18 @@ def request(port: int, entry: dict, extra_headers: dict | None = None) -> Respon
 
 
 class Agent:
-    def __init__(self, label: str, cmd: str, fixture: Path):
+    def __init__(self, label: str, cmd: str, fixture: Path, cert: Path):
         self.label = label
         self.dir = Path(tempfile.mkdtemp(prefix=f"parity-{label}-"))
         self.config = self.dir / "config.json"
-        shutil.copyfile(fixture, self.config)
         self.port = free_port()
+        self.lan_port = free_port()
+        text = fixture.read_text(encoding="utf-8")
+        if wifi_enabled(text):
+            self.config.write_text(prepare_config(text, self.lan_port), encoding="utf-8")
+            shutil.copyfile(cert, self.dir / "lan-cert.pfx")
+        else:
+            shutil.copyfile(fixture, self.config)
         self.log = open(self.dir / "stdout.log", "wb")
         argv = shlex.split(cmd) + ["--config", str(self.config), "--port", str(self.port)]
         env = dict(os.environ, HOME=str(self.dir), XDG_CONFIG_HOME=str(self.dir), XDG_DATA_HOME=str(self.dir))
@@ -246,8 +284,8 @@ class Agent:
         self.log.close()
 
 
-def run(csharp_cmd: str, rust_cmd: str, corpus: list[dict], fixture: Path, keep: bool) -> list[str]:
-    agents = [Agent("csharp", csharp_cmd, fixture), Agent("rust", rust_cmd, fixture)]
+def run(csharp_cmd: str, rust_cmd: str, corpus: list[dict], fixture: Path, cert: Path, keep: bool) -> list[str]:
+    agents = [Agent("csharp", csharp_cmd, fixture, cert), Agent("rust", rust_cmd, fixture, cert)]
     problems: list[str] = []
     finished = False
     try:
@@ -259,7 +297,7 @@ def run(csharp_cmd: str, rust_cmd: str, corpus: list[dict], fixture: Path, keep:
             answers = []
             for a in agents:
                 extra = {"X-Config-Version": a.config_version()} if entry.get("config_version") else None
-                answers.append(request(a.port, entry, extra))
+                answers.append(request(a.port, entry, extra, a.lan_port))
             problems += diff(entry, answers[0], answers[1])
             if entry.get("config_file"):
                 ca, cb = agents[0].config.read_bytes(), agents[1].config.read_bytes()
@@ -286,10 +324,12 @@ def main() -> int:
     ap.add_argument("--rust", required=True, help="command that starts the Rust agent")
     ap.add_argument("--corpus", required=True, type=Path)
     ap.add_argument("--fixture", type=Path, default=here / "fixtures" / "default.json")
+    ap.add_argument("--fixture-cert", type=Path, default=here / "fixtures" / "lan-cert.pfx",
+                    help="the Wi-Fi certificate both agents get when the fixture turns Wi-Fi on")
     ap.add_argument("--keep", action="store_true", help="keep the agents' temporary folders")
     args = ap.parse_args()
     corpus = json.loads(args.corpus.read_text(encoding="utf-8"))
-    problems = run(args.csharp, args.rust, corpus, args.fixture, args.keep)
+    problems = run(args.csharp, args.rust, corpus, args.fixture, args.fixture_cert, args.keep)
     for p in problems:
         print(p)
     print(f"{len(corpus)} requests, {len(problems)} differences")
