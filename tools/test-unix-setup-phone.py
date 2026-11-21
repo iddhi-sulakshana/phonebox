@@ -13,16 +13,20 @@ SETUP = Path(__file__).resolve().parents[1] / 'setup.sh'
 
 
 class SetupPhoneTests(unittest.TestCase):
-    def install(self, mode, root, expected_code=0):
+    def install(self, mode, root, expected_code=0, version='0.0.1', args=None, releases=None):
         bin_dir = root / 'bin'
         bin_dir.mkdir()
         agent = root / 'PhoneBox/app'
-        archive = root / 'PhoneBoxAgent-0.0.1-linux-x64.zip'
-        apk = root / 'PhoneBox-0.0.1.apk'
+        archive = root / f'PhoneBoxAgent-{version}-linux-x64.zip'
+        apk = root / f'PhoneBox-{version}.apk'
         apk.write_bytes(b'fixture APK')
         with ZipFile(archive, 'w') as bundle:
             bundle.writestr('PhoneBoxAgent', '#!/bin/sh\nprintf "%s\\n" "$PHONEBOX_TEST_AGENT"\n')
-        (root / 'SHA256SUMS-0.0.1.txt').write_text(
+            bundle.writestr('THIRD-PARTY-NOTICES.txt', 'notices')
+        # the GitHub API's release list (newest first), for --pre
+        if releases is not None:
+            (root / 'releases.json').write_text(releases, encoding='utf-8')
+        (root / f'SHA256SUMS-{version}.txt').write_text(
             ''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n'
                     for p in (archive, apk)),
             encoding='utf-8',
@@ -41,6 +45,15 @@ url = args[-1]
 if url == 'http://127.0.0.1:8765/api/info':
     sys.exit(0)
 root = pathlib.Path(os.environ['PHONEBOX_TEST_ROOT'])
+if url.startswith('https://api.github.com/'):
+    # only the release list exists here (no full release yet, so /releases/latest is a 404)
+    listed = root / 'releases.json'
+    if '/releases?' not in url or not listed.exists():
+        sys.exit(22)
+    sys.stdout.write(listed.read_text())
+    sys.exit(0)
+if '-o' not in args:
+    sys.exit(22)
 source = root / url.rsplit('/', 1)[-1]
 dest = pathlib.Path(args[args.index('-o') + 1])
 if source.suffix == '.apk' and os.environ['PHONEBOX_TEST_MODE'] == 'missing':
@@ -70,11 +83,16 @@ esac''')
                    HOME=str(root), TMPDIR=str(root), PHONEBOX_TEST_ROOT=str(root),
                    PHONEBOX_TEST_AGENT=str(agent), PHONEBOX_TEST_MODE=mode,
                    DISPLAY='', WAYLAND_DISPLAY='')
+        if args is None:
+            args = ['--version', version]
         result = subprocess.run(
-            ['/bin/bash', str(SETUP), '--yes', '--no-autostart', '--no-extras', '--version', '0.0.1'],
+            ['/bin/bash', str(SETUP), '--yes', '--no-autostart', '--no-extras', *args],
             env=env, capture_output=True, text=True, timeout=20,
         )
         self.assertEqual(result.returncode, expected_code, result.stdout + result.stderr)
+        if expected_code == 0:
+            # the release assets came from this repository's downloads
+            self.assertIn(f'PhoneBox {version} (linux-x64)', result.stdout)
         self.assertEqual((agent / 'PhoneBoxAgent').exists(), expected_code == 0)
         self.assertEqual((root / 'agent-started').exists(), expected_code == 0,
                          result.stdout + result.stderr)
@@ -99,6 +117,30 @@ esac''')
             root = Path(directory)
             self.install('valid', root)
             self.assertTrue((root / 'phone-installed').exists())
+
+
+    def test_a_pre_release_installs_by_its_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.install('valid', root, version='1.0.0-alpha.2')
+            self.assertTrue((root / 'phone-installed').exists())
+
+    def test_pre_installs_the_newest_release_including_pre_releases(self):
+        listed = ('[{"tag_name": "v1.0.0-alpha.2", "draft": false, "prerelease": true},'
+                  ' {"tag_name": "v1.0.0-alpha.1", "draft": false, "prerelease": true}]')
+        with tempfile.TemporaryDirectory() as directory:
+            self.install('valid', Path(directory), version='1.0.0-alpha.2', args=['--pre'], releases=listed)
+
+    def test_without_a_full_release_setup_names_the_pre_option(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result = self.install('valid', Path(directory), expected_code=1, args=[])
+            self.assertIn('--pre', result.stderr)
+
+    def test_a_malformed_version_is_refused(self):
+        for version in ('1.0.0-', '1.0', '1.0.0-alpha_1'):
+            with self.subTest(version=version), tempfile.TemporaryDirectory() as directory:
+                result = self.install('valid', Path(directory), expected_code=1, args=['--version', version])
+                self.assertIn('unexpected version', result.stderr)
 
 
 if __name__ == '__main__':

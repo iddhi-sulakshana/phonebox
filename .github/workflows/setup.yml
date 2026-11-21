@@ -1,7 +1,8 @@
 name: setup
 
-# Runs the one-step installers (setup.ps1, setup.sh) for real against the published release:
-# download, checksum, dependencies, install, start, and a second run that updates a running agent.
+# Runs the one-step installers (setup.ps1, setup.sh) for real against the newest published release, pre-releases
+# included (-Pre / --pre): download, checksum, dependencies, install, start, and a second run that updates a running
+# agent. While the repository has no published release the jobs skip with a notice.
 on:
   pull_request:
     paths: [setup.ps1, setup.sh, tools/test-unix-setup-phone.py, .github/workflows/setup.yml]
@@ -44,10 +45,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false   # the jobs run downloaded programs and need no Git access
+      # The newest published release, pre-releases included (only 1.0.0-alpha.N exist before 1.0.0); none yet: skip
+      - name: Newest release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/${{ github.repository }}/releases?per_page=20" \
+            | python3 -c 'import json, sys; print(next((r["tag_name"] for r in json.load(sys.stdin) if not r["draft"]), ""))')
+          if [ -z "$tag" ]; then echo "::notice::${{ github.repository }} has no published release yet: nothing to install"; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - name: First install
+        if: steps.release.outputs.tag != ''
         shell: powershell
-        run: '& ([scriptblock]::Create((Get-Content -Raw .\setup.ps1))) -Yes -NoPhone -AllowAdministrator'
+        run: '& ([scriptblock]::Create((Get-Content -Raw .\setup.ps1))) -Yes -NoPhone -Pre -AllowAdministrator'
       - name: Check the running agent
+        if: steps.release.outputs.tag != ''
         shell: powershell
         run: |
           $info = Invoke-RestMethod http://127.0.0.1:8765/api/info
@@ -56,9 +70,10 @@ jobs:
           if (-not (Test-Path "$env:LOCALAPPDATA\PhoneBox\app\PhoneBoxAgent.exe")) { throw 'agent not in the install folder' }
           if (-not (Test-Path ([Environment]::GetFolderPath('Startup') + '\PhoneBox.lnk'))) { throw 'no Startup shortcut' }
       - name: Second run replaces a running agent
+        if: steps.release.outputs.tag != ''
         shell: powershell
         run: |
-          & ([scriptblock]::Create((Get-Content -Raw .\setup.ps1))) -Yes -NoPhone -AllowAdministrator
+          & ([scriptblock]::Create((Get-Content -Raw .\setup.ps1))) -Yes -NoPhone -Pre -AllowAdministrator
           Invoke-RestMethod http://127.0.0.1:8765/api/info | Select-Object version, os
       - name: Stop the agent
         if: always()
@@ -78,15 +93,29 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false   # the jobs run downloaded programs and need no Git access
+      # The newest published release, pre-releases included (only 1.0.0-alpha.N exist before 1.0.0); none yet: skip
+      - name: Newest release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/${{ github.repository }}/releases?per_page=20" \
+            | python3 -c 'import json, sys; print(next((r["tag_name"] for r in json.load(sys.stdin) if not r["draft"]), ""))')
+          if [ -z "$tag" ]; then echo "::notice::${{ github.repository }} has no published release yet: nothing to install"; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - name: First install (piped, as with curl | bash)
-        run: cat setup.sh | bash -s -- --yes --no-phone
+        if: steps.release.outputs.tag != ''
+        run: cat setup.sh | bash -s -- --yes --no-phone --pre
       - name: Check the running agent
+        if: steps.release.outputs.tag != ''
         run: |
           curl -fsS http://127.0.0.1:8765/api/info | tee /tmp/info.json; echo
           python3 -c 'import json; i = json.load(open("/tmp/info.json")); assert i["adb"], "setup did not install adb"'
       - name: Second run replaces a running agent
+        if: steps.release.outputs.tag != ''
         run: |
-          bash setup.sh --yes --no-phone --no-extras
+          bash setup.sh --yes --no-phone --no-extras --pre
           curl -fsS http://127.0.0.1:8765/api/info >/dev/null
       - name: Stop the agent
         if: always()
