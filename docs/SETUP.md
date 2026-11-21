@@ -11,21 +11,32 @@
 **Windows 10/11**: open PowerShell (a normal window, not *Run as administrator*) and paste:
 
 ```powershell
-irm https://raw.githubusercontent.com/ersinkoc/phonebox/main/setup.ps1 | iex
+irm https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/main/setup.ps1 | iex
 ```
 
 **Linux and macOS**: open a terminal and paste (run it as yourself, not with `sudo`):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/ersinkoc/phonebox/main/setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/main/setup.sh | bash
 ```
 
-Setup installs the [latest release](https://github.com/ersinkoc/phonebox/releases/latest) and anything missing:
+Until 1.0.0 there are only pre-releases (`1.0.0-alpha.N`). To install one, take the script from the `rust-agent`
+branch and add `-Pre` / `--pre`:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/rust-agent/setup.ps1))) -Pre
+```
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/rust-agent/setup.sh | bash -s -- --pre
+```
+
+Setup installs the [latest release](https://github.com/iddhi-sulakshana/phonebox/releases/latest) and anything missing:
 
 1. **Checks the computer**: Windows x64; Linux x64 / ARM64 with glibc; macOS on Apple silicon or Intel.
 2. **Downloads and checks the agent**: the download must match the release's SHA-256 checksums. With the
    [GitHub CLI](https://cli.github.com) 2.93.0 or later signed in, it also verifies the build provenance (`gh attestation verify`).
-   No .NET to install: the agent is one self-contained program.
+   Nothing else to install for the agent: it is one program with no runtime.
 3. **Installs adb if it is missing**, after asking. adb is the USB link to the phone. Setup gets it from winget, Homebrew or
    your distribution (apt, dnf, pacman, zypper), or from Google's download as a fallback.
 4. **Offers optional helpers** for more widgets. On Linux: `playerctl` for Now Playing, `pactl` for volume, and `xprintidle`.
@@ -59,29 +70,31 @@ and changes nothing.
 | `-NoAutostart` | `--no-autostart` | Do not start PhoneBox at login |
 | `-NoStart` | `--no-start` | Install only |
 | — | `--no-extras` | Do not offer the optional helpers |
-| `-Version 0.9.8` | `--version 0.9.8` | Install that release instead of the latest |
+| `-Version 1.0.0` | `--version 1.0.0` | Install that release instead of the latest |
+| `-Pre` | `--pre` | Install the newest release, pre-releases included |
 | `-DryRun` | `--dry-run` | Download and check, change nothing |
 
 To pass options:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/ersinkoc/phonebox/main/setup.ps1))) -NoPhone
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/main/setup.ps1))) -NoPhone
 ```
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/ersinkoc/phonebox/main/setup.sh | bash -s -- --no-phone
+curl -fsSL https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/main/setup.sh | bash -s -- --no-phone
 ```
 
 </details>
 
 <details><summary><b>Before you run it: warnings</b></summary>
 
-- **The Windows agent is not code-signed yet.** The [SignPath Foundation](../README.md#code-signing-policy) application is pending.
+- **The Windows agent is not code-signed** (see the [code signing policy](../README.md#code-signing-policy)).
   Windows SmartScreen or an antivirus may warn about a new, unsigned program, and some antivirus engines have flagged
-  it ([#69](https://github.com/ersinkoc/phonebox/issues/69)). Setup only installs a file that matches the release
-  checksum. If your antivirus removes `PhoneBoxAgent.exe`, setup says so; restore it from quarantine or report it.
+  the original project's agent ([#69](https://github.com/ersinkoc/phonebox/issues/69)). Setup only installs a file
+  that matches the release checksum. If your antivirus removes `PhoneBoxAgent.exe`, setup says so; restore it from
+  quarantine or report it.
 - **Smart App Control** (Windows 11) blocks programs that are neither signed nor known to Microsoft. The agent is
-  not code-signed yet (signing through SignPath Foundation is pending, [#56](https://github.com/ersinkoc/phonebox/issues/56)),
+  not code-signed (see the original project's [#56](https://github.com/ersinkoc/phonebox/issues/56)),
   so with Smart App Control on, Windows refuses to start it: "An Application Control policy has blocked this file"
   ([#69](https://github.com/ersinkoc/phonebox/issues/69)). Setup warns you first, still installs it, and explains
   if Windows blocks it. Please keep Smart App Control on: on older Windows builds it cannot be turned back on without
@@ -96,12 +109,12 @@ curl -fsSL https://raw.githubusercontent.com/ersinkoc/phonebox/main/setup.sh | b
 - **Linux USB permissions**: if `adb devices` shows `no permissions`, adb also needs udev rules. Install
   `android-sdk-platform-tools-common` on Debian/Ubuntu or `android-udev` on Arch. Some systems also need the
   `plugdev` group (`sudo usermod -aG plugdev $USER`, then log out and in). Setup points this out when it happens.
-- **On macOS**, the agent is signed with PhoneBox's own certificate, not an Apple Developer ID. The first time,
+- **On macOS**, the agent is signed with this fork's own certificate, not an Apple Developer ID. The first time,
   macOS may ask whether it may control Music or Spotify (for Now Playing), or accept incoming connections (with Wi-Fi
   on). Shortcuts that press keys need *System Settings › Privacy & Security › Accessibility* for PhoneBoxAgent; it
-  carries over to later updates. Before 0.9.22 the agent was signed ad hoc, and macOS dropped the permission with every
-  update, so after updating from an older version allow it once more: remove PhoneBoxAgent there with *−* and add it
-  again, even if it is listed and switched on ([#269](https://github.com/ersinkoc/phonebox/issues/269)).
+  carries over to later updates. The original project's agent (0.9.x) was signed with another certificate, so after
+  switching to this one allow it once more: remove PhoneBoxAgent there with *−* and add it again, even if it is listed
+  and switched on ([#269](https://github.com/ersinkoc/phonebox/issues/269)); macOS asks about Music or Spotify again too.
 - **Windows USB drivers**: if the phone never appears, Windows may need its USB driver. Google phones use the
   Google USB Driver; other brands have one on their support site.
 - **Scoop users**: setup stops if PhoneBox is installed with Scoop, so two copies don't fight over the same port.
@@ -121,7 +134,7 @@ curl -fsSL https://raw.githubusercontent.com/ersinkoc/phonebox/main/setup.sh | b
   Setup installs the app, or use *Settings › General › Install the phone app* later. Then the phone wakes up and
   opens the panel whenever it is plugged in.
 - **Over Wi-Fi only**, with no developer options or adb: install the APK from the
-  [release page](https://github.com/ersinkoc/phonebox/releases/latest) on the phone. Then on the computer turn on
+  [release page](https://github.com/iddhi-sulakshana/phonebox/releases/latest) on the phone. Then on the computer turn on
   *Settings › General › Wi-Fi & Tailscale*, click **Pair a phone over Wi-Fi** and scan the QR code (see
   [Wi-Fi & Tailscale](#wi-fi--tailscale)).
 
@@ -129,31 +142,42 @@ The settings are at <http://127.0.0.1:8765>, on Windows also from the tray icon.
 
 ### Other ways to install
 
-- **Manual download**: the [release](https://github.com/ersinkoc/phonebox/releases/latest) has the signed Android
+- **Manual download**: the [release](https://github.com/iddhi-sulakshana/phonebox/releases/latest) has the signed Android
   APK and agents for Windows x64, Linux x64/ARM64 and macOS Apple silicon/Intel, with SHA-256 checksums and build
   provenance. Unzip the agent and run it. It can update itself only from the install folder in the table above.
 - **Scoop** (Windows), which can then put the app on the phone from *Settings › General › Install the phone app*:
 
   ```powershell
-  scoop bucket add phonebox https://github.com/ersinkoc/phonebox
+  scoop bucket add phonebox https://github.com/iddhi-sulakshana/phonebox
   scoop install main/adb phonebox/phonebox
   ```
 
-- **winget**: a package (`ersinkoc.PhoneBox`) is prepared in [`packaging/winget`](../packaging/winget) for
-  winget-pkgs. Once it is accepted, `winget install ersinkoc.PhoneBox` will install it.
-- **From source** (for development): needs the [.NET 10 SDK](https://dotnet.microsoft.com/download) and `adb`. To build
-  the phone app it also needs **JDK 17** and **Android SDK Platform 35** (for example through Android Studio), with
-  `JAVA_HOME` set and `ANDROID_HOME` or `android/local.properties` (`sdk.dir`) pointing at the SDK.
+- **winget**: manifests are prepared in [`packaging/winget`](../packaging/winget) for winget-pkgs; this fork has not
+  submitted a package yet.
+- **From source** (for development): needs Rust through [rustup](https://rustup.rs), which fetches the version that
+  `agent-rs/rust-toolchain.toml` names (1.98), a C compiler and linker (Visual Studio Build Tools with C++ on Windows,
+  the Xcode Command Line Tools on macOS, gcc on Linux) and `adb`. To build the phone app it also needs **JDK 17** and
+  **Android SDK Platform 35** (for example through Android Studio), with `JAVA_HOME` set and `ANDROID_HOME` or
+  `android/local.properties` (`sdk.dir`) pointing at the SDK.
 
   ```powershell
-  git clone https://github.com/ersinkoc/phonebox; cd phonebox
+  git clone https://github.com/iddhi-sulakshana/phonebox; cd phonebox
   .\scripts\install.ps1 -Apk -Autostart   # add -Serial <id> with several devices; -BuildApk always rebuilds the app
   ```
 
   ```sh
-  git clone https://github.com/ersinkoc/phonebox && cd phonebox
+  git clone https://github.com/iddhi-sulakshana/phonebox && cd phonebox
   ./scripts/install.sh --apk --autostart  # systemd user service (Linux) or launchd agent (macOS)
   ```
+
+### Switching from the original PhoneBox
+
+An install of the original project's agent (0.9.x from `ersinkoc/phonebox`) switches by running this fork's setup
+above. The new agent goes into the same folder and keeps the settings, phone pairings, shortcut icons and pushed
+values; from then on it updates from this fork. On the phone, uninstall PhoneBox once (Android refuses an update
+signed with another key), then let setup or *Settings › General › Install the phone app* install this fork's app
+over USB. A Wi-Fi-only phone gets the APK from the [release page](https://github.com/iddhi-sulakshana/phonebox/releases/latest)
+and pairs again. On macOS, allow Accessibility once more (see the warnings above).
 
 ### Stop and start the agent
 
@@ -172,11 +196,11 @@ itself once the agent runs again.
 ### Uninstall
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/ersinkoc/phonebox/main/scripts/uninstall.ps1))) # add -Purge -Apk
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/main/scripts/uninstall.ps1))) # add -Purge -Apk
 ```
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/ersinkoc/phonebox/main/scripts/uninstall.sh | bash -s --   # add --purge --apk
+curl -fsSL https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/main/scripts/uninstall.sh | bash -s --   # add --purge --apk
 ```
 
 Without options it removes the program and the start-at-login entry and keeps the settings. `-Purge` / `--purge` also

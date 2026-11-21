@@ -16,18 +16,18 @@ page lists what reviews keep asking for; following it gets a pull request merged
 ## The security model, in short
 
 - The agent listens on `127.0.0.1` (the phone reaches it through `adb reverse`). The optional Wi-Fi port serves only
-  the paths on the allow-list in `agent/PhoneBox.Agent/Lan.cs`, over TLS pinned to the paired certificate, with the
-  paired key. Settings, pairing and tests stay local. **Adding a path to that allow-list is a security decision**:
+  the paths on the allow-list in `agent-rs/crates/phonebox/src/lan.rs`, over TLS pinned to the paired certificate,
+  with the paired key. Settings, pairing and tests stay local. **Adding a path to that allow-list is a security decision**:
   say in the pull request why the phone needs it.
 - **The phone sends ids, never commands, paths or URLs.** Shortcuts, command widgets, apps and calendars are defined
   on the computer; the phone asks for one by id, and the agent looks it up in its own settings.
 - **Anything that controls the computer goes through a per-widget option** (like Docker's `control` or the processes
-  widget's `allowKill`) that the agent checks with `Widgets(enabledPagesOnly: true)`, so removing or hiding the
+  widget's `allowKill`) that the agent checks with `widgets(true)` (enabled pages only), so removing or hiding the
   widget turns it off. New features that start programs, record or send data are off by default.
-- **Secrets never reach the phone.** `AgentConfig.ToPublic()` is what the phone gets; tokens, keys, calendar URLs
-  and commands stay out of it (including inside Smart Stack children). Don't log them either.
-- **Processes**: start them with `ProcessStartInfo.ArgumentList`, never through a shell and never with text from a
-  request. Kill them on timeout and cancel.
+- **Secrets never reach the phone.** `to_public` (`config/public.rs`) is what the phone gets; tokens, keys, calendar
+  URLs and commands stay out of it (including inside Smart Stack children). Don't log them either.
+- **Processes**: start them with each argument passed on its own (`Command::arg`/`args`, or `tool_process.rs` for
+  optional tools), never through a shell and never with text from a request. Kill them on timeout and cancel.
 - **Panel and settings UI**: build elements with `textContent`; no `innerHTML` with data from the agent, a widget
   option or the network. Custom HTML widgets stay sandboxed.
 - Report vulnerabilities privately, see [SECURITY.md](SECURITY.md).
@@ -42,9 +42,10 @@ page lists what reviews keep asking for; following it gets a pull request merged
 
 ## Settings, widgets and the phone app
 
-- **A new setting** goes in `Config.cs` (with a default and normalization of bad values), in all three
-  `config.default*.json` files, and in the settings page. Decide whether the phone needs it; if not, keep it out of
-  `ToPublic()`.
+- **A new setting** goes in `agent-rs/crates/phonebox/src/config/` (the field and its default in `mod.rs`,
+  normalization of bad values in `normalize.rs`), in all three `agent-rs/assets/config.default*.json` files, and in
+  the settings page (`agent-rs/assets/settings.html`). Decide whether the phone needs it; if not, keep it out of
+  `to_public`.
 - **A new widget** needs its entry in `agent-rs/assets/widgets.json`, the widget in
   `android/app/src/main/assets/www/widgets/`, an icon in `WIDGET_ICONS`, the README count (`tools/check-release.py`
   checks it) and, if it calls the agent, a mock in `tools/pages/demo.js` so the web demo and the UI tests can render
@@ -64,7 +65,7 @@ page lists what reviews keep asking for; following it gets a pull request merged
 Run what CI runs, and say in the pull request what you ran and what you tried by hand:
 
 ```sh
-dotnet test agent/PhoneBox.Agent.Tests
+cd agent-rs && cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
 cd tools/ui-tests && npm ci && npx playwright install chromium && npx playwright test
 python tools/check-release.py
 cd android && ./gradlew lintDebug assembleDebug     # when the Android app changes
