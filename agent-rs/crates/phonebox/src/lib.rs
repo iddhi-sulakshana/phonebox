@@ -16,6 +16,7 @@ pub mod catalog;
 pub mod claude_hook;
 pub mod claude_transcript;
 pub mod codex_bar;
+pub mod command_runner;
 pub mod config;
 pub mod der;
 pub mod dictation;
