@@ -19,6 +19,7 @@ pub mod lan;
 pub mod listening_ports;
 pub mod log;
 pub mod net_adapters;
+pub mod panel_widgets;
 pub mod phone_registry;
 pub mod ping_monitor;
 pub mod png;
@@ -35,6 +36,7 @@ pub mod system_monitor;
 pub mod unix;
 pub mod usb_doctor;
 pub mod webview_doctor;
+pub mod widget_feed_proxy;
 pub mod win_icon;
 pub mod windows_gpu;
 

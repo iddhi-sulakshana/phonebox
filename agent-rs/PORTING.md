@@ -51,14 +51,14 @@ C# test methods: 898 · ported or ruled out: 208 · to do: 690
 | `AntigravityTests.ParseAntigravityLimits_SingleGroup_UsesSimpleLabels` |  | `parse_antigravity_limits_single_group_uses_simple_labels` | todo |
 | `AntigravityTests.ParseAntigravityLimits_MalformedOrEmpty_ReturnsEmptyList` |  | `parse_antigravity_limits_malformed_or_empty_returns_empty_list` | todo |
 | `AntigravityTests.ParseAntigravityPlan_ExtractsPlanName_FallsBackToUserTier` |  | `parse_antigravity_plan_extracts_plan_name_falls_back_to_user_tier` | todo |
-| `AppCatalogTests.HidingThePageWithTheWidgetTurnsOpeningOff` |  | `hiding_the_page_with_the_widget_turns_opening_off` | todo |
-| `AppCatalogTests.ConcurrentRequestsConvertAnIconOnce` |  | `concurrent_requests_convert_an_icon_once` | todo |
-| `AppCatalogTests.AFailedConversionIsRetriedAfterItExpires` |  | `a_failed_conversion_is_retried_after_it_expires` | todo |
-| `AppCatalogTests.ScansTopLevelAndOneFolderDeepSortedByName` |  | `scans_top_level_and_one_folder_deep_sorted_by_name` | todo |
-| `AppCatalogTests.IdsAreStableAndOnlyKnownIdsResolve` |  | `ids_are_stable_and_only_known_ids_resolve` | todo |
-| `AppCatalogTests.OpeningNeedsAnAppsWidgetOnAPage` |  | `opening_needs_an_apps_widget_on_a_page` | todo |
-| `AppCatalogTests.UnknownIdsAreRefused` |  | `unknown_ids_are_refused` | todo |
-| `AppCatalogTests.MissingRootsGiveAnEmptyList` |  | `missing_roots_give_an_empty_list` | todo |
+| `AppCatalogTests.HidingThePageWithTheWidgetTurnsOpeningOff` | 3 | `hiding_the_page_with_the_widget_turns_opening_off` | todo |
+| `AppCatalogTests.ConcurrentRequestsConvertAnIconOnce` | 3 | `concurrent_requests_convert_an_icon_once` | todo |
+| `AppCatalogTests.AFailedConversionIsRetriedAfterItExpires` | 3 | `a_failed_conversion_is_retried_after_it_expires` | todo |
+| `AppCatalogTests.ScansTopLevelAndOneFolderDeepSortedByName` | 3 | `scans_top_level_and_one_folder_deep_sorted_by_name` | todo |
+| `AppCatalogTests.IdsAreStableAndOnlyKnownIdsResolve` | 3 | `ids_are_stable_and_only_known_ids_resolve` | todo |
+| `AppCatalogTests.OpeningNeedsAnAppsWidgetOnAPage` | 3 | `opening_needs_an_apps_widget_on_a_page` | todo |
+| `AppCatalogTests.UnknownIdsAreRefused` | 3 | `unknown_ids_are_refused` | todo |
+| `AppCatalogTests.MissingRootsGiveAnEmptyList` | 3 | `missing_roots_give_an_empty_list` | todo |
 | `AppConsoleFocusRaceTests.AnEditSavedWhileTheFocusIsLookedUpIsHonoured` |  | `an_edit_saved_while_the_focus_is_looked_up_is_honoured` | todo |
 | `AppConsoleFocusRaceTests.AMacroIsNotRedirectedToAnAppTheProfileWasMovedTo` |  | `a_macro_is_not_redirected_to_an_app_the_profile_was_moved_to` | todo |
 | `AppConsoleTests.TheStateNamesTheProfileButNeverTheApp` |  | `the_state_names_the_profile_but_never_the_app` | todo |
@@ -103,25 +103,25 @@ C# test methods: 898 · ported or ruled out: 208 · to do: 690
 | `ApprovalExpiryTests.ADecisionMustArriveStrictlyBeforeTheRequestExpires` |  | `a_decision_must_arrive_strictly_before_the_request_expires` | todo |
 | `ApprovalOutcomeTests.ARequestEndsAtItsExpiryAndIsNotListedAfterIt` |  | `a_request_ends_at_its_expiry_and_is_not_listed_after_it` | todo |
 | `ApprovalOutcomeTests.ADecisionIsAcceptedOnlyIfTheRequestReturnsIt` |  | `a_decision_is_accepted_only_if_the_request_returns_it` | todo |
-| `AudioCacheTests.SnapshotReturnsAtOnceAndFillsInTheBackground` |  | `snapshot_returns_at_once_and_fills_in_the_background` | todo |
-| `AudioCacheTests.AnOlderBackgroundReadCannotReplaceANewerCurrentReading` |  | `an_older_background_read_cannot_replace_a_newer_current_reading` | todo |
-| `AudioSetVolumeTests.ASuccessfulSetShowsTheNewVolumeAtOnce` |  | `a_successful_set_shows_the_new_volume_at_once` | todo |
-| `AudioSetVolumeTests.ASlowReaderDoesNotHoldUpASetWhenAnOlderReadingExists` |  | `a_slow_reader_does_not_hold_up_a_set_when_an_older_reading_exists` | todo |
-| `AudioSetVolumeTests.AFailedSetKeepsTheReadingAndReportsFailure` |  | `a_failed_set_keeps_the_reading_and_reports_failure` | todo |
-| `AudioSetVolumeTests.TwoSetsAtOnceAreWrittenAndRememberedInOrder` |  | `two_sets_at_once_are_written_and_remembered_in_order` | todo |
-| `AudioSetVolumeTests.ASetThatDoesNotClearMuteKeepsTheMuteState` |  | `a_set_that_does_not_clear_mute_keeps_the_mute_state` | todo |
-| `AudioSetVolumeTests.WithNoEarlierReadingAVolumeOnlyWriteLeavesTheMuteStateUnknown` |  | `with_no_earlier_reading_a_volume_only_write_leaves_the_mute_state_unknown` | todo |
-| `AudioSetVolumeTests.AToggleFlipsTheRememberedMuteAtOnce` |  | `a_toggle_flips_the_remembered_mute_at_once` | todo |
-| `AudioSetVolumeTests.AFailedToggleKeepsNothingStale` |  | `a_failed_toggle_keeps_nothing_stale` | todo |
-| `AudioSetVolumeTests.StereoNeedsBothChannelsWritten` |  | `stereo_needs_both_channels_written` | todo |
-| `AudioSetVolumeTests.AMonoOutputNeedsOnlyItsOneChannelAndNoChannelsIsFailure` |  | `a_mono_output_needs_only_its_one_channel_and_no_channels_is_failure` | todo |
-| `AudioSetVolumeTests.AMuteThatCannotBeReadIsOnlyFineWhenTheOutputHasNoMuteProperty` |  | `a_mute_that_cannot_be_read_is_only_fine_when_the_output_has_no_mute_property` | todo |
-| `AudioSetVolumeTests.ChannelsKeepTheirBalanceWhenTheVolumeChanges` |  | `channels_keep_their_balance_when_the_volume_changes` | todo |
-| `AudioSetVolumeTests.AWriteThatCouldNotReachTheLevelIsRememberedAtTheLevelItReached` |  | `a_write_that_could_not_reach_the_level_is_remembered_at_the_level_it_reached` | todo |
-| `AudioSetVolumeTests.TheEffectiveLevelIsTheAverageOfWhatWasWritten` |  | `the_effective_level_is_the_average_of_what_was_written` | todo |
-| `AudioSetVolumeTests.AReadThatLandsDuringAToggleIsNotFlippedAgain` |  | `a_read_that_lands_during_a_toggle_is_not_flipped_again` | todo |
-| `AudioSetVolumeTests.AFailedActionMakesTheNextOneStartFromAFreshRead` |  | `a_failed_action_makes_the_next_one_start_from_a_fresh_read` | todo |
-| `AudioSetVolumeTests.AnInvalidatedReadingIsUnknownNotABaseline` |  | `an_invalidated_reading_is_unknown_not_a_baseline` | todo |
+| `AudioCacheTests.SnapshotReturnsAtOnceAndFillsInTheBackground` | 3 | `snapshot_returns_at_once_and_fills_in_the_background` | todo |
+| `AudioCacheTests.AnOlderBackgroundReadCannotReplaceANewerCurrentReading` | 3 | `an_older_background_read_cannot_replace_a_newer_current_reading` | todo |
+| `AudioSetVolumeTests.ASuccessfulSetShowsTheNewVolumeAtOnce` | 3 | `a_successful_set_shows_the_new_volume_at_once` | todo |
+| `AudioSetVolumeTests.ASlowReaderDoesNotHoldUpASetWhenAnOlderReadingExists` | 3 | `a_slow_reader_does_not_hold_up_a_set_when_an_older_reading_exists` | todo |
+| `AudioSetVolumeTests.AFailedSetKeepsTheReadingAndReportsFailure` | 3 | `a_failed_set_keeps_the_reading_and_reports_failure` | todo |
+| `AudioSetVolumeTests.TwoSetsAtOnceAreWrittenAndRememberedInOrder` | 3 | `two_sets_at_once_are_written_and_remembered_in_order` | todo |
+| `AudioSetVolumeTests.ASetThatDoesNotClearMuteKeepsTheMuteState` | 3 | `a_set_that_does_not_clear_mute_keeps_the_mute_state` | todo |
+| `AudioSetVolumeTests.WithNoEarlierReadingAVolumeOnlyWriteLeavesTheMuteStateUnknown` | 3 | `with_no_earlier_reading_a_volume_only_write_leaves_the_mute_state_unknown` | todo |
+| `AudioSetVolumeTests.AToggleFlipsTheRememberedMuteAtOnce` | 3 | `a_toggle_flips_the_remembered_mute_at_once` | todo |
+| `AudioSetVolumeTests.AFailedToggleKeepsNothingStale` | 3 | `a_failed_toggle_keeps_nothing_stale` | todo |
+| `AudioSetVolumeTests.StereoNeedsBothChannelsWritten` | 3 | `stereo_needs_both_channels_written` | todo |
+| `AudioSetVolumeTests.AMonoOutputNeedsOnlyItsOneChannelAndNoChannelsIsFailure` | 3 | `a_mono_output_needs_only_its_one_channel_and_no_channels_is_failure` | todo |
+| `AudioSetVolumeTests.AMuteThatCannotBeReadIsOnlyFineWhenTheOutputHasNoMuteProperty` | 3 | `a_mute_that_cannot_be_read_is_only_fine_when_the_output_has_no_mute_property` | todo |
+| `AudioSetVolumeTests.ChannelsKeepTheirBalanceWhenTheVolumeChanges` | 3 | `channels_keep_their_balance_when_the_volume_changes` | todo |
+| `AudioSetVolumeTests.AWriteThatCouldNotReachTheLevelIsRememberedAtTheLevelItReached` | 3 | `a_write_that_could_not_reach_the_level_is_remembered_at_the_level_it_reached` | todo |
+| `AudioSetVolumeTests.TheEffectiveLevelIsTheAverageOfWhatWasWritten` | 3 | `the_effective_level_is_the_average_of_what_was_written` | todo |
+| `AudioSetVolumeTests.AReadThatLandsDuringAToggleIsNotFlippedAgain` | 3 | `a_read_that_lands_during_a_toggle_is_not_flipped_again` | todo |
+| `AudioSetVolumeTests.AFailedActionMakesTheNextOneStartFromAFreshRead` | 3 | `a_failed_action_makes_the_next_one_start_from_a_fresh_read` | todo |
+| `AudioSetVolumeTests.AnInvalidatedReadingIsUnknownNotABaseline` | 3 | `an_invalidated_reading_is_unknown_not_a_baseline` | todo |
 | `AuditRegressionTests.PushStoreStillComesFromTheAgentsServices` |  | `push_store_still_comes_from_the_agents_services` | todo |
 | `AuditRegressionTests.AnExpiredValueChangesTheVersionOnceSoThePhoneDropsIt` |  | `an_expired_value_changes_the_version_once_so_the_phone_drops_it` | todo |
 | `AuditRegressionTests.ExpiredValuesDoNotCountAgainstTheKeyLimit` |  | `expired_values_do_not_count_against_the_key_limit` | todo |
@@ -346,15 +346,15 @@ C# test methods: 898 · ported or ruled out: 208 · to do: 690
 | `DeckAuditTests.SleepFadeMatchesThePlayersOwnAudioSession` |  | `sleep_fade_matches_the_players_own_audio_session` | todo |
 | `DeckAuditTests.ASleepTimerCanBeCancelledAfterItsPlayerClosed` |  | `a_sleep_timer_can_be_cancelled_after_its_player_closed` | todo |
 | `DeckAuditTests.AFolderShortcutIsNotTreatedAsARunningApplication` |  | `a_folder_shortcut_is_not_treated_as_a_running_application` | todo |
-| `DictationTests.TheTextIsTypedWithASpaceAfterIt` |  | `the_text_is_typed_with_a_space_after_it` | todo |
-| `DictationTests.LineBreaksNeverBecomeEnter` |  | `line_breaks_never_become_enter` | todo |
-| `DictationTests.EnterOnlyWithTheWidgetsOption` |  | `enter_only_with_the_widgets_option` | todo |
-| `DictationTests.NothingIsTypedWithoutTheWidgetsOwnSwitch` |  | `nothing_is_typed_without_the_widgets_own_switch` | todo |
-| `DictationTests.EmptyTextAndElevatedAppsAreRefused` |  | `empty_text_and_elevated_apps_are_refused` | todo |
-| `DictationTests.ACancelledRequestNeverPressesEnter` |  | `a_cancelled_request_never_presses_enter` | todo |
-| `DictationTests.TheSwitchIsReadAgainAfterWaitingForTheTextBefore` |  | `the_switch_is_read_again_after_waiting_for_the_text_before` | todo |
-| `DictationTests.LongTextIsCut` |  | `long_text_is_cut` | todo |
-| `DictationTests.ARefusedTypingIsReported` |  | `a_refused_typing_is_reported` | todo |
+| `DictationTests.TheTextIsTypedWithASpaceAfterIt` | 3 | `the_text_is_typed_with_a_space_after_it` | todo |
+| `DictationTests.LineBreaksNeverBecomeEnter` | 3 | `line_breaks_never_become_enter` | todo |
+| `DictationTests.EnterOnlyWithTheWidgetsOption` | 3 | `enter_only_with_the_widgets_option` | todo |
+| `DictationTests.NothingIsTypedWithoutTheWidgetsOwnSwitch` | 3 | `nothing_is_typed_without_the_widgets_own_switch` | todo |
+| `DictationTests.EmptyTextAndElevatedAppsAreRefused` | 3 | `empty_text_and_elevated_apps_are_refused` | todo |
+| `DictationTests.ACancelledRequestNeverPressesEnter` | 3 | `a_cancelled_request_never_presses_enter` | todo |
+| `DictationTests.TheSwitchIsReadAgainAfterWaitingForTheTextBefore` | 3 | `the_switch_is_read_again_after_waiting_for_the_text_before` | todo |
+| `DictationTests.LongTextIsCut` | 3 | `long_text_is_cut` | todo |
+| `DictationTests.ARefusedTypingIsReported` | 3 | `a_refused_typing_is_reported` | todo |
 | `DiscordTests.Actions_are_refused_unless_control_is_on` |  | `actions_are_refused_unless_control_is_on` | todo |
 | `DiscordTests.Actions_need_a_connection_even_with_control_on` |  | `actions_need_a_connection_even_with_control_on` | todo |
 | `DiscordTests.A_widget_on_a_disabled_page_does_not_allow_control` |  | `a_widget_on_a_disabled_page_does_not_allow_control` | todo |
@@ -491,11 +491,11 @@ C# test methods: 898 · ported or ruled out: 208 · to do: 690
 | `HomeAssistantTests.TheEntityPickerNeedsAConfiguredHomeAssistant` |  | `the_entity_picker_needs_a_configured_home_assistant` | todo |
 | `HomeAssistantTests.TestReportsABadToken` |  | `test_reports_a_bad_token` | todo |
 | `HomeAssistantTests.ToggleHandlesUnconfiguredSettingsColdLockCacheAndWidgetEntityEdits` |  | `toggle_handles_unconfigured_settings_cold_lock_cache_and_widget_entity_edits` | todo |
-| `IconEncodingTests.KnownDoubleEncodedIconsAreRecoveredWithoutReencodingOtherText` |  | `known_double_encoded_icons_are_recovered_without_reencoding_other_text` | todo |
-| `IconEncodingTests.SavedIconStringsSurviveAnsiReadingAndKeepOtherUnicodeText` |  | `saved_icon_strings_survive_ansi_reading_and_keep_other_unicode_text` | todo |
-| `IconEncodingTests.ExistingBrokenIconsArePersistedOnceWithAnOriginalBackup` |  | `existing_broken_icons_are_persisted_once_with_an_original_backup` | todo |
-| `IconEncodingTests.Latin1AndRepeatedAnsiCorruptionAreRecoveredByExactMatchOnly` |  | `latin1_and_repeated_ansi_corruption_are_recovered_by_exact_match_only` | todo |
-| `IconEncodingTests.ValidEmojiAndCustomIconTextAreUnchanged` |  | `valid_emoji_and_custom_icon_text_are_unchanged` | todo |
+| `IconEncodingTests.KnownDoubleEncodedIconsAreRecoveredWithoutReencodingOtherText` | 3 | `known_double_encoded_icons_are_recovered_without_reencoding_other_text` | todo |
+| `IconEncodingTests.SavedIconStringsSurviveAnsiReadingAndKeepOtherUnicodeText` | 3 | `saved_icon_strings_survive_ansi_reading_and_keep_other_unicode_text` | todo |
+| `IconEncodingTests.ExistingBrokenIconsArePersistedOnceWithAnOriginalBackup` | 3 | `existing_broken_icons_are_persisted_once_with_an_original_backup` | todo |
+| `IconEncodingTests.Latin1AndRepeatedAnsiCorruptionAreRecoveredByExactMatchOnly` | 3 | `latin1_and_repeated_ansi_corruption_are_recovered_by_exact_match_only` | todo |
+| `IconEncodingTests.ValidEmojiAndCustomIconTextAreUnchanged` | 3 | `valid_emoji_and_custom_icon_text_are_unchanged` | todo |
 | `IcsTests.SingleEventInUtc` |  | `single_event_in_utc` | todo |
 | `IcsTests.EscapedBackslashIsNotReadAsALineBreak` |  | `escaped_backslash_is_not_read_as_a_line_break` | todo |
 | `IcsTests.FoldedLinesAreJoined` |  | `folded_lines_are_joined` | todo |
@@ -529,14 +529,14 @@ C# test methods: 898 · ported or ruled out: 208 · to do: 690
 | `IntegrationVisibilityTests.HiddenPagesGrantNeitherDockerNorHomeAssistantControl` |  | `hidden_pages_grant_neither_docker_nor_home_assistant_control` | todo |
 | `IntegrationVisibilityTests.HidingAfterSuccessRevokesBothControlPermissions` |  | `hiding_after_success_revokes_both_control_permissions` | todo |
 | `IntegrationVisibilityTests.DisabledStackChildrenGrantNoControlOrEntityAccess` |  | `disabled_stack_children_grant_no_control_or_entity_access` | todo |
-| `KeySenderTests.ParsesCombosAndSequences` |  | `parses_combos_and_sequences` | todo |
-| `KeySenderTests.RejectsBadSpecs` |  | `rejects_bad_specs` | todo |
-| `KeySenderTests.BracketsAreKeys` |  | `brackets_are_keys` | todo |
-| `KeySenderTests.ModifiersAloneAreAllowed` |  | `modifiers_alone_are_allowed` | todo |
-| `KeySenderTests.WindowsKeysAreTheLeftHandOnes` |  | `windows_keys_are_the_left_hand_ones` | todo |
-| `KeySenderTests.NumpadKeysHaveTheirOwnNames` |  | `numpad_keys_have_their_own_names` | todo |
-| `KeySenderTests.UnknownNumpadNamesAreRejected` |  | `unknown_numpad_names_are_rejected` | todo |
-| `KeySenderTests.WindowsKeypadCodes` |  | `windows_keypad_codes` | todo |
+| `KeySenderTests.ParsesCombosAndSequences` | 3 | `parses_combos_and_sequences` | todo |
+| `KeySenderTests.RejectsBadSpecs` | 3 | `rejects_bad_specs` | todo |
+| `KeySenderTests.BracketsAreKeys` | 3 | `brackets_are_keys` | todo |
+| `KeySenderTests.ModifiersAloneAreAllowed` | 3 | `modifiers_alone_are_allowed` | todo |
+| `KeySenderTests.WindowsKeysAreTheLeftHandOnes` | 3 | `windows_keys_are_the_left_hand_ones` | todo |
+| `KeySenderTests.NumpadKeysHaveTheirOwnNames` | 3 | `numpad_keys_have_their_own_names` | todo |
+| `KeySenderTests.UnknownNumpadNamesAreRejected` | 3 | `unknown_numpad_names_are_rejected` | todo |
+| `KeySenderTests.WindowsKeypadCodes` | 3 | `windows_keypad_codes` | todo |
 | `ListeningPortsTests.FindsAListenerOfThisProcess` | 2 | `finds_a_listener_of_this_process` | ported |
 | `ListeningPortsTests.InvalidProcessIdsHaveNoPorts` | 2 | `invalid_process_ids_have_no_ports` | ported |
 | `ListeningPortsTests.ResultIsCappedSortedAndDistinct` | 2 | `result_is_capped_sorted_and_distinct` | ported |
@@ -547,30 +547,30 @@ C# test methods: 898 · ported or ruled out: 208 · to do: 690
 | `ListeningPortsTests.AnIpv6OnlyListenerIsReachedOnIpv6Loopback` | 2 | `an_ipv6_only_listener_is_reached_on_ipv6_loopback` | ported |
 | `ListeningPortsTests.BothFamiliesOnOnePortAreKept` | 2 | `both_families_on_one_port_are_kept` | ported |
 | `ListeningPortsTests.MappedAddressesAreReadAsIpv4` | 2 | `mapped_addresses_are_read_as_ipv4` | ported |
-| `MacMediaTests.SystemMetadataAdvancesFromTheReportedPositionAndStopsWhenPaused` |  | `system_metadata_advances_from_the_reported_position_and_stops_when_paused` | todo |
-| `MacMediaTests.PositionIsExtrapolatedFromWhenTheSourcePublishedIt` |  | `position_is_extrapolated_from_when_the_source_published_it` | todo |
-| `MacMediaTests.ThePublishedPositionIsKeptWhilePausedOrWhenTheTimestampCannotBeTrusted` |  | `the_published_position_is_kept_while_paused_or_when_the_timestamp_cannot_be_trusted` | todo |
-| `MacMediaTests.ASampleReportsItsAgeToThePhoneWithoutExposingTheClockReading` |  | `a_sample_reports_its_age_to_the_phone_without_exposing_the_clock_reading` | todo |
-| `MacMediaTests.SpotifyAndMusicAnchorOnThePlayersOwnPositionWhenMacOsReportsNone` |  | `spotify_and_music_anchor_on_the_players_own_position_when_mac_os_reports_none` | todo |
-| `MacMediaTests.AfterASeekThePlayerIsAskedAgainAtOnceNotAtTheNextCheck` |  | `after_a_seek_the_player_is_asked_again_at_once_not_at_the_next_check` | todo |
-| `MacMediaTests.ATrackThatComesBackAfterAGapIsAskedAboutAgainAtOnce` |  | `a_track_that_comes_back_after_a_gap_is_asked_about_again_at_once` | todo |
-| `MacMediaTests.ThePositionIsDatedWhenItIsComputedNotAfterTheArtworkIsDecoded` |  | `the_position_is_dated_when_it_is_computed_not_after_the_artwork_is_decoded` | todo |
-| `MacMediaTests.WhenThePlayerCannotBeAskedThePositionStillAdvancesAndOtherPlayersAreNeverAsked` |  | `when_the_player_cannot_be_asked_the_position_still_advances_and_other_players_are_never_asked` | todo |
-| `MacMediaTests.ExtrapolatedPositionNeverPassesTheDuration` |  | `extrapolated_position_never_passes_the_duration` | todo |
-| `MacMediaTests.MissingOrMalformedMetadataIsUnavailable` |  | `missing_or_malformed_metadata_is_unavailable` | todo |
-| `MacMediaTests.KnownPlayersAreNamedAfterTheirBundle` |  | `known_players_are_named_after_their_bundle` | todo |
-| `MacMediaTests.DelayedMacArtworkRefreshUpdatesArtIdAndClearsWhenMissing` |  | `delayed_mac_artwork_refresh_updates_art_id_and_clears_when_missing` | todo |
-| `MacMediaTests.LoadArtRejectsNonImagesAndLoopbackAndSystemMediaHonorsSmallSeeks` |  | `load_art_rejects_non_images_and_loopback_and_system_media_honors_small_seeks` | todo |
-| `MacMediaTests.ArtworkDownloadDeadlineCoversAStalledBody` |  | `artwork_download_deadline_covers_a_stalled_body` | todo |
-| `MediaArtworkBackoffTests.RepeatedFailuresBackOffAndATrackChangeResetsIt` |  | `repeated_failures_back_off_and_a_track_change_resets_it` | todo |
-| `MediaArtworkBackoffTests.CancellationIsNotCountedAsAFailure` |  | `cancellation_is_not_counted_as_a_failure` | todo |
-| `MediaArtworkTests.LateChangesAreRecheckedWithoutAnEventAndStableImagesAreThrottled` |  | `late_changes_are_rechecked_without_an_event_and_stable_images_are_throttled` | todo |
-| `MediaArtworkTests.OldAsyncReadCannotRestoreArtworkAfterTrackChangeOrClear` |  | `old_async_read_cannot_restore_artwork_after_track_change_or_clear` | todo |
-| `MediaArtworkTests.MissingEmptyAndFailedThumbnailsAreRetriedAndCancellationCannotPublish` |  | `missing_empty_and_failed_thumbnails_are_retried_and_cancellation_cannot_publish` | todo |
-| `MediaArtworkTests.DelayedChromiumThumbnailReplacesThePreviousVideosImage` |  | `delayed_chromium_thumbnail_replaces_the_previous_videos_image` | todo |
-| `MediaArtworkTests.MetadataEventRefreshesArtworkForAnUnchangedTitle` |  | `metadata_event_refreshes_artwork_for_an_unchanged_title` | todo |
-| `MediaArtworkTests.IdenticalArtworkDoesNotChangeItsCacheId` |  | `identical_artwork_does_not_change_its_cache_id` | todo |
-| `MediaArtworkTests.CancelledReadsNeitherWipePreviousTrackArtworkNorThrottleImmediateRetry` |  | `cancelled_reads_neither_wipe_previous_track_artwork_nor_throttle_immediate_retry` | todo |
+| `MacMediaTests.SystemMetadataAdvancesFromTheReportedPositionAndStopsWhenPaused` | 3 | `system_metadata_advances_from_the_reported_position_and_stops_when_paused` | todo |
+| `MacMediaTests.PositionIsExtrapolatedFromWhenTheSourcePublishedIt` | 3 | `position_is_extrapolated_from_when_the_source_published_it` | todo |
+| `MacMediaTests.ThePublishedPositionIsKeptWhilePausedOrWhenTheTimestampCannotBeTrusted` | 3 | `the_published_position_is_kept_while_paused_or_when_the_timestamp_cannot_be_trusted` | todo |
+| `MacMediaTests.ASampleReportsItsAgeToThePhoneWithoutExposingTheClockReading` | 3 | `a_sample_reports_its_age_to_the_phone_without_exposing_the_clock_reading` | todo |
+| `MacMediaTests.SpotifyAndMusicAnchorOnThePlayersOwnPositionWhenMacOsReportsNone` | 3 | `spotify_and_music_anchor_on_the_players_own_position_when_mac_os_reports_none` | todo |
+| `MacMediaTests.AfterASeekThePlayerIsAskedAgainAtOnceNotAtTheNextCheck` | 3 | `after_a_seek_the_player_is_asked_again_at_once_not_at_the_next_check` | todo |
+| `MacMediaTests.ATrackThatComesBackAfterAGapIsAskedAboutAgainAtOnce` | 3 | `a_track_that_comes_back_after_a_gap_is_asked_about_again_at_once` | todo |
+| `MacMediaTests.ThePositionIsDatedWhenItIsComputedNotAfterTheArtworkIsDecoded` | 3 | `the_position_is_dated_when_it_is_computed_not_after_the_artwork_is_decoded` | todo |
+| `MacMediaTests.WhenThePlayerCannotBeAskedThePositionStillAdvancesAndOtherPlayersAreNeverAsked` | 3 | `when_the_player_cannot_be_asked_the_position_still_advances_and_other_players_are_never_asked` | todo |
+| `MacMediaTests.ExtrapolatedPositionNeverPassesTheDuration` | 3 | `extrapolated_position_never_passes_the_duration` | todo |
+| `MacMediaTests.MissingOrMalformedMetadataIsUnavailable` | 3 | `missing_or_malformed_metadata_is_unavailable` | todo |
+| `MacMediaTests.KnownPlayersAreNamedAfterTheirBundle` | 3 | `known_players_are_named_after_their_bundle` | todo |
+| `MacMediaTests.DelayedMacArtworkRefreshUpdatesArtIdAndClearsWhenMissing` | 3 | `delayed_mac_artwork_refresh_updates_art_id_and_clears_when_missing` | todo |
+| `MacMediaTests.LoadArtRejectsNonImagesAndLoopbackAndSystemMediaHonorsSmallSeeks` | 3 | `load_art_rejects_non_images_and_loopback_and_system_media_honors_small_seeks` | todo |
+| `MacMediaTests.ArtworkDownloadDeadlineCoversAStalledBody` | 3 | `artwork_download_deadline_covers_a_stalled_body` | todo |
+| `MediaArtworkBackoffTests.RepeatedFailuresBackOffAndATrackChangeResetsIt` | 3 | `repeated_failures_back_off_and_a_track_change_resets_it` | todo |
+| `MediaArtworkBackoffTests.CancellationIsNotCountedAsAFailure` | 3 | `cancellation_is_not_counted_as_a_failure` | todo |
+| `MediaArtworkTests.LateChangesAreRecheckedWithoutAnEventAndStableImagesAreThrottled` | 3 | `late_changes_are_rechecked_without_an_event_and_stable_images_are_throttled` | todo |
+| `MediaArtworkTests.OldAsyncReadCannotRestoreArtworkAfterTrackChangeOrClear` | 3 | `old_async_read_cannot_restore_artwork_after_track_change_or_clear` | todo |
+| `MediaArtworkTests.MissingEmptyAndFailedThumbnailsAreRetriedAndCancellationCannotPublish` | 3 | `missing_empty_and_failed_thumbnails_are_retried_and_cancellation_cannot_publish` | todo |
+| `MediaArtworkTests.DelayedChromiumThumbnailReplacesThePreviousVideosImage` | 3 | `delayed_chromium_thumbnail_replaces_the_previous_videos_image` | todo |
+| `MediaArtworkTests.MetadataEventRefreshesArtworkForAnUnchangedTitle` | 3 | `metadata_event_refreshes_artwork_for_an_unchanged_title` | todo |
+| `MediaArtworkTests.IdenticalArtworkDoesNotChangeItsCacheId` | 3 | `identical_artwork_does_not_change_its_cache_id` | todo |
+| `MediaArtworkTests.CancelledReadsNeitherWipePreviousTrackArtworkNorThrottleImmediateRetry` | 3 | `cancelled_reads_neither_wipe_previous_track_artwork_nor_throttle_immediate_retry` | todo |
 | `MonitorAuditTests.CalendarsWithTheSameNameDoNotMultiplyEventsWhileAFeedFails` |  | `calendars_with_the_same_name_do_not_multiply_events_while_a_feed_fails` | todo |
 | `MonitorAuditTests.ChargeGuardKeepsTryingToRestoreThePowerAfterAFailedSwitchOn` |  | `charge_guard_keeps_trying_to_restore_the_power_after_a_failed_switch_on` | todo |
 | `MonitorAuditTests.CodexBarTextsDoNotDependOnTheWindowsLocale` |  | `codex_bar_texts_do_not_depend_on_the_windows_locale` | todo |
@@ -618,7 +618,7 @@ C# test methods: 898 · ported or ruled out: 208 · to do: 690
 | `PairingTests.AClaimThatOutlivesWifiBeingTurnedOffIsRefusedAndKeepsTheCode` |  | `a_claim_that_outlives_wifi_being_turned_off_is_refused_and_keeps_the_code` | todo |
 | `PairingTests.TheLastOfRepeatedLanMembersIsTheOneChecked` |  | `the_last_of_repeated_lan_members_is_the_one_checked` | todo |
 | `PairingTests.LanCertificateIsolatesToConfigDirectoryAndCollidingLanPortIsDetected` |  | `lan_certificate_isolates_to_config_directory_and_colliding_lan_port_is_detected` | todo |
-| `PairingTests.ShortcutIconUploadRejectsConcurrentSettingsSaveAcrossBodyReadWithoutOrphans` |  | `shortcut_icon_upload_rejects_concurrent_settings_save_across_body_read_without_orphans` | todo |
+| `PairingTests.ShortcutIconUploadRejectsConcurrentSettingsSaveAcrossBodyReadWithoutOrphans` | 3 | `shortcut_icon_upload_rejects_concurrent_settings_save_across_body_read_without_orphans` | todo |
 | `PhoneRegistryConcurrencyTests.ConcurrentRequestsReturnAnUnchangedWarningOnlyOnce` | 1 | `concurrent_requests_return_an_unchanged_warning_only_once` | ported |
 | `PhonesTests.EachPhoneGetsItsPagesInTheUsualOrder` | 1 | `each_phone_gets_its_pages_in_the_usual_order` | ported |
 | `PhonesTests.UnknownOrEmptySelectionsFallBackToAllPages` | 1 | `unknown_or_empty_selections_fall_back_to_all_pages` | ported |
@@ -713,7 +713,7 @@ C# test methods: 898 · ported or ruled out: 208 · to do: 690
 | `RuleTests.TimeWindowsRequireValidEndpoints` |  | `time_windows_require_valid_endpoints` | todo |
 | `RuleTests.RuleOptionsAreClamped` |  | `rule_options_are_clamped` | todo |
 | `RuleTests.WhileActiveShortcutRulesKeepAlreadyOnTogglesOnAndReviewRequestedCountsOnlyMatchingNonDrafts` |  | `while_active_shortcut_rules_keep_already_on_toggles_on_and_review_requested_counts_only_matching_non_drafts` | todo |
-| `RuleTests.MacroShortcutStepsUpdateToggleStateAndRunOffCmd` |  | `macro_shortcut_steps_update_toggle_state_and_run_off_cmd` | todo |
+| `RuleTests.MacroShortcutStepsUpdateToggleStateAndRunOffCmd` | 3 | `macro_shortcut_steps_update_toggle_state_and_run_off_cmd` | todo |
 | `ChargeGuardTests.StopsChargingAtTheTop` |  | `stops_charging_at_the_top` | todo |
 | `ChargeGuardTests.StartsChargingAtTheBottom` |  | `starts_charging_at_the_bottom` | todo |
 | `ChargeGuardTests.LeavesThePowerAloneInBetween` |  | `leaves_the_power_alone_in_between` | todo |
@@ -765,54 +765,54 @@ C# test methods: 898 · ported or ruled out: 208 · to do: 690
 | `SessionTitleTests.TheWorkDataForThePhoneCarriesTheTitleOnlyWhenTitlesAreOn` |  | `the_work_data_for_the_phone_carries_the_title_only_when_titles_are_on` | todo |
 | `SessionTitleTests.ThePermissionCardNeverShowsTheTitle` |  | `the_permission_card_never_shows_the_title` | todo |
 | `ShTests.OutputDeadlineAppliesAfterTheDirectProcessExits` | 2 | `output_deadline_applies_after_the_direct_process_exits` | ported |
-| `ShortcutIconTests.RecognisesWhetherACommandNamesARealFile` |  | `recognises_whether_a_command_names_a_real_file` | todo |
-| `ShortcutIconTests.CommandsWithoutAFileHaveNoIcon` |  | `commands_without_a_file_have_no_icon` | todo |
-| `ShortcutIconTests.AMissingProgramHasNoIcon` |  | `a_missing_program_has_no_icon` | todo |
-| `ShortcutIconTests.HasIconAgreesWithIcon` |  | `has_icon_agrees_with_icon` | todo |
-| `ShortcutIconTests.HasIconCacheSurvivesAClearWithTheSameAnswer` |  | `has_icon_cache_survives_a_clear_with_the_same_answer` | todo |
-| `ShortcutIconTests.RemovingAResolvedProgramStopsAdvertisingItsIcon` |  | `removing_a_resolved_program_stops_advertising_its_icon` | todo |
-| `ShortcutIconTests.RevisionAgreesWithHasIcon` |  | `revision_agrees_with_has_icon` | todo |
-| `ShortcutIconUploadsTests.NothingUploadedReadsAsNull` |  | `nothing_uploaded_reads_as_null` | todo |
-| `ShortcutIconUploadsTests.ExistsAgreesWithRead` |  | `exists_agrees_with_read` | todo |
-| `ShortcutIconUploadsTests.RevisionChangesWhenTheUploadIsReplaced` |  | `revision_changes_when_the_upload_is_replaced` | todo |
-| `ShortcutIconUploadsTests.AnUploadOnlyRequestNeverFallsBackToTheProgramIcon` |  | `an_upload_only_request_never_falls_back_to_the_program_icon` | todo |
-| `ShortcutIconUploadsTests.AValidUploadOfEachSupportedTypeCanBeReadBack` |  | `a_valid_upload_of_each_supported_type_can_be_read_back` | todo |
-| `ShortcutIconUploadsTests.AContentTypeWithParametersIsStillRecognised` |  | `a_content_type_with_parameters_is_still_recognised` | todo |
-| `ShortcutIconUploadsTests.UnsupportedContentTypesAreRejected` |  | `unsupported_content_types_are_rejected` | todo |
-| `ShortcutIconUploadsTests.ContentThatDoesNotMatchItsDeclaredTypeIsRejected` |  | `content_that_does_not_match_its_declared_type_is_rejected` | todo |
-| `ShortcutIconUploadsTests.AFileThatCannotBeRenderedAsSvgDoesNotReplaceAnExistingIcon` |  | `a_file_that_cannot_be_rendered_as_svg_does_not_replace_an_existing_icon` | todo |
-| `ShortcutIconUploadsTests.AnSvgCanStartWithAComment` |  | `an_svg_can_start_with_a_comment` | todo |
-| `ShortcutIconUploadsTests.APngWithACorruptedSignatureIsRejected` |  | `a_png_with_a_corrupted_signature_is_rejected` | todo |
-| `ShortcutIconUploadsTests.AnEmptyFileIsRejected` |  | `an_empty_file_is_rejected` | todo |
-| `ShortcutIconUploadsTests.TooLargeAnUploadIsRejected` |  | `too_large_an_upload_is_rejected` | todo |
-| `ShortcutIconUploadsTests.UploadingAgainInADifferentFormatReplacesTheOldOne` |  | `uploading_again_in_a_different_format_replaces_the_old_one` | todo |
-| `ShortcutIconUploadsTests.AFailedReplacementKeepsTheExistingIconAndItsRevision` |  | `a_failed_replacement_keeps_the_existing_icon_and_its_revision` | todo |
-| `ShortcutIconUploadsTests.RemoveDeletesWhicheverFormatWasSaved` |  | `remove_deletes_whichever_format_was_saved` | todo |
-| `ShortcutIconUploadsTests.RemoveOfANeverUploadedIconIsHarmless` |  | `remove_of_a_never_uploaded_icon_is_harmless` | todo |
-| `ShortcutIconUploadsTests.CleanupDropsUploadsForShortcutsThatNoLongerExist` |  | `cleanup_drops_uploads_for_shortcuts_that_no_longer_exist` | todo |
-| `ShortcutIconUploadsTests.CleanupOnAFolderThatWasNeverCreatedDoesNothing` |  | `cleanup_on_a_folder_that_was_never_created_does_nothing` | todo |
-| `ShortcutIconUploadsTests.AnIdWithPathCharactersCannotEscapeTheIconsFolder` |  | `an_id_with_path_characters_cannot_escape_the_icons_folder` | todo |
-| `ShortcutRuleFollowUpTests.ThePhoneDoesNotGetTheConfiguredTextOfAFailedShortcut` |  | `the_phone_does_not_get_the_configured_text_of_a_failed_shortcut` | todo |
-| `ShortcutRuleFollowUpTests.ThePhoneStillGetsTheAgentsOwnAccessibilityHint` |  | `the_phone_still_gets_the_agents_own_accessibility_hint` | todo |
+| `ShortcutIconTests.RecognisesWhetherACommandNamesARealFile` | 3 | `recognises_whether_a_command_names_a_real_file` | todo |
+| `ShortcutIconTests.CommandsWithoutAFileHaveNoIcon` | 3 | `commands_without_a_file_have_no_icon` | todo |
+| `ShortcutIconTests.AMissingProgramHasNoIcon` | 3 | `a_missing_program_has_no_icon` | todo |
+| `ShortcutIconTests.HasIconAgreesWithIcon` | 3 | `has_icon_agrees_with_icon` | todo |
+| `ShortcutIconTests.HasIconCacheSurvivesAClearWithTheSameAnswer` | 3 | `has_icon_cache_survives_a_clear_with_the_same_answer` | todo |
+| `ShortcutIconTests.RemovingAResolvedProgramStopsAdvertisingItsIcon` | 3 | `removing_a_resolved_program_stops_advertising_its_icon` | todo |
+| `ShortcutIconTests.RevisionAgreesWithHasIcon` | 3 | `revision_agrees_with_has_icon` | todo |
+| `ShortcutIconUploadsTests.NothingUploadedReadsAsNull` | 3 | `nothing_uploaded_reads_as_null` | todo |
+| `ShortcutIconUploadsTests.ExistsAgreesWithRead` | 3 | `exists_agrees_with_read` | todo |
+| `ShortcutIconUploadsTests.RevisionChangesWhenTheUploadIsReplaced` | 3 | `revision_changes_when_the_upload_is_replaced` | todo |
+| `ShortcutIconUploadsTests.AnUploadOnlyRequestNeverFallsBackToTheProgramIcon` | 3 | `an_upload_only_request_never_falls_back_to_the_program_icon` | todo |
+| `ShortcutIconUploadsTests.AValidUploadOfEachSupportedTypeCanBeReadBack` | 3 | `a_valid_upload_of_each_supported_type_can_be_read_back` | todo |
+| `ShortcutIconUploadsTests.AContentTypeWithParametersIsStillRecognised` | 3 | `a_content_type_with_parameters_is_still_recognised` | todo |
+| `ShortcutIconUploadsTests.UnsupportedContentTypesAreRejected` | 3 | `unsupported_content_types_are_rejected` | todo |
+| `ShortcutIconUploadsTests.ContentThatDoesNotMatchItsDeclaredTypeIsRejected` | 3 | `content_that_does_not_match_its_declared_type_is_rejected` | todo |
+| `ShortcutIconUploadsTests.AFileThatCannotBeRenderedAsSvgDoesNotReplaceAnExistingIcon` | 3 | `a_file_that_cannot_be_rendered_as_svg_does_not_replace_an_existing_icon` | todo |
+| `ShortcutIconUploadsTests.AnSvgCanStartWithAComment` | 3 | `an_svg_can_start_with_a_comment` | todo |
+| `ShortcutIconUploadsTests.APngWithACorruptedSignatureIsRejected` | 3 | `a_png_with_a_corrupted_signature_is_rejected` | todo |
+| `ShortcutIconUploadsTests.AnEmptyFileIsRejected` | 3 | `an_empty_file_is_rejected` | todo |
+| `ShortcutIconUploadsTests.TooLargeAnUploadIsRejected` | 3 | `too_large_an_upload_is_rejected` | todo |
+| `ShortcutIconUploadsTests.UploadingAgainInADifferentFormatReplacesTheOldOne` | 3 | `uploading_again_in_a_different_format_replaces_the_old_one` | todo |
+| `ShortcutIconUploadsTests.AFailedReplacementKeepsTheExistingIconAndItsRevision` | 3 | `a_failed_replacement_keeps_the_existing_icon_and_its_revision` | todo |
+| `ShortcutIconUploadsTests.RemoveDeletesWhicheverFormatWasSaved` | 3 | `remove_deletes_whichever_format_was_saved` | todo |
+| `ShortcutIconUploadsTests.RemoveOfANeverUploadedIconIsHarmless` | 3 | `remove_of_a_never_uploaded_icon_is_harmless` | todo |
+| `ShortcutIconUploadsTests.CleanupDropsUploadsForShortcutsThatNoLongerExist` | 3 | `cleanup_drops_uploads_for_shortcuts_that_no_longer_exist` | todo |
+| `ShortcutIconUploadsTests.CleanupOnAFolderThatWasNeverCreatedDoesNothing` | 3 | `cleanup_on_a_folder_that_was_never_created_does_nothing` | todo |
+| `ShortcutIconUploadsTests.AnIdWithPathCharactersCannotEscapeTheIconsFolder` | 3 | `an_id_with_path_characters_cannot_escape_the_icons_folder` | todo |
+| `ShortcutRuleFollowUpTests.ThePhoneDoesNotGetTheConfiguredTextOfAFailedShortcut` | 3 | `the_phone_does_not_get_the_configured_text_of_a_failed_shortcut` | todo |
+| `ShortcutRuleFollowUpTests.ThePhoneStillGetsTheAgentsOwnAccessibilityHint` | 3 | `the_phone_still_gets_the_agents_own_accessibility_hint` | todo |
 | `ShortcutRuleFollowUpTests.AToggleHeldByTwoRulesStaysOnUntilTheLastOneEnds` |  | `a_toggle_held_by_two_rules_stays_on_until_the_last_one_ends` | todo |
 | `ShortcutRuleFollowUpTests.AFailedReleaseIsLogged` |  | `a_failed_release_is_logged` | todo |
 | `SingleFileMigrationTests.ASingleFileAgentRemovesTheFrameworkDependentFilesAndKeepsTheRest` |  | `a_single_file_agent_removes_the_framework_dependent_files_and_keeps_the_rest` | todo |
 | `SingleFileMigrationTests.AFrameworkDependentAgentKeepsItsFiles` |  | `a_framework_dependent_agent_keeps_its_files` | todo |
 | `SingleFileMigrationTests.AMissingDirectoryOrPartialSetIsFine` |  | `a_missing_directory_or_partial_set_is_fine` | todo |
-| `SpectrumAnalyzerTests.SilenceIsAllZero` |  | `silence_is_all_zero` | todo |
-| `SpectrumAnalyzerTests.ACorruptSampleDoesNotBlankTheRestOfTheWindow` |  | `a_corrupt_sample_does_not_blank_the_rest_of_the_window` | todo |
-| `SpectrumAnalyzerTests.BassLandsInTheBassBars` |  | `bass_lands_in_the_bass_bars` | todo |
-| `SpectrumAnalyzerTests.AToneLightsItsOwnBand` |  | `a_tone_lights_its_own_band` | todo |
-| `SpectrumAnalyzerTests.LouderIsTaller` |  | `louder_is_taller` | todo |
-| `SpectrumAnalyzerTests.LoopbackGainUndoesSoftwareVolume` |  | `loopback_gain_undoes_software_volume` | todo |
-| `SpectrumAnalyzerTests.SoftwareVolumeNoLongerFlattensTheBars` |  | `software_volume_no_longer_flattens_the_bars` | todo |
-| `SpectrumAnalyzerTests.AVolumeChangeOnlyScalesAudioCapturedAfterIt` |  | `a_volume_change_only_scales_audio_captured_after_it` | todo |
-| `SpectrumAnalyzerTests.StereoOnASurroundOutputKeepsItsLevel` |  | `stereo_on_a_surround_output_keeps_its_level` | todo |
-| `SpectrumAnalyzerTests.PcmIsDownmixedToo` |  | `pcm_is_downmixed_too` | todo |
-| `SpectrumAnalyzerTests.OnlyFullWindowsAreAnalyzed` |  | `only_full_windows_are_analyzed` | todo |
-| `SpectrumAnalyzerTests.CaptureIsRefusedWithoutTheWidgetOnAnEnabledPage` |  | `capture_is_refused_without_the_widget_on_an_enabled_page` | todo |
-| `SpectrumAnalyzerTests.TheWidgetOnAnEnabledPageIsShown` |  | `the_widget_on_an_enabled_page_is_shown` | todo |
-| `SpectrumAnalyzerTests.ThePhoneMayAskForBandsOverWifi` |  | `the_phone_may_ask_for_bands_over_wifi` | todo |
+| `SpectrumAnalyzerTests.SilenceIsAllZero` | 3 | `silence_is_all_zero` | todo |
+| `SpectrumAnalyzerTests.ACorruptSampleDoesNotBlankTheRestOfTheWindow` | 3 | `a_corrupt_sample_does_not_blank_the_rest_of_the_window` | todo |
+| `SpectrumAnalyzerTests.BassLandsInTheBassBars` | 3 | `bass_lands_in_the_bass_bars` | todo |
+| `SpectrumAnalyzerTests.AToneLightsItsOwnBand` | 3 | `a_tone_lights_its_own_band` | todo |
+| `SpectrumAnalyzerTests.LouderIsTaller` | 3 | `louder_is_taller` | todo |
+| `SpectrumAnalyzerTests.LoopbackGainUndoesSoftwareVolume` | 3 | `loopback_gain_undoes_software_volume` | todo |
+| `SpectrumAnalyzerTests.SoftwareVolumeNoLongerFlattensTheBars` | 3 | `software_volume_no_longer_flattens_the_bars` | todo |
+| `SpectrumAnalyzerTests.AVolumeChangeOnlyScalesAudioCapturedAfterIt` | 3 | `a_volume_change_only_scales_audio_captured_after_it` | todo |
+| `SpectrumAnalyzerTests.StereoOnASurroundOutputKeepsItsLevel` | 3 | `stereo_on_a_surround_output_keeps_its_level` | todo |
+| `SpectrumAnalyzerTests.PcmIsDownmixedToo` | 3 | `pcm_is_downmixed_too` | todo |
+| `SpectrumAnalyzerTests.OnlyFullWindowsAreAnalyzed` | 3 | `only_full_windows_are_analyzed` | todo |
+| `SpectrumAnalyzerTests.CaptureIsRefusedWithoutTheWidgetOnAnEnabledPage` | 3 | `capture_is_refused_without_the_widget_on_an_enabled_page` | todo |
+| `SpectrumAnalyzerTests.TheWidgetOnAnEnabledPageIsShown` | 3 | `the_widget_on_an_enabled_page_is_shown` | todo |
+| `SpectrumAnalyzerTests.ThePhoneMayAskForBandsOverWifi` | 3 | `the_phone_may_ask_for_bands_over_wifi` | todo |
 | `SpotifyControlTests.TracksCarryTheSmallestUsableCoverFromSpotifysImageServer` |  | `tracks_carry_the_smallest_usable_cover_from_spotifys_image_server` | todo |
 | `SpotifyControlTests.ThePlayingEpisodeAndQueuedEpisodesAreAskedFor` |  | `the_playing_episode_and_queued_episodes_are_asked_for` | todo |
 | `SpotifyControlTests.CoversFromAnyOtherHostAreDropped` |  | `covers_from_any_other_host_are_dropped` | todo |
@@ -840,33 +840,33 @@ C# test methods: 898 · ported or ruled out: 208 · to do: 690
 | `StateSignalTests.AMediaChangeThatMattersPokesButTheTickingPositionDoesNot` | 3 | `a_media_change_that_matters_pokes_but_the_ticking_position_does_not` | todo |
 | `StoreFollowUpTests.ASetWaitingForASaveDoesNotBlockTheOthers` |  | `a_set_waiting_for_a_save_does_not_block_the_others` | todo |
 | `StoreFollowUpTests.AFailedSaveIsRetriedEvenWhenItsWarningCannotBeWritten` |  | `a_failed_save_is_retried_even_when_its_warning_cannot_be_written` | todo |
-| `StoreFollowUpTests.AFormatChangeThatCannotRetireTheOldFileKeepsTheOldIcon` |  | `a_format_change_that_cannot_retire_the_old_file_keeps_the_old_icon` | todo |
+| `StoreFollowUpTests.AFormatChangeThatCannotRetireTheOldFileKeepsTheOldIcon` | 3 | `a_format_change_that_cannot_retire_the_old_file_keeps_the_old_icon` | todo |
 | `StoreFollowUpTests.APageReferenceWithStraySpacesFindsItsPage` |  | `a_page_reference_with_stray_spaces_finds_its_page` | todo |
 | `StoreFollowUpTests.DocumentationAddressesAreNotPublic` |  | `documentation_addresses_are_not_public` | todo |
 | `StoreFollowUpTests.ReplacingClaudeSettingsKeepsThemOwnerOnly` |  | `replacing_claude_settings_keeps_them_owner_only` | todo |
 | `StoreFollowUpTests.AMalformedHooksValueIsLeftAsItIs` |  | `a_malformed_hooks_value_is_left_as_it_is` | todo |
-| `TerminalStandInTests.WindowsTerminalFallsBackToPowerShell` |  | `windows_terminal_falls_back_to_power_shell` | todo |
-| `TerminalStandInTests.LinuxTriesTheTerminalVariableFirst` |  | `linux_tries_the_terminal_variable_first` | todo |
-| `TerminalStandInTests.LinuxWithoutTheVariableStartsWithTheDesktopTerminals` |  | `linux_without_the_variable_starts_with_the_desktop_terminals` | todo |
-| `TerminalStandInTests.OtherCommandsAreLeftAlone` |  | `other_commands_are_left_alone` | todo |
-| `TerminalStandInTests.TheGnomeDefaultsFallBackToKdeFirst` |  | `the_gnome_defaults_fall_back_to_kde_first` | todo |
-| `TerminalStandInTests.EveryStandInIsAPlainProgramName` |  | `every_stand_in_is_a_plain_program_name` | todo |
-| `TerminalStandInTests.OtherGnomeNamesAreLeftAlone` |  | `other_gnome_names_are_left_alone` | todo |
+| `TerminalStandInTests.WindowsTerminalFallsBackToPowerShell` | 3 | `windows_terminal_falls_back_to_power_shell` | todo |
+| `TerminalStandInTests.LinuxTriesTheTerminalVariableFirst` | 3 | `linux_tries_the_terminal_variable_first` | todo |
+| `TerminalStandInTests.LinuxWithoutTheVariableStartsWithTheDesktopTerminals` | 3 | `linux_without_the_variable_starts_with_the_desktop_terminals` | todo |
+| `TerminalStandInTests.OtherCommandsAreLeftAlone` | 3 | `other_commands_are_left_alone` | todo |
+| `TerminalStandInTests.TheGnomeDefaultsFallBackToKdeFirst` | 3 | `the_gnome_defaults_fall_back_to_kde_first` | todo |
+| `TerminalStandInTests.EveryStandInIsAPlainProgramName` | 3 | `every_stand_in_is_a_plain_program_name` | todo |
+| `TerminalStandInTests.OtherGnomeNamesAreLeftAlone` | 3 | `other_gnome_names_are_left_alone` | todo |
 | `TestPortsTests.ConcurrentFixturesKeepDistinctBoundListeners` |  | `concurrent_fixtures_keep_distinct_bound_listeners` | todo |
 | `ToolProcessTests.DrainsBothStreamsAndReportsFailure` |  | `drains_both_streams_and_reports_failure` | todo |
 | `ToolProcessTests.TimeoutTerminatesTheChildAndCancellationRemainsCancellation` |  | `timeout_terminates_the_child_and_cancellation_remains_cancellation` | todo |
 | `ToolProcessTests.CancellingGitHubRefreshReapsTheCli` |  | `cancelling_git_hub_refresh_reaps_the_cli` | todo |
-| `TrackpadTests.MouseMethodsInvokeTestSeam` |  | `mouse_methods_invoke_test_seam` | todo |
-| `TrackpadTests.MoveIsClampedToSaneBounds` |  | `move_is_clamped_to_sane_bounds` | todo |
-| `TrackpadTests.ScrollIsClampedToSaneBounds` |  | `scroll_is_clamped_to_sane_bounds` | todo |
-| `TrackpadTests.UnknownActionTypesAreIgnored` |  | `unknown_action_types_are_ignored` | todo |
-| `TrackpadTests.NanAndInfinityDoNotTriggerMovement` |  | `nan_and_infinity_do_not_trigger_movement` | todo |
-| `TrackpadTests.ForeignBrowserOriginsAreRefusedByBrowserGuard` |  | `foreign_browser_origins_are_refused_by_browser_guard` | ported |
-| `TrackpadTests.IsAllowedRequiresWidgetOnEnabledPageWithControlOption` |  | `is_allowed_requires_widget_on_enabled_page_with_control_option` | todo |
-| `TrackpadTests.ProcessPayloadHonorsConfigStore` |  | `process_payload_honors_config_store` | todo |
-| `TrackpadTests.HandleEndpointReturns403WhenServiceMissingOrControlDisabled` |  | `handle_endpoint_returns403_when_service_missing_or_control_disabled` | todo |
-| `TrackpadTests.HandleEndpointReturns405OnGet` |  | `handle_endpoint_returns405_on_get` | todo |
-| `TrackpadTests.HandleEndpointExecutesOnPostWithJson` |  | `handle_endpoint_executes_on_post_with_json` | todo |
+| `TrackpadTests.MouseMethodsInvokeTestSeam` | 3 | `mouse_methods_invoke_test_seam` | todo |
+| `TrackpadTests.MoveIsClampedToSaneBounds` | 3 | `move_is_clamped_to_sane_bounds` | todo |
+| `TrackpadTests.ScrollIsClampedToSaneBounds` | 3 | `scroll_is_clamped_to_sane_bounds` | todo |
+| `TrackpadTests.UnknownActionTypesAreIgnored` | 3 | `unknown_action_types_are_ignored` | todo |
+| `TrackpadTests.NanAndInfinityDoNotTriggerMovement` | 3 | `nan_and_infinity_do_not_trigger_movement` | todo |
+| `TrackpadTests.ForeignBrowserOriginsAreRefusedByBrowserGuard` | 3 | `foreign_browser_origins_are_refused_by_browser_guard` | ported |
+| `TrackpadTests.IsAllowedRequiresWidgetOnEnabledPageWithControlOption` | 3 | `is_allowed_requires_widget_on_enabled_page_with_control_option` | todo |
+| `TrackpadTests.ProcessPayloadHonorsConfigStore` | 3 | `process_payload_honors_config_store` | todo |
+| `TrackpadTests.HandleEndpointReturns403WhenServiceMissingOrControlDisabled` | 3 | `handle_endpoint_returns403_when_service_missing_or_control_disabled` | todo |
+| `TrackpadTests.HandleEndpointReturns405OnGet` | 3 | `handle_endpoint_returns405_on_get` | todo |
+| `TrackpadTests.HandleEndpointExecutesOnPostWithJson` | 3 | `handle_endpoint_executes_on_post_with_json` | todo |
 | `UpdateChecksumTests.EveryRidFindsItsZipTheAppAndTheChecksumsAndEachIsListed` |  | `every_rid_finds_its_zip_the_app_and_the_checksums_and_each_is_listed` | todo |
 | `UpdateChecksumTests.TheLinuxX64ZipIsNotTakenForTheArm64One` |  | `the_linux_x64_zip_is_not_taken_for_the_arm64_one` | todo |
 | `UpdateChecksumTests.ListingFormatsAreRead` |  | `listing_formats_are_read` | todo |

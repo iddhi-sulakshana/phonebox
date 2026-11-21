@@ -377,6 +377,13 @@ mod tests {
         }
     }
 
+    /// The tests that open sockets in this process run one at a time, as xUnit runs one class's tests: one test's
+    /// listener on both families must not show up as a duplicate port in another's capped list.
+    fn sockets() -> std::sync::MutexGuard<'static, ()> {
+        static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     /// An IPv6-only socket on ::1 (std's listener on ::1 is already IPv6-only), or None on a host without IPv6.
     fn listen_v6(port: u16) -> Option<TcpListener> {
         TcpListener::bind((Ipv6Addr::LOCALHOST, port)).ok()
@@ -384,6 +391,7 @@ mod tests {
 
     #[test]
     fn finds_a_listener_of_this_process() {
+        let _one_at_a_time = sockets();
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let port = listener.local_addr().unwrap().port();
         // other tests run listeners in this process too, so the default cap could hide this port
@@ -398,6 +406,7 @@ mod tests {
 
     #[test]
     fn result_is_capped_sorted_and_distinct() {
+        let _one_at_a_time = sockets();
         let _listeners: Vec<TcpListener> = (0..3)
             .map(|_| TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap())
             .collect();
@@ -536,6 +545,7 @@ mod tests {
 
     #[test]
     fn an_ipv6_only_listener_is_reached_on_ipv6_loopback() {
+        let _one_at_a_time = sockets();
         let Some(socket) = listen_v6(0) else { return }; // nothing to find on a host without IPv6
         let port = socket.local_addr().unwrap().port();
         assert!(for_process(std::process::id(), usize::MAX).contains(&v6(port)));
@@ -543,6 +553,7 @@ mod tests {
 
     #[test]
     fn both_families_on_one_port_are_kept() {
+        let _one_at_a_time = sockets();
         let ipv4 = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let port = ipv4.local_addr().unwrap().port();
         let Some(_ipv6) = listen_v6(port) else { return };

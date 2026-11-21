@@ -34,6 +34,10 @@ PHASE_BY_FILE = {
     "CpuTempMalformedTests": 2, "AppleSmcTests": 2, "BatteryTests": 2, "BatteryParsingTests": 2,
     "ListeningPortsTests": 2, "PingMonitorTests": 2, "NetworkAdapterTests": 2, "NetworkRatesTests": 2, "ShTests": 2,
     "DrmUsageTests": 2,
+    "ShortcutIconUploadsTests": 3, "AudioSetVolumeTests": 3, "MacMediaTests": 3, "SpectrumAnalyzerTests": 3,
+    "TrackpadTests": 3, "DictationTests": 3, "KeySenderTests": 3, "AppCatalogTests": 3, "ShortcutIconTests": 3,
+    "MediaArtworkTests": 3, "MediaArtworkBackoffTests": 3, "IconEncodingTests": 3, "AudioCacheTests": 3,
+    "TerminalStandInTests": 3,
 }
 # Files that mix phases: the phase of single methods ("Class.Method"); the rest of such a file stays unassigned.
 PHASE_BY_METHOD: dict[str, int] = {
@@ -58,6 +62,12 @@ PHASE_BY_METHOD: dict[str, int] = {
     # MonitorAuditTests.cs spans several monitors; these two are ProcessMonitor's (the rest: plans 5 and 6)
     "MonitorAuditTests.ProcessDetailToleratesDuplicateSessionPidsAndLocksAgentProcess": 2,
     "MonitorAuditTests.ColdProcessIconDoesNotCacheNullAndShortenArgsHandlesTabSeparators": 2,
+    # shortcut and icon checks that live in audit and pairing files (the rest of those files: plans 4-6)
+    "ShortcutRuleFollowUpTests.ThePhoneDoesNotGetTheConfiguredTextOfAFailedShortcut": 3,
+    "ShortcutRuleFollowUpTests.ThePhoneStillGetsTheAgentsOwnAccessibilityHint": 3,
+    "StoreFollowUpTests.AFormatChangeThatCannotRetireTheOldFileKeepsTheOldIcon": 3,
+    "PairingTests.ShortcutIconUploadRejectsConcurrentSettingsSaveAcrossBodyReadWithoutOrphans": 3,
+    "RuleTests.MacroShortcutStepsUpdateToggleStateAndRunOffCmd": 3,
     # StateSignal.MediaChanged compares media snapshots: it comes with the media monitor
     "StateSignalTests.AMediaChangeThatMattersPokesButTheTickingPositionDoesNot": 3,
 }
