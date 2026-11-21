@@ -471,6 +471,53 @@ pub(crate) fn walk_files(
     found
 }
 
+/// The live stream's "work" frame: the sessions and the GitHub summary.
+pub struct WorkFeed {
+    pub sessions: Arc<SessionMonitor>,
+    pub github: Arc<crate::github_monitor::GitHubMonitor>,
+}
+
+impl crate::state::StateSource for WorkFeed {
+    fn snapshot(&self) -> Value {
+        let github = self
+            .github
+            .snapshot()
+            .and_then(|g| serde_json::to_value(g).ok());
+        work_feed(&self.sessions, github)
+    }
+}
+
+/// What the process list reads: each session's process, its name, and when it last changed.
+impl crate::process_monitor::AgentSessions for SessionMonitor {
+    fn sessions(&self) -> Vec<crate::process_monitor::AgentSessionRef> {
+        self.snapshot()
+            .into_iter()
+            .map(|s| crate::process_monitor::AgentSessionRef {
+                pid: s.pid.and_then(|p| u32::try_from(p).ok()),
+                title: s.name,
+                updated: s.since,
+            })
+            .collect()
+    }
+}
+
+impl SessionMonitor {
+    /// A pass every 2 s until `stop` (the reads run off the async workers).
+    pub fn start(self: &Arc<Self>, stop: crate::server::Stop) -> tokio::task::JoinHandle<()> {
+        let me = self.clone();
+        tokio::spawn(async move {
+            while !stop.is_stopped() {
+                let pass = me.clone();
+                let _ = tokio::task::spawn_blocking(move || pass.tick()).await;
+                tokio::select! {
+                    _ = stop.stopped() => break,
+                    _ = tokio::time::sleep(std::time::Duration::from_secs(2)) => {}
+                }
+            }
+        })
+    }
+}
+
 /// The "work" data the phone gets, on the live stream and on the polling path alike: sessions and GitHub.
 pub fn work_feed(sessions: &SessionMonitor, github: Option<Value>) -> Value {
     serde_json::json!({ "sessions": sessions.snapshot(), "github": github })

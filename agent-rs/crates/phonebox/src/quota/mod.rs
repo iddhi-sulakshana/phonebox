@@ -10,9 +10,15 @@ use std::sync::{Arc, Mutex};
 
 use serde::{Deserialize, Serialize};
 
+use std::time::Duration;
+
+use tokio::time::Instant;
+
 use crate::codex_bar::{self, CodexBarError, QuotaOverview};
 use crate::config::store::ConfigStore;
 use crate::dotnet_text::{utf16_len, utf16_prefix};
+use crate::server::Stop;
+use crate::tool_process;
 use connect::UsageHttp;
 
 pub(crate) const CATEGORY: &str = "PhoneBox.Agent.QuotaMonitor";
@@ -192,6 +198,9 @@ pub struct QuotaMonitor {
     pub(crate) credentials_path: PathBuf,
     pub(crate) codex_sessions_root: PathBuf,
     pub(crate) http: UsageHttp,
+    /// Only for the Antigravity server's HTTPS port (a self-signed certificate on this computer passes); None without
+    /// TLS, and in tests.
+    pub(crate) antigravity_https: Option<UsageHttp>,
     /// Claude Code's macOS Keychain item; None uses the `security` tool, and only for the default credentials path on
     /// macOS. Tests give a reader of their own so nothing touches the real Keychain.
     pub(crate) read_keychain: Option<claude::KeychainReader>,
@@ -209,6 +218,10 @@ impl QuotaMonitor {
             credentials_path: home.join(".claude").join(".credentials.json"),
             codex_sessions_root: home.join(".codex").join("sessions"),
             http: connect::usage_http(),
+            #[cfg(feature = "tls")]
+            antigravity_https: Some(antigravity::loopback_tls_http()),
+            #[cfg(not(feature = "tls"))]
+            antigravity_https: None,
             read_keychain: None,
             claude_sched: Default::default(),
             state: Mutex::new(State::default()),
@@ -292,6 +305,228 @@ impl QuotaMonitor {
             state.overview = None;
         }
         false
+    }
+
+    /// CodexBar's providers from `read` (None: `codexbar` is not installed). A provider it now reports without limits
+    /// keeps its cached reading with the error, one it leaves out keeps no limits and says so. True unless the read
+    /// failed (the next one is due sooner then).
+    pub async fn refresh_codexbar_with<R, F>(&self, path: Option<PathBuf>, read: R) -> bool
+    where
+        R: FnOnce(PathBuf) -> F,
+        F: std::future::Future<Output = Result<Vec<QuotaProvider>, CodexBarError>>,
+    {
+        let mark = |error: &str| {
+            let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+            for p in &mut state.external {
+                p.error = Some(error.to_string());
+            }
+        };
+        let Some(path) = path else {
+            mark("CodexBar is not installed");
+            return true;
+        };
+        match read(path).await {
+            Ok(latest) => {
+                let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+                let old = std::mem::take(&mut state.external);
+                let mut external: Vec<QuotaProvider> = latest
+                    .iter()
+                    .map(|p| match old.iter().find(|o| o.id == p.id) {
+                        Some(cached) if p.limits.is_empty() => QuotaProvider {
+                            error: Some(
+                                p.error
+                                    .clone()
+                                    .unwrap_or_else(|| "CodexBar returned no data".into()),
+                            ),
+                            ..cached.clone()
+                        },
+                        _ => p.clone(),
+                    })
+                    .collect();
+                external.extend(
+                    old.into_iter()
+                        .filter(|o| !latest.iter().any(|p| p.id == o.id))
+                        .map(|o| QuotaProvider {
+                            limits: Vec::new(),
+                            error: Some("CodexBar omitted this provider".into()),
+                            ..o
+                        }),
+                );
+                state.external = external;
+                true
+            }
+            Err(e) => {
+                crate::log::debug(CATEGORY, &format!("CodexBar: {e}"));
+                mark("CodexBar refresh failed");
+                false
+            }
+        }
+    }
+
+    /// Antigravity's quota from the first candidate server that answers, else the CLI. Without a server or a CLI a
+    /// reading with limits stays with "not running"; a server that gives nothing keeps it with the error. True when
+    /// a new reading came in.
+    pub async fn refresh_antigravity_with(
+        &self,
+        endpoints: Vec<antigravity::AntigravityEndpoint>,
+        cli: Option<PathBuf>,
+        run: &antigravity::CliRun,
+        cancel: impl std::future::Future<Output = ()>,
+    ) -> bool {
+        let mut cancel = std::pin::pin!(cancel);
+        let mut provider = None;
+        if !endpoints.is_empty() {
+            let https = self.antigravity_https.as_ref();
+            match antigravity::read_antigravity(&self.http, &endpoints, cancel.as_mut(), https)
+                .await
+            {
+                Ok(read) => provider = read,
+                Err(antigravity::Cancelled) => return false,
+            }
+        }
+        if provider.is_none()
+            && let Some(cli) = &cli
+        {
+            match antigravity::read_antigravity_cli(cli, cancel.as_mut(), run).await {
+                Ok(read) => provider = read,
+                Err(antigravity::CliError::Cancelled) => return false,
+                Err(antigravity::CliError::Failed(kind)) => {
+                    crate::log::debug(
+                        CATEGORY,
+                        &format!("Antigravity CLI quota refresh failed ({kind})"),
+                    );
+                }
+            }
+        }
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let previous = state.antigravity.take().filter(|p| !p.limits.is_empty());
+        if endpoints.is_empty() && cli.is_none() {
+            state.antigravity = previous.map(|p| QuotaProvider {
+                error: Some("Antigravity process not running".into()),
+                ..p
+            });
+            return false;
+        }
+        if let Some(provider) = provider {
+            state.antigravity = Some(provider);
+            return true;
+        }
+        const ERROR: &str = "Could not read local Antigravity quotas";
+        state.antigravity = Some(match previous {
+            Some(cached) => QuotaProvider {
+                error: Some(ERROR.into()),
+                ..cached
+            },
+            None => QuotaProvider::new(
+                "antigravity",
+                "Antigravity",
+                "Antigravity",
+                Vec::new(),
+                None,
+                None,
+                Some(ERROR.into()),
+            ),
+        });
+        false
+    }
+
+    /// The candidates of the running processes and the CLI, through [`Self::refresh_antigravity_with`].
+    pub async fn refresh_antigravity(&self, stop: &Stop) -> bool {
+        let found = tokio::task::spawn_blocking(|| {
+            let table = antigravity::process_commands();
+            antigravity::find_antigravity_endpoints(
+                &|name| antigravity::commands_named(&table, name),
+                &|pid| {
+                    crate::listening_ports::for_process(pid, crate::listening_ports::DEFAULT_MAX)
+                },
+            )
+        })
+        .await
+        .unwrap_or_default();
+        let mut endpoints = Vec::new();
+        for ep in found {
+            if endpoints.len() == 8 {
+                break;
+            }
+            if !endpoints.contains(&ep) {
+                endpoints.push(ep);
+            }
+        }
+        let cli = tokio::task::spawn_blocking(antigravity::find_antigravity_cli)
+            .await
+            .ok()
+            .flatten();
+        let run = antigravity::tool_runner();
+        self.refresh_antigravity_with(endpoints, cli, &*run, stop.stopped())
+            .await
+    }
+
+    /// The usage loop (every 30 s: CodexBar every 3 minutes, Codex, Antigravity every minute, Claude on its
+    /// schedule) and the cost overview loop (every 5 s while enabled), until `stop`.
+    pub fn start(self: &Arc<Self>, stop: Stop) {
+        let me = self.clone();
+        let usage_stop = stop.clone();
+        tokio::spawn(async move { me.usage_loop(usage_stop).await });
+        let me = self.clone();
+        tokio::spawn(async move { me.overview_loop(stop).await });
+    }
+
+    async fn usage_loop(self: Arc<Self>, stop: Stop) {
+        self.load_claude_cache(crate::server::now_ms());
+        let (mut next_codexbar, mut next_antigravity) = (Instant::now(), Instant::now());
+        while !stop.is_stopped() {
+            if Instant::now() >= next_codexbar {
+                let path = tokio::task::spawn_blocking(|| tool_process::find("codexbar"))
+                    .await
+                    .ok()
+                    .flatten();
+                let refresh =
+                    self.refresh_codexbar_with(path, |p| async move { codex_bar::read(&p).await });
+                let ok = tokio::select! {
+                    _ = stop.stopped() => break,
+                    ok = refresh => ok,
+                };
+                next_codexbar = Instant::now() + Duration::from_secs(if ok { 180 } else { 60 });
+            }
+            let me = self.clone();
+            let _ = tokio::task::spawn_blocking(move || me.codex_tick()).await;
+            if Instant::now() >= next_antigravity {
+                let ok = self.refresh_antigravity(&stop).await;
+                next_antigravity = Instant::now() + Duration::from_secs(if ok { 60 } else { 30 });
+            }
+            tokio::select! {
+                _ = stop.stopped() => break,
+                _ = self.claude_tick(crate::server::now_ms()) => {}
+            }
+            crate::wake::delay(Duration::from_secs(30), &stop).await;
+        }
+    }
+
+    async fn overview_loop(self: Arc<Self>, stop: Stop) {
+        let mut next: Option<Instant> = None;
+        let mut wakes = crate::wake::count();
+        while !stop.is_stopped() {
+            if !self.is_overview_enabled() {
+                self.state
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .overview = None;
+                next = None;
+            } else if next.is_none_or(|n| Instant::now() >= n) || crate::wake::count() != wakes {
+                wakes = crate::wake::count();
+                let refresh = self.refresh_overview_once(
+                    || tool_process::find("codexbar"),
+                    |p| async move { codex_bar::read_cost(&p).await },
+                    crate::server::now_ms(),
+                );
+                let ok = tokio::select! {
+                    _ = stop.stopped() => break,
+                    ok = refresh => ok,
+                };
+                next = Some(Instant::now() + Duration::from_secs(if ok { 1200 } else { 300 }));
+            }
+            crate::wake::delay(Duration::from_secs(5), &stop).await;
+        }
     }
 
     /// One pass for Codex (blocking: it walks the sessions folder). A busy log keeps the last reading.
@@ -471,6 +706,201 @@ mod tests {
                 .await
         );
         assert!(monitor.overview(T0).is_none());
+    }
+
+    fn external(id: &str, percent: Option<f64>) -> QuotaProvider {
+        let limits = percent
+            .map(|p| vec![QuotaLimit::new("Weekly", p, None, None, "normal")])
+            .unwrap_or_default();
+        QuotaProvider {
+            source: "codexbar".into(),
+            ..QuotaProvider::new(id, id, id, limits, None, Some(1), None)
+        }
+    }
+
+    fn externals(m: &QuotaMonitor) -> Vec<(String, usize, Option<String>)> {
+        let state = m.state.lock().unwrap();
+        state
+            .external
+            .iter()
+            .map(|p| (p.id.clone(), p.limits.len(), p.error.clone()))
+            .collect()
+    }
+
+    #[tokio::test]
+    async fn codexbar_refresh_keeps_cached_readings_and_marks_omitted_providers() {
+        let dir = tempfile::tempdir().unwrap();
+        let m = QuotaMonitor::new(None, dir.path(), dir.path());
+        let tool = || Some(PathBuf::from("codexbar"));
+        assert!(
+            m.refresh_codexbar_with(None, |_| async { Ok(vec![]) })
+                .await
+        );
+        assert!(externals(&m).is_empty());
+        let first = vec![external("cursor", Some(5.0)), external("zai", Some(7.0))];
+        assert!(
+            m.refresh_codexbar_with(tool(), |_| async move { Ok(first) })
+                .await
+        );
+        let next = vec![external("cursor", None), external("kimi", Some(1.0))];
+        assert!(
+            m.refresh_codexbar_with(tool(), |_| async move { Ok(next) })
+                .await
+        );
+        let no_data = Some("CodexBar returned no data".to_string());
+        let omitted = Some("CodexBar omitted this provider".to_string());
+        assert_eq!(
+            externals(&m),
+            [
+                ("cursor".to_string(), 1, no_data),
+                ("kimi".to_string(), 1, None),
+                ("zai".to_string(), 0, omitted)
+            ]
+        );
+        assert_eq!(
+            m.state.lock().unwrap().external[0].limits[0].percent,
+            5.0,
+            "the cached reading"
+        );
+
+        assert!(
+            !m.refresh_codexbar_with(tool(), |_| async { Err(CodexBarError::Run("boom".into())) })
+                .await
+        );
+        assert!(
+            externals(&m)
+                .iter()
+                .all(|p| p.2.as_deref() == Some("CodexBar refresh failed"))
+        );
+        assert!(
+            m.refresh_codexbar_with(None, |_| async { Ok(vec![]) })
+                .await
+        );
+        assert!(
+            externals(&m)
+                .iter()
+                .all(|p| p.2.as_deref() == Some("CodexBar is not installed"))
+        );
+    }
+
+    #[tokio::test]
+    async fn antigravity_refresh_reports_a_missing_or_unreadable_server() {
+        use antigravity::{AntigravityEndpoint, CliRun};
+        let dir = tempfile::tempdir().unwrap();
+        let answer = Arc::new(Mutex::new(Some(
+            r#"{"groups":[{"buckets":[{"window":"5h","remainingFraction":0.25}]}]}"#.to_string(),
+        )));
+        let reply = answer.clone();
+        let http: UsageHttp = Arc::new(move |_req| {
+            let body = reply.lock().unwrap().clone();
+            Box::pin(async move {
+                match body {
+                    Some(body) => Ok(connect::UsageReply {
+                        status: 200,
+                        retry_after: None,
+                        body,
+                    }),
+                    None => Err(connect::HttpFail::Connect("refused".into())),
+                }
+            })
+        });
+        let m = QuotaMonitor {
+            http,
+            antigravity_https: None,
+            ..QuotaMonitor::new(None, dir.path(), dir.path())
+        };
+        let never: Box<CliRun> = Box::new(|_, _| panic!("no CLI was found"));
+        let shown = |m: &QuotaMonitor| {
+            m.snapshot(crate::server::now_ms())
+                .into_iter()
+                .find(|p| p.id == "antigravity")
+        };
+        let server = || vec![AntigravityEndpoint::http(18765, "token")];
+
+        assert!(
+            !m.refresh_antigravity_with(vec![], None, &*never, std::future::pending())
+                .await
+        );
+        assert_eq!(
+            shown(&m),
+            None,
+            "nothing running and nothing before: no provider"
+        );
+
+        assert!(
+            m.refresh_antigravity_with(server(), None, &*never, std::future::pending())
+                .await
+        );
+        let read = shown(&m).unwrap();
+        assert_eq!((read.limits[0].percent, read.error.clone()), (75.0, None));
+
+        assert!(
+            !m.refresh_antigravity_with(vec![], None, &*never, std::future::pending())
+                .await
+        );
+        let gone = shown(&m).unwrap();
+        assert_eq!(
+            (gone.limits.len(), gone.error.as_deref()),
+            (1, Some("Antigravity process not running"))
+        );
+
+        *answer.lock().unwrap() = None;
+        assert!(
+            !m.refresh_antigravity_with(server(), None, &*never, std::future::pending())
+                .await
+        );
+        assert_eq!(
+            shown(&m).unwrap().error.as_deref(),
+            Some("Could not read local Antigravity quotas")
+        );
+
+        // the CLI when the server gives nothing
+        let cli: Box<CliRun> = Box::new(|cmd, _| {
+            let out = if cmd.args[0] == "--version" {
+                "1.5.3".to_string()
+            } else {
+                r#"{"status":"SUCCESS","command":{"name":"usage","data":{"groups":[{"buckets":[{"window":"weekly","remaining_fraction":0.5}]}]}}}"#
+                    .to_string()
+            };
+            Box::pin(async move {
+                Ok(crate::tool_process::Output {
+                    code: 0,
+                    stdout: out,
+                    stderr: String::new(),
+                })
+            })
+        });
+        assert!(
+            m.refresh_antigravity_with(server(), Some("agy".into()), &*cli, std::future::pending())
+                .await
+        );
+        assert_eq!(shown(&m).unwrap().limits[0].percent, 50.0);
+
+        let fresh = QuotaMonitor {
+            antigravity_https: None,
+            ..QuotaMonitor::new(None, dir.path(), dir.path())
+        };
+        let failing: Box<CliRun> = Box::new(|_, _| {
+            Box::pin(async { Err(crate::tool_process::RunError::Start("no agy".into())) })
+        });
+        assert!(
+            !fresh
+                .refresh_antigravity_with(
+                    vec![],
+                    Some("agy".into()),
+                    &*failing,
+                    std::future::pending()
+                )
+                .await
+        );
+        let failed = shown(&fresh).unwrap();
+        assert_eq!(
+            (failed.plan.as_str(), failed.error.as_deref()),
+            (
+                "Antigravity",
+                Some("Could not read local Antigravity quotas")
+            )
+        );
     }
 
     #[test]

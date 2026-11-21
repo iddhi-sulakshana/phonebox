@@ -3,6 +3,7 @@
 pub mod guard;
 pub mod query;
 mod routes_desk;
+mod routes_dev;
 pub mod routes_info;
 pub mod routes_pair;
 pub mod routes_settings;
@@ -101,6 +102,7 @@ fn all_routes() -> axum::Router<AppState> {
         .merge(routes_system::routes())
         .merge(routes_desk::routes())
         .merge(routes_pair::routes())
+        .merge(routes_dev::routes())
         // Kestrel's default request body limit: a settings page with many pages still fits
         .layer(axum::extract::DefaultBodyLimit::max(30_000_000))
 }
@@ -223,6 +225,26 @@ pub struct AppState {
     /// Wi-Fi as the agent started it: the startup port, the certificate when the Wi-Fi listener runs, the pairing
     /// codes (`/api/pair*`, `/api/lan`); main sets it up.
     pub wifi: Arc<crate::lan::Wifi>,
+    /// The Claude Code, Codex and Cursor sessions (`/api/work`, the stream's "work" frame); main starts its loop.
+    pub sessions: Arc<crate::session_monitor::SessionMonitor>,
+    /// The session monitor's conversation cache (`/api/work/conversation`).
+    pub transcripts: Arc<crate::claude_transcript::ClaudeTranscript>,
+    /// Permission prompts waiting for the phone (`/api/approvals*`).
+    pub approvals: Arc<crate::approval_store::ApprovalStore>,
+    /// The Claude Code PermissionRequest hook (`/api/hooks/claude/permission`).
+    pub hook: Arc<crate::claude_hook::ClaudeHook>,
+    /// Claude Code's settings file, where `/api/claude/hook` adds and removes the hook.
+    pub claude_settings: std::path::PathBuf,
+    /// AI quotas (`/api/quotas`); main starts its loops.
+    pub quotas: Arc<crate::quota::QuotaMonitor>,
+    /// Pull requests and notifications through `gh` (`/api/work`); main starts its loop.
+    pub github: Arc<crate::github_monitor::GitHubMonitor>,
+    /// Docker / Podman containers (`/api/docker*`); main starts its loop.
+    pub docker: Arc<crate::docker_monitor::DockerMonitor>,
+    /// Command widgets' output (`/api/widget/...`).
+    pub commands: Arc<crate::command_runner::CommandRunner>,
+    /// WorkBuddy's workspace names (the permission card's project).
+    pub work_names: Arc<crate::work_buddy::WorkBuddyNames>,
 }
 
 /// Serializes the writes that move the config version for shortcut icons (upload, removal) with the settings save.
@@ -262,7 +284,29 @@ impl AppState {
         let wifi = Arc::new(crate::lan::Wifi::off(
             cfg.get().lan.port.clamp(1, 65535) as u16
         ));
+        let home = crate::app_paths::home();
+        let phone: Arc<PhoneSeenState> = Default::default();
+        let sessions = crate::session_monitor::SessionMonitor::new(Some(cfg.clone()), home.clone());
+        let approvals = crate::approval_store::ApprovalStore::new(push.clone(), phone.clone());
+        let work_names = Arc::new(crate::work_buddy::WorkBuddyNames::new());
+        let hook = claude_hook(&cfg, &approvals, &sessions, &work_names, &home);
         AppState {
+            transcripts: sessions.transcripts(),
+            procs: crate::process_monitor::ProcessMonitor::new(sessions.clone()),
+            hook,
+            claude_settings: crate::claude_hook::settings_path(&home),
+            quotas: Arc::new(crate::quota::QuotaMonitor::new(
+                Some(cfg.clone()),
+                &crate::app_paths::local_dir(),
+                &home,
+            )),
+            github: Arc::new(crate::github_monitor::GitHubMonitor::new()),
+            docker: Arc::new(crate::docker_monitor::DockerMonitor::new(cfg.clone())),
+            commands: Arc::new(crate::command_runner::CommandRunner::new(cfg.clone(), home)),
+            sessions,
+            approvals,
+            work_names,
+            phone,
             adb,
             wifi,
             apps: crate::app_catalog::AppCatalog::new(cfg.clone()),
@@ -275,21 +319,58 @@ impl AppState {
             )),
             system: crate::system_monitor::SystemMonitor::new(cfg.clone()),
             ping: crate::ping_monitor::PingMonitor::new(cfg.clone()),
-            procs: crate::process_monitor::ProcessMonitor::new(Arc::new(
-                crate::process_monitor::NoSessions,
-            )),
             batteries: crate::battery_monitor::BatteryMonitor::new(),
             audio: crate::audio_control::AudioControl::new(),
             cfg,
             endpoint,
             push,
             timings: Default::default(),
-            phone: Default::default(),
             stop: Stop::default(),
             sources,
             frames,
         }
     }
+}
+
+impl AppState {
+    /// The session and GitHub monitors main built first (the state sources' "work" frame reads them): the process list
+    /// and the permission hook read the same session monitor.
+    pub fn with_work(
+        mut self,
+        sessions: Arc<crate::session_monitor::SessionMonitor>,
+        github: Arc<crate::github_monitor::GitHubMonitor>,
+    ) -> AppState {
+        let home = sessions.home().to_path_buf();
+        self.procs = crate::process_monitor::ProcessMonitor::new(sessions.clone());
+        self.hook = claude_hook(
+            &self.cfg,
+            &self.approvals,
+            &sessions,
+            &self.work_names,
+            &home,
+        );
+        self.transcripts = sessions.transcripts();
+        self.sessions = sessions;
+        self.github = github;
+        self
+    }
+}
+
+fn claude_hook(
+    cfg: &Arc<ConfigStore>,
+    approvals: &Arc<crate::approval_store::ApprovalStore>,
+    sessions: &Arc<crate::session_monitor::SessionMonitor>,
+    names: &Arc<crate::work_buddy::WorkBuddyNames>,
+    home: &std::path::Path,
+) -> Arc<crate::claude_hook::ClaudeHook> {
+    Arc::new(crate::claude_hook::ClaudeHook {
+        cfg: cfg.clone(),
+        approvals: approvals.clone(),
+        sessions: sessions.clone(),
+        names: names.clone(),
+        home: home.to_path_buf(),
+        idle: Arc::new(crate::idle::seconds),
+    })
 }
 
 /// The agent is stopping (Ctrl+C, SIGTERM, or a restart from the settings page). Live streams end on it, so the

@@ -76,6 +76,10 @@ fn main() -> ExitCode {
     let media = phonebox::media_monitor::MediaMonitor::new();
     let deck: Arc<dyn phonebox::media_monitor::MediaDeck> =
         Arc::new(phonebox::media_monitor::NoDeck);
+    // the "work" frame, the process list and the permission hook read the same session monitor
+    let sessions =
+        phonebox::session_monitor::SessionMonitor::new(Some(cfg.clone()), app_paths::home());
+    let github = Arc::new(phonebox::github_monitor::GitHubMonitor::new());
     let sources = phonebox::state::StateSources::phase1()
         .with_pc(Box::new(system.clone()))
         .with_ping(Box::new(ping.clone()))
@@ -88,8 +92,13 @@ fn main() -> ExitCode {
             cfg: cfg.clone(),
             push: push.clone(),
             audio: audio.clone(),
+        }))
+        .with_work(Box::new(phonebox::session_monitor::WorkFeed {
+            sessions: sessions.clone(),
+            github: github.clone(),
         }));
-    let mut state = AppState::new(cfg, endpoint, push.clone(), Arc::new(sources));
+    let mut state =
+        AppState::new(cfg, endpoint, push.clone(), Arc::new(sources)).with_work(sessions, github);
     state.system = system;
     state.ping = ping;
     state.audio = audio;
@@ -149,6 +158,10 @@ async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Res
     state.ping.start(state.stop.clone());
     state.procs.start(state.stop.clone());
     state.batteries.start(state.stop.clone());
+    state.sessions.start(state.stop.clone()); // every 2 s
+    state.github.start(state.stop.clone()); // after 3 s, then every 3 min
+    state.quotas.start(state.stop.clone()); // usage every 30 s, the overview every 5 s
+    state.docker.start(state.stop.clone()); // only while the phone asks
     log::info(
         "PhoneBoxAgent",
         &format!(

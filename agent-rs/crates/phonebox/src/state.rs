@@ -65,6 +65,12 @@ impl StateSources {
         self
     }
 
+    /// `work` (the live stream's frame) from the session and GitHub monitors.
+    pub fn with_work(mut self, work: Box<dyn StateSource>) -> StateSources {
+        self.work = work;
+        self
+    }
+
     /// `ping` from the ping monitor.
     pub fn with_ping(mut self, ping: Box<dyn StateSource>) -> StateSources {
         self.ping = ping;

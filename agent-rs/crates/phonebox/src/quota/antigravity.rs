@@ -90,6 +90,31 @@ pub enum CliError {
 pub type CliRun =
     dyn Fn(ToolCommand, Duration) -> BoxFuture<'static, Result<Output, RunError>> + Send + Sync;
 
+/// Runs through [`crate::tool_process::run`].
+pub fn tool_runner() -> Box<CliRun> {
+    Box::new(|cmd, timeout| {
+        Box::pin(
+            async move { crate::tool_process::run(&cmd, timeout, std::future::pending()).await },
+        )
+    })
+}
+
+/// `agy` on PATH, or its standard per-user installation on Windows.
+pub fn find_antigravity_cli() -> Option<std::path::PathBuf> {
+    if let Some(path) = crate::tool_process::find("agy") {
+        return Some(path);
+    }
+    if !cfg!(windows) {
+        return None;
+    }
+    let local = std::env::var_os("LOCALAPPDATA")?;
+    let path = std::path::Path::new(&local)
+        .join("agy")
+        .join("bin")
+        .join("agy.exe");
+    path.is_file().then_some(path)
+}
+
 /// `(port, csrf token)` of the server's extension or hub port.
 pub fn parse_endpoint_from_command_line(cmd: &str) -> Option<(u16, String)> {
     if cmd.trim().is_empty() {
