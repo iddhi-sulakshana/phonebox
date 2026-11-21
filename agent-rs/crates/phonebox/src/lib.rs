@@ -15,6 +15,7 @@ pub mod browser_guard;
 pub mod calendar;
 pub mod camera_feeds;
 pub mod catalog;
+pub mod charge_guard;
 pub mod claude_hook;
 pub mod claude_transcript;
 pub mod codex_bar;

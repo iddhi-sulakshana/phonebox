@@ -2,6 +2,7 @@
 
 pub mod guard;
 pub mod query;
+mod routes_charge;
 mod routes_desk;
 mod routes_dev;
 pub mod routes_info;
@@ -113,6 +114,7 @@ fn all_routes() -> axum::Router<AppState> {
         .merge(routes_widgets::routes())
         .merge(routes_phones::routes())
         .merge(routes_rules::routes())
+        .merge(routes_charge::routes())
         // Kestrel's default request body limit: a settings page with many pages still fits
         .layer(axum::extract::DefaultBodyLimit::max(30_000_000))
 }
@@ -206,7 +208,9 @@ pub struct AppState {
     pub adb: Arc<crate::adb::AdbReverse>,
     /// Microphone and camera use (the "On air" widget and rules); main shares it with the state sources.
     pub privacy: Arc<crate::privacy_monitor::PrivacyMonitor>,
-    /// Automation rules; [`AppState::with_rules`] builds it over the monitors in place.
+    /// Battery care: switches the phone's power supply by its battery level.
+    pub charge: Arc<crate::charge_guard::ChargeGuard>,
+    /// Automation rules; [`AppState::rewire`] builds it over the monitors in place.
     pub rules: Arc<crate::rule_engine::RuleEngine>,
     pub stop: Stop,
     /// The monitors behind `/api/state` and the live stream.
@@ -335,6 +339,8 @@ impl AppState {
             let cameras = cameras.clone();
             settings_hooks.add(Arc::new(move || cameras.settings_saved()));
         }
+        let ha = Arc::new(crate::home_assistant::HomeAssistant::new(cfg.clone()));
+        let audio = crate::audio_control::AudioControl::new();
         let state = AppState {
             // replaced below, once the monitors it reads are in place
             rules: crate::rule_engine::RuleEngine::new(
@@ -352,7 +358,14 @@ impl AppState {
             hook,
             claude_settings: crate::claude_hook::settings_path(&home),
             settings_hooks,
-            ha: Arc::new(crate::home_assistant::HomeAssistant::new(cfg.clone())),
+            charge: Arc::new(crate::charge_guard::ChargeGuard::new(
+                cfg.clone(),
+                ha.clone(),
+                push.clone(),
+                Some(audio.clone()),
+                Arc::new(crate::usb_doctor::last_report),
+            )),
+            ha,
             obs: Arc::new(crate::obs_monitor::ObsMonitor::new(cfg.clone())),
             discord: Arc::new(crate::discord_monitor::DiscordMonitor::new(cfg.clone())),
             feeds: Arc::new(crate::feeds::FeedMonitor::new(cfg.clone())),
@@ -388,7 +401,7 @@ impl AppState {
             system: crate::system_monitor::SystemMonitor::new(cfg.clone()),
             ping: crate::ping_monitor::PingMonitor::new(cfg.clone()),
             batteries: crate::battery_monitor::BatteryMonitor::new(),
-            audio: crate::audio_control::AudioControl::new(),
+            audio,
             cfg,
             endpoint,
             push,
@@ -397,13 +410,21 @@ impl AppState {
             sources,
             frames,
         };
-        state.with_rules()
+        state.rewire()
     }
 }
 
 impl AppState {
-    /// A rule engine over the monitors now in place (main calls it again after putting its own monitors in).
-    pub fn with_rules(mut self) -> AppState {
+    /// The rule engine and the charge guard over the monitors now in place (main calls it again after putting its own
+    /// monitors in).
+    pub fn rewire(mut self) -> AppState {
+        self.charge = Arc::new(crate::charge_guard::ChargeGuard::new(
+            self.cfg.clone(),
+            self.ha.clone(),
+            self.push.clone(),
+            Some(self.audio.clone()),
+            Arc::new(crate::usb_doctor::last_report),
+        ));
         let inputs = Arc::new(crate::rule_engine::LiveInputs::of(&self));
         self.rules = crate::rule_engine::RuleEngine::new(
             self.cfg.clone(),

@@ -5,7 +5,8 @@
 use std::sync::Mutex;
 
 /// `ChargeGuard`'s `PhoneBatteryReport`: the phone's battery and USB link as it last reported them.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PhoneBatteryReport {
     pub level: i32,
     pub plugged: bool,
@@ -20,8 +21,7 @@ pub struct PhoneBatteryReport {
 
 static LAST_REPORT: Mutex<Option<PhoneBatteryReport>> = Mutex::new(None);
 
-/// `ChargeGuard.LastReport`. Nothing sets it before the battery route is ported (with `ChargeGuard`, plan 6), so
-/// until then there is never a diagnosis.
+/// `ChargeGuard.LastReport`: the phone's latest report (`POST /api/phone/battery`, over USB or Wi-Fi), or None.
 pub fn last_report() -> Option<PhoneBatteryReport> {
     LAST_REPORT
         .lock()

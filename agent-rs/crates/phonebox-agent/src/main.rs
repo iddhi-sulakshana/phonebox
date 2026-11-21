@@ -120,8 +120,8 @@ fn main() -> ExitCode {
     // started here, on its own thread: the server never stops it before the process ends
     media.start(state.stop.clone());
     state.media = media;
-    // the rules read the monitors put in above; /api/state reads the same engine
-    let state = state.with_rules();
+    // the rules and the charge guard use the monitors put in above; /api/state reads the same engine
+    let state = state.rewire();
     rules.set(state.rules.clone());
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
     let result = runtime.block_on(serve(state, config_path));
@@ -185,6 +185,7 @@ async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Res
     state.cameras.start(state.stop.clone()); // every second: stops cameras off screen, restarts stalled ffmpegs
     state.privacy.start(state.stop.clone()); // every 2 s (macOS: unknown)
     state.rules.start(state.stop.clone()); // after 3 s, then every second
+    state.charge.start(state.stop.clone()); // after 5 s, then every 30 s
     // every second: the phones' screens follow the Mac's lock while display.followComputerLock is on
     phonebox::session_lock_monitor::start(state.cfg.clone(), state.adb.clone(), state.stop.clone());
     log::info(

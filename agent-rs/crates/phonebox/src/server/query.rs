@@ -55,6 +55,14 @@ pub fn boolean(q: &Pairs, name: &str) -> Result<Option<bool>, NotANumber> {
         .transpose()
 }
 
+/// A `double?` parameter (`double.TryParse`, invariant): Ok(None) when absent, Err(NotANumber) (a 400) when present
+/// but not a number.
+pub fn float64(q: &Pairs, name: &str) -> Result<Option<f64>, NotANumber> {
+    value(q, name)
+        .map(|v| crate::config::normalize::parse_invariant_double(&v).ok_or(NotANumber))
+        .transpose()
+}
+
 /// A JSON body bound like an ASP.NET typed parameter: a JSON content type (else 415) and a JSON object (an empty,
 /// invalid or null body is a 400). Look its members up with [`json_field`]: names match in any case.
 pub fn json_object(
