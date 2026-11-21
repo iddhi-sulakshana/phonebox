@@ -386,6 +386,21 @@ fn version_string(path: &str, field: &str) -> Option<String> {
     }
 }
 
+/// Whether this output exists and is active.
+pub(super) fn device_active(id: &str) -> bool {
+    let Some(enumerator) = enumerator() else {
+        return false;
+    };
+    // SAFETY: plain calls on the enumerator and the device it returns
+    unsafe {
+        enumerator
+            .GetDevice(&HSTRING::from(id))
+            .and_then(|device| device.GetState())
+            .ok()
+            == Some(DEVICE_STATE_ACTIVE)
+    }
+}
+
 /// An active device's master or channel volume (0–100) and mute.
 pub(super) fn set_device(
     id: &str,

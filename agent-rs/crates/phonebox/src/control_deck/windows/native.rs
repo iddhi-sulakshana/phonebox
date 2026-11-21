@@ -5,10 +5,8 @@ use std::sync::{Arc, Mutex};
 use futures_util::future::BoxFuture;
 
 use super::super::models::*;
-use super::{audio, media};
+use super::{audio, media, playback};
 use crate::media_monitor::SystemMedia;
-
-type Callback = Arc<dyn Fn(&str) + Send + Sync>;
 
 pub struct WindowsDeckNative {
     /// The agent's own media monitor (pausing the current media goes through it, as in C#).
@@ -16,8 +14,8 @@ pub struct WindowsDeckNative {
     names: audio::Names,
     /// One lock for the audio calls, as C#'s `_gate`.
     gate: Mutex<()>,
-    sound_stopped: Mutex<Option<Callback>>,
     sessions: Arc<media::Sessions>,
+    playback: Arc<playback::Playback>,
 }
 
 impl WindowsDeckNative {
@@ -26,8 +24,8 @@ impl WindowsDeckNative {
             media,
             names: Mutex::default(),
             gate: Mutex::new(()),
-            sound_stopped: Mutex::new(None),
             sessions: Arc::default(),
+            playback: Arc::default(),
         }
     }
 
@@ -38,7 +36,21 @@ impl WindowsDeckNative {
 
 impl DeckNative for WindowsDeckNative {
     fn on_sound_stopped(&self, callback: Arc<dyn Fn(&str) + Send + Sync>) {
-        *self.sound_stopped.lock().unwrap_or_else(|e| e.into_inner()) = Some(callback);
+        self.playback.on_sound_stopped(callback);
+    }
+
+    fn action_state(&self, action: &crate::config::DeckAction) -> Option<String> {
+        match action.kind.as_str() {
+            "sound" | "radio" => Some(
+                if self.playback.playing(&action.id) {
+                    "Playing"
+                } else {
+                    "Stopped"
+                }
+                .into(),
+            ),
+            _ => None,
+        }
     }
 
     fn audio(&self) -> DeckAudio {
@@ -129,11 +141,17 @@ impl DeckNative for WindowsDeckNative {
         })
     }
 
-    fn play(&self, _: &str, _: &str, _: Option<&str>, _: i32) -> Result<(), String> {
-        Err("Playback is unavailable".into())
+    fn play(&self, id: &str, file: &str, device: Option<&str>, volume: i32) -> Result<(), String> {
+        self.playback.play(id, file, device, volume)
     }
 
-    fn stop_sound(&self, _: Option<&str>) {}
+    fn stop_sound(&self, id: Option<&str>) {
+        self.playback.stop(id);
+    }
+
+    fn dispose(&self) {
+        self.playback.stop(None);
+    }
 
     fn midi_ports(&self) -> Vec<DeckItem> {
         vec![]

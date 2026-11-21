@@ -66,14 +66,22 @@ pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 [target.'cfg(windows)'.dependencies]
 # the privacy monitor's camera callback (#[implement] expands to windows_core paths)
 windows-core = "0.62"
+# waiting on WinRT operations with a timeout (the deck's player opening a source)
+windows-future = "0.3"
 # the photo frame's scaled copies on Windows (C# used GDI+): JPEG and PNG in, JPEG out
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 windows = { version = "0.62", features = [
     "ApplicationModel",
+    "Devices_Enumeration",
     "Foundation",
+    "Foundation_Collections",
     "Management_Deployment",
     "Media",
     "Media_Control",
+    "Media_Core",
+    "Media_Devices",
+    "Media_Playback",
+    "Media_Streaming_Adaptive",
     "Storage_Streams",
     "Win32_Devices_DeviceAndDriverInstallation",
     "Win32_Devices_HumanInterfaceDevice",

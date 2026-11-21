@@ -8,6 +8,8 @@ mod audio;
 mod media;
 #[cfg(windows)]
 mod native;
+#[cfg(windows)]
+mod playback;
 
 #[cfg(windows)]
 pub use native::WindowsDeckNative;
@@ -79,6 +81,37 @@ pub fn repeat_name(mode: Option<i32>) -> String {
     }
 }
 
+/// What a sound's target is: an http(s) address ending in `.m3u8` (HLS), another http(s) address (a stream), or a
+/// file path.
+#[derive(Debug, PartialEq)]
+pub enum PlayTarget {
+    Hls(reqwest::Url),
+    Stream(reqwest::Url),
+    File(std::path::PathBuf),
+}
+
+pub fn play_target(target: &str) -> PlayTarget {
+    match reqwest::Url::parse(target) {
+        Ok(url) if super::hls::is_hls_url(&url) => PlayTarget::Hls(url),
+        Ok(url) if matches!(url.scheme(), "http" | "https") => PlayTarget::Stream(url),
+        _ => PlayTarget::File(target.into()),
+    }
+}
+
+/// `AdaptiveMediaSourceCreationStatus` as .NET prints it (its number when it has no name).
+pub fn adaptive_status_name(status: i32) -> String {
+    match status {
+        0 => "Success".into(),
+        1 => "ManifestDownloadFailure".into(),
+        2 => "ManifestParseFailure".into(),
+        3 => "UnsupportedManifestContentType".into(),
+        4 => "UnsupportedManifestVersion".into(),
+        5 => "UnsupportedManifestProfile".into(),
+        6 => "UnknownFailure".into(),
+        other => other.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,5 +157,29 @@ mod tests {
         assert_eq!(media_timeline(5, 0, 0, 0, 0, false), (0, 0));
         assert_eq!(repeat_name(Some(2)), "List");
         assert_eq!(repeat_name(None), "None");
+    }
+
+    #[test]
+    fn play_targets_and_adaptive_statuses() {
+        let url = |s: &str| reqwest::Url::parse(s).unwrap();
+        assert_eq!(
+            play_target("https://radio.example/live/playlist.M3U8?token=1"),
+            PlayTarget::Hls(url("https://radio.example/live/playlist.M3U8?token=1"))
+        );
+        assert_eq!(
+            play_target("http://radio.example/stream.mp3"),
+            PlayTarget::Stream(url("http://radio.example/stream.mp3"))
+        );
+        for file in [
+            r"C:\Sounds\ding.wav",
+            "file:///tmp/test.m3u8",
+            "ftp://host/a.mp3",
+            "ding.wav",
+        ] {
+            assert_eq!(play_target(file), PlayTarget::File(file.into()), "{file}");
+        }
+        assert_eq!(adaptive_status_name(1), "ManifestDownloadFailure");
+        assert_eq!(adaptive_status_name(6), "UnknownFailure");
+        assert_eq!(adaptive_status_name(9), "9");
     }
 }

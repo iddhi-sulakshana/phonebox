@@ -1320,6 +1320,7 @@ dependencies = [
  "webpki-roots",
  "windows",
  "windows-core",
+ "windows-future",
 ]
 
 [[package]]
