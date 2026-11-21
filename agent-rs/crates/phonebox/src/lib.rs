@@ -12,6 +12,7 @@ pub mod approval_store;
 pub mod audio_control;
 pub mod battery_monitor;
 pub mod browser_guard;
+pub mod calendar;
 pub mod catalog;
 pub mod claude_hook;
 pub mod claude_transcript;
