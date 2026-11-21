@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use futures_util::future::BoxFuture;
 
 use super::super::models::*;
-use super::audio;
+use super::{audio, media};
 use crate::media_monitor::SystemMedia;
 
 type Callback = Arc<dyn Fn(&str) + Send + Sync>;
@@ -17,6 +17,7 @@ pub struct WindowsDeckNative {
     /// One lock for the audio calls, as C#'s `_gate`.
     gate: Mutex<()>,
     sound_stopped: Mutex<Option<Callback>>,
+    sessions: Arc<media::Sessions>,
 }
 
 impl WindowsDeckNative {
@@ -26,6 +27,7 @@ impl WindowsDeckNative {
             names: Mutex::default(),
             gate: Mutex::new(()),
             sound_stopped: Mutex::new(None),
+            sessions: Arc::default(),
         }
     }
 
@@ -87,22 +89,43 @@ impl DeckNative for WindowsDeckNative {
     }
 
     fn media(&self) -> BoxFuture<'_, Result<Vec<DeckMedia>, String>> {
-        Box::pin(async { Ok(vec![]) })
+        let sessions = self.sessions.clone();
+        Box::pin(async move {
+            tokio::task::spawn_blocking(move || sessions.list())
+                .await
+                .map_err(|e| e.to_string())?
+        })
     }
 
-    fn media_action<'a>(&'a self, _: &'a str, _: &'a str, _: i64) -> BoxFuture<'a, bool> {
-        Box::pin(async { false })
+    fn media_action<'a>(&'a self, id: &'a str, action: &'a str, value: i64) -> BoxFuture<'a, bool> {
+        Box::pin(async move { self.media_action_with_state(id, action, value).await.0 })
+    }
+
+    /// The selected session's own state (not the first of its app id) decides "was playing".
+    fn media_action_with_state<'a>(
+        &'a self,
+        id: &'a str,
+        action: &'a str,
+        value: i64,
+    ) -> BoxFuture<'a, (bool, bool)> {
+        let (sessions, id, action) = (self.sessions.clone(), id.to_string(), action.to_string());
+        Box::pin(async move {
+            tokio::task::spawn_blocking(move || sessions.act(&id, &action, value))
+                .await
+                .unwrap_or((false, false))
+        })
     }
 
     fn pause_current_media(&self) -> BoxFuture<'_, bool> {
-        let media = self.media.clone();
+        let (media, sessions) = (self.media.clone(), self.sessions.clone());
         Box::pin(async move {
-            match media {
-                Some(media) => tokio::task::spawn_blocking(move || media.pause())
-                    .await
-                    .unwrap_or(false),
-                None => false,
-            }
+            // the agent's own media monitor when there is one, as in C#
+            tokio::task::spawn_blocking(move || match media {
+                Some(media) => media.pause(),
+                None => sessions.pause_current(),
+            })
+            .await
+            .unwrap_or(false)
         })
     }
 

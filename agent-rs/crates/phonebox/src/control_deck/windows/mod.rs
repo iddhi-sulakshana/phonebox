@@ -5,6 +5,8 @@
 #[cfg(windows)]
 mod audio;
 #[cfg(windows)]
+mod media;
+#[cfg(windows)]
 mod native;
 
 #[cfg(windows)]
@@ -35,6 +37,48 @@ pub fn session_display(pid: u32, display: Option<&str>, friendly: &str) -> Strin
     }
 }
 
+/// A media session's player name: Spotify by any of its app ids, a desktop app's file name, else the app id.
+pub fn media_name(aumid: &str) -> String {
+    if aumid.to_lowercase().contains("spotify") {
+        return "Spotify".into();
+    }
+    let n = aumid.len();
+    if n >= 4 && aumid.is_char_boundary(n - 4) && aumid[n - 4..].eq_ignore_ascii_case(".exe") {
+        // Path.GetFileNameWithoutExtension with Windows separators
+        let file = aumid.rsplit(['\\', '/']).next().unwrap_or(aumid);
+        return file.rfind('.').map_or(file, |dot| &file[..dot]).to_string();
+    }
+    aumid.to_string()
+}
+
+/// (position, duration) in ms from a session's timeline (100 ns ticks; `updated` and `now` as file times): a playing
+/// session's position moves on since its last update, clamped to the duration.
+pub fn media_timeline(
+    start: i64,
+    end: i64,
+    position: i64,
+    updated: i64,
+    now: i64,
+    playing: bool,
+) -> (i64, i64) {
+    let duration = ((end - start) / 10_000).max(0);
+    let mut at = (position - start) / 10_000;
+    if playing {
+        at += ((now - updated) / 10_000).max(0);
+    }
+    (at.clamp(0, duration), duration)
+}
+
+/// `MediaPlaybackAutoRepeatMode` as its name ("None" when there is none).
+pub fn repeat_name(mode: Option<i32>) -> String {
+    match mode {
+        Some(1) => "Track".into(),
+        Some(2) => "List".into(),
+        Some(0) | None => "None".into(),
+        Some(other) => other.to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -54,5 +98,31 @@ mod tests {
         );
         assert_eq!(session_display(7, Some(" "), "Friendly"), "Friendly");
         assert_eq!(session_display(7, Some("Chrome"), "Friendly"), "Chrome");
+    }
+
+    #[test]
+    fn media_names_timelines_and_repeat_modes() {
+        assert_eq!(
+            media_name("SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify"),
+            "Spotify"
+        );
+        assert_eq!(media_name("C:\\Program Files\\VLC\\vlc.EXE"), "vlc");
+        assert_eq!(media_name("Chrome"), "Chrome");
+        // 10 s into a 100 s track, updated 2 s ago and playing: 12 s
+        assert_eq!(
+            media_timeline(0, 1_000_000_000, 100_000_000, 0, 20_000_000, true),
+            (12_000, 100_000)
+        );
+        assert_eq!(
+            media_timeline(0, 1_000_000_000, 100_000_000, 0, 20_000_000, false),
+            (10_000, 100_000)
+        );
+        assert_eq!(
+            media_timeline(0, 10_000_000, 100_000_000, 0, 0, false),
+            (1_000, 1_000)
+        );
+        assert_eq!(media_timeline(5, 0, 0, 0, 0, false), (0, 0));
+        assert_eq!(repeat_name(Some(2)), "List");
+        assert_eq!(repeat_name(None), "None");
     }
 }
