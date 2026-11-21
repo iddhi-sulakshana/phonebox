@@ -170,30 +170,77 @@ pub fn kill_tree(pid: Option<u32>) {
     }
     #[cfg(windows)]
     {
-        use std::collections::HashMap;
         let Ok(mut sys) = sysinfo::System::new() else {
             return;
         };
         sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
-        let mut children: HashMap<sysinfo::Pid, Vec<sysinfo::Pid>> = HashMap::new();
-        for (id, p) in sys.processes() {
-            if let Some(parent) = p.parent() {
-                children.entry(parent).or_default().push(*id);
-            }
-        }
-        // the deepest first, so nobody is left to start new children
-        let mut order = Vec::new();
-        let mut stack = vec![sysinfo::Pid::from_u32(pid)];
-        while let Some(p) = stack.pop() {
-            order.push(p);
-            stack.extend(children.get(&p).into_iter().flatten().copied());
-        }
-        for p in order.into_iter().rev() {
-            if let Some(process) = sys.process(p) {
+        let table: Vec<(u32, Option<u32>, u64)> = sys
+            .processes()
+            .iter()
+            .map(|(id, p)| {
+                (
+                    id.as_u32(),
+                    p.parent().map(|pp| pp.as_u32()),
+                    p.start_time(),
+                )
+            })
+            .collect();
+        for p in tree_order(pid, &table) {
+            if let Some(process) = sys.process(sysinfo::Pid::from_u32(p)) {
                 process.kill();
             }
         }
     }
+}
+
+/// The processes under `root` in `table` (pid, parent pid, start time in seconds), the deepest first, so nobody is
+/// left to start new children. As .NET's `Kill(entireProcessTree)`, a process older than its recorded parent is not
+/// its child: Windows keeps a dead parent's pid, and that pid may since belong to someone else.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn tree_order(root: u32, table: &[(u32, Option<u32>, u64)]) -> Vec<u32> {
+    use std::collections::HashMap;
+    let started: HashMap<u32, u64> = table.iter().map(|&(id, _, at)| (id, at)).collect();
+    let mut children: HashMap<u32, Vec<u32>> = HashMap::new();
+    for &(id, parent, at) in table {
+        if let Some(parent) = parent
+            && started
+                .get(&parent)
+                .is_some_and(|&parent_at| parent_at <= at)
+        {
+            children.entry(parent).or_default().push(id);
+        }
+    }
+    let mut order = Vec::new();
+    let mut stack = vec![root];
+    while let Some(p) = stack.pop() {
+        order.push(p);
+        stack.extend(children.get(&p).into_iter().flatten().copied());
+    }
+    order.reverse();
+    order
+}
+
+/// [`run`] from a blocking caller: on a thread of its own, so the wait never sits inside an async task, on the
+/// caller's runtime or, from a plain thread, a small one of its own. None when the tool could not run or timed out.
+pub fn run_blocking(cmd: &ToolCommand, timeout: Duration) -> Option<Output> {
+    let current = tokio::runtime::Handle::try_current().ok();
+    std::thread::scope(|s| {
+        s.spawn(|| {
+            let run = run(cmd, timeout, std::future::pending());
+            match current {
+                Some(runtime) => runtime.block_on(run).ok(),
+                None => tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .ok()?
+                    .block_on(run)
+                    .ok(),
+            }
+        })
+        .join()
+        .ok()
+        .flatten()
+    })
 }
 
 async fn drain<R: tokio::io::AsyncRead + Unpin>(pipe: Option<R>) -> Vec<u8> {
@@ -233,6 +280,35 @@ pub(crate) mod tests {
         } else {
             ToolCommand::new("/bin/sh").args(["-c", unix])
         }
+    }
+
+    #[test]
+    fn a_tree_skips_processes_older_than_their_recorded_parent() {
+        // 40 is an app whose launcher (pid 7) exited before 7 was reused by the tool started at 100
+        let table = [
+            (7, Some(1), 100),
+            (8, Some(7), 101),
+            (9, Some(8), 101),
+            (40, Some(7), 50),
+            (41, Some(40), 60),
+        ];
+        let order = tree_order(7, &table);
+        assert_eq!(order, vec![9, 8, 7]);
+    }
+
+    #[test]
+    fn a_tree_keeps_children_started_in_the_same_second() {
+        let table = [(7, Some(1), 100), (8, Some(7), 100)];
+        assert_eq!(tree_order(7, &table), vec![8, 7]);
+    }
+
+    #[test]
+    fn a_blocking_run_works_from_a_thread_without_a_runtime() {
+        let cmd = shell("Write-Output hi", "echo hi");
+        let out = std::thread::spawn(move || run_blocking(&cmd, Duration::from_secs(10)))
+            .join()
+            .unwrap();
+        assert_eq!(out.map(|o| o.stdout.trim().to_string()), Some("hi".into()));
     }
 
     pub(crate) fn alive(pid: u32) -> bool {

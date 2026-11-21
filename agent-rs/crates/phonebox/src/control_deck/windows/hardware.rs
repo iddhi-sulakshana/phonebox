@@ -231,15 +231,11 @@ async fn run(exe: &str, args: &[&str]) -> Option<crate::tool_process::Output> {
         .ok()
 }
 
-/// `run` from a blocking caller, on a thread of its own so the wait never sits inside an async task.
+/// `run` from a blocking caller (the deck's hardware thread has no runtime of its own).
 fn run_blocking(exe: &str, args: &[&str]) -> Option<crate::tool_process::Output> {
-    let runtime = tokio::runtime::Handle::try_current().ok()?;
-    std::thread::scope(|s| {
-        s.spawn(|| runtime.block_on(run(exe, args)))
-            .join()
-            .ok()
-            .flatten()
-    })
+    let command =
+        crate::tool_process::ToolCommand::new(system32().join(exe)).args(args.iter().copied());
+    crate::tool_process::run_blocking(&command, TOOL_TIMEOUT)
 }
 
 /// A service's `dwCurrentState`, 0 when it cannot be read.

@@ -28,7 +28,10 @@ pub fn useful_name(value: Option<&str>, process: &str) -> bool {
     let Some(value) = value.filter(|v| !v.trim().is_empty()) else {
         return false;
     };
-    if value.len() >= 12 && value[..12].eq_ignore_ascii_case("ms-resource:") {
+    if value
+        .get(..12)
+        .is_some_and(|start| start.eq_ignore_ascii_case("ms-resource:"))
+    {
         return false;
     }
     let candidate = value.trim().to_uppercase();
@@ -489,6 +492,14 @@ mod tests {
         );
         assert_eq!(session_display(7, Some(" "), "Friendly"), "Friendly");
         assert_eq!(session_display(7, Some("Chrome"), "Friendly"), "Chrome");
+    }
+
+    #[test]
+    fn non_ascii_app_names_do_not_panic() {
+        // byte 12 falls inside a character in both
+        assert!(useful_name(Some("VK Музыка"), "vk"));
+        assert!(useful_name(Some("Windows 音频"), "audiodg"));
+        assert!(!useful_name(Some("MS-RESOURCE:Музыка"), "x"));
     }
 
     #[test]

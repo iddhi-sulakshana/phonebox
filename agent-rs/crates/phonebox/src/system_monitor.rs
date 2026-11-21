@@ -271,21 +271,50 @@ fn volumes() -> Vec<Volume> {
         GetDiskFreeSpaceExW, GetDriveTypeW, GetLogicalDrives,
     };
     use windows::core::HSTRING;
-    const DRIVE_FIXED: u32 = 3;
     // SAFETY: no arguments; a bit per drive letter.
     let mask = unsafe { GetLogicalDrives() };
+    drive_volumes(
+        mask,
+        // SAFETY: the root is a valid NUL-terminated wide string.
+        |root| unsafe { GetDriveTypeW(&HSTRING::from(root)) },
+        |root| {
+            let (mut total, mut free) = (0u64, 0u64);
+            // SAFETY: the root is a valid NUL-terminated wide string; the out-pointers are valid u64s.
+            unsafe {
+                GetDiskFreeSpaceExW(
+                    &HSTRING::from(root),
+                    None,
+                    Some(&mut total),
+                    Some(&mut free),
+                )
+            }
+            .ok()?;
+            Some((total, free))
+        },
+    )
+}
+
+/// The fixed drives in `mask` (a bit per letter, A first) with their sizes from `size` (total, free). As C#'s
+/// `DriveType == Fixed` before `TotalSize`: other drives are never asked, so a disconnected network drive cannot hold
+/// up the sample, an optical drive does not spin up and an empty card reader raises no "no disk" prompt.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn drive_volumes(
+    mask: u32,
+    drive_type: impl Fn(&str) -> u32,
+    size: impl Fn(&str) -> Option<(u64, u64)>,
+) -> Vec<Volume> {
+    const DRIVE_FIXED: u32 = 3;
     (0..26u8)
         .filter(|i| mask & (1 << i) != 0)
         .filter_map(|i| {
             let name = format!("{}:\\", (b'A' + i) as char);
-            let root = HSTRING::from(name.as_str());
-            // SAFETY: `root` is a valid NUL-terminated wide string; the out-pointers are valid u64s.
-            let fixed = unsafe { GetDriveTypeW(&root) } == DRIVE_FIXED;
-            let (mut total, mut free) = (0u64, 0u64);
-            unsafe { GetDiskFreeSpaceExW(&root, None, Some(&mut total), Some(&mut free)) }.ok()?;
+            if drive_type(&name) != DRIVE_FIXED {
+                return None;
+            }
+            let (total, free) = size(&name)?;
             Some(Volume {
                 name,
-                fixed,
+                fixed: true,
                 total,
                 free,
             })
@@ -1012,6 +1041,35 @@ pub fn os_gpu_step(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_fixed_drives_are_asked_for_their_size() {
+        // C: fixed, D: optical (5), Z: a mapped network drive (4)
+        let mask = (1 << 2) | (1 << 3) | (1 << 25);
+        let asked = std::cell::RefCell::new(Vec::new());
+        let volumes = drive_volumes(
+            mask,
+            |root| {
+                if root.starts_with('C') {
+                    3
+                } else if root.starts_with('D') {
+                    5
+                } else {
+                    4
+                }
+            },
+            |root| {
+                asked.borrow_mut().push(root.to_string());
+                Some((100, 40))
+            },
+        );
+        assert_eq!(*asked.borrow(), vec!["C:\\".to_string()]);
+        assert_eq!(
+            volumes.iter().map(|v| v.name.as_str()).collect::<Vec<_>>(),
+            vec!["C:\\"]
+        );
+        assert!(volumes[0].fixed);
+    }
 
     #[test]
     fn memory_total_is_positive_and_used_is_within_it() {
