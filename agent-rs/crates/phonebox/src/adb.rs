@@ -270,6 +270,18 @@ impl AdbReverse {
         lock(&self.seen).missing_app.clone()
     }
 
+    /// The phones in use (`Devices`, after the deviceSerial filter).
+    pub fn devices(&self) -> Vec<String> {
+        lock(&self.seen).devices.clone()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_seen_for_test(&self, devices: &[&str], missing_app: &[&str]) {
+        let mut seen = lock(&self.seen);
+        seen.devices = devices.iter().map(|s| s.to_string()).collect();
+        seen.missing_app = missing_app.iter().map(|s| s.to_string()).collect();
+    }
+
     /// Why the phone is missing from adb although it reports in over Wi-Fi (see `usb_doctor`), or None.
     pub fn usb_problem(&self) -> Option<String> {
         crate::usb_doctor::diagnose(

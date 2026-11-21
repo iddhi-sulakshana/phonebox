@@ -4,6 +4,7 @@ mod apply;
 pub mod assets;
 pub mod github;
 pub mod migration;
+pub mod phone;
 pub mod service;
 pub mod swap;
 pub mod version;

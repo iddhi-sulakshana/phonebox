@@ -24,6 +24,7 @@ pub type GhToken = Arc<dyn Fn() -> BoxFuture<'static, Option<String>> + Send + S
 pub struct UpdateDeps {
     pub http: Arc<dyn UpdateHttp>,
     pub gh_token: GhToken,
+    pub installer: Arc<dyn super::phone::PhoneInstaller>,
     /// Where downloads and the staged agent go (`LocalDir/updates`).
     pub downloads: PathBuf,
     pub api_base: String,
@@ -41,6 +42,7 @@ impl UpdateDeps {
         UpdateDeps {
             http: Arc::new(super::github::ReqwestHttp::default()),
             gh_token: Arc::new(|| Box::pin(super::github::gh_token())),
+            installer: Arc::new(super::phone::AdbInstaller),
             downloads: crate::app_paths::local_dir().join("updates"),
             api_base: super::github::api_base(std::env::var("PHONEBOX_UPDATE_API").ok().as_deref()),
             agent_version: crate::app_paths::version().to_string(),
@@ -76,6 +78,8 @@ pub(super) struct Inner {
     pub phone_retry_for: Option<String>,
     /// download link → the asset's API link (`_apiUrls`), the fallback when a download fails.
     pub api_urls: HashMap<String, String>,
+    /// The phone failure last logged (the same one is not logged every minute).
+    pub phone_warning: Option<String>,
 }
 
 impl Default for Inner {
@@ -88,6 +92,7 @@ impl Default for Inner {
             phone_retry: vec![],
             phone_retry_for: None,
             api_urls: HashMap::new(),
+            phone_warning: None,
         }
     }
 }
@@ -106,7 +111,6 @@ pub struct Stopped;
 
 pub struct UpdateService {
     pub(super) cfg: Arc<ConfigStore>,
-    #[allow(dead_code)] // the phone installs read it (plan 7, Task 5)
     pub(super) adb: Arc<crate::adb::AdbReverse>,
     pub(super) phone: Arc<PhoneSeenState>,
     pub(super) stop: Stop,

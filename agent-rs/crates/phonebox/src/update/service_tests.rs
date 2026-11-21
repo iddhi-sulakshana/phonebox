@@ -3,12 +3,16 @@ use std::sync::Mutex as StdMutex;
 use super::*;
 use crate::update::github::FetchError;
 
+pub(crate) type DownloadHook = Arc<dyn Fn(&str) + Send + Sync>;
+
 /// Answers by URL; records every request's URL and token.
 #[derive(Default)]
 pub(crate) struct FakeHttp {
     pub answers: StdMutex<HashMap<String, Result<String, FetchError>>>,
     pub files: StdMutex<HashMap<String, Vec<u8>>>,
     pub calls: StdMutex<Vec<(String, Option<String>)>>,
+    /// Called with each download's link before it is answered.
+    pub on_download: StdMutex<Option<DownloadHook>>,
 }
 
 impl FakeHttp {
@@ -58,6 +62,9 @@ impl UpdateHttp for FakeHttp {
             .lock()
             .unwrap()
             .push((url.into(), token.map(String::from)));
+        if let Some(hook) = self.on_download.lock().unwrap().clone() {
+            hook(url);
+        }
         let bytes = self.files.lock().unwrap().get(url).cloned();
         let answer = self.answers.lock().unwrap().get(url).cloned();
         Box::pin(async move {
@@ -102,11 +109,43 @@ pub(crate) fn release(tag: &str, draft: bool, rid: &str) -> Value {
     })
 }
 
+/// `adb`: "Failure [LOCKED]" on install when the mode is "fail" or names the phone, else "Success".
+#[derive(Default)]
+pub(crate) struct FakeInstaller {
+    pub mode: StdMutex<String>,
+    pub calls: StdMutex<Vec<Vec<String>>>,
+}
+
+impl crate::update::phone::PhoneInstaller for FakeInstaller {
+    fn locate(&self, _configured: Option<&str>) -> Option<std::path::PathBuf> {
+        Some("fake-adb".into())
+    }
+
+    fn run<'a>(
+        &'a self,
+        _adb: &'a std::path::Path,
+        args: Vec<String>,
+    ) -> BoxFuture<'a, Result<String, String>> {
+        self.calls.lock().unwrap().push(args.clone());
+        let mode = self.mode.lock().unwrap().clone();
+        Box::pin(async move {
+            if args.get(2).map(String::as_str) == Some("install") {
+                if mode == "fail" || args.get(1) == Some(&mode) {
+                    return Ok("Failure [LOCKED]\n".into());
+                }
+                return Ok("Success\n".into());
+            }
+            Ok("ok\n".into())
+        })
+    }
+}
+
 pub(crate) struct Fixture {
     pub _dir: tempfile::TempDir,
     pub state: crate::server::AppState,
     pub http: Arc<FakeHttp>,
     pub tokens: Arc<std::sync::atomic::AtomicUsize>,
+    pub adb: Arc<FakeInstaller>,
 }
 
 pub(crate) fn fixture(
@@ -115,10 +154,12 @@ pub(crate) fn fixture(
 ) -> (Fixture, Arc<UpdateService>) {
     let (dir, state) = crate::server::guard::tests::test_state();
     let http = Arc::new(FakeHttp::default());
+    let adb = Arc::new(FakeInstaller::default());
     let tokens = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let counted = tokens.clone();
     let deps = UpdateDeps {
         http: http.clone(),
+        installer: adb.clone(),
         gh_token: Arc::new(move || {
             counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             Box::pin(async move { gh.map(String::from) })
@@ -144,6 +185,7 @@ pub(crate) fn fixture(
             state,
             http,
             tokens,
+            adb,
         },
         service,
     )
@@ -438,4 +480,127 @@ async fn the_swap_keeps_the_old_binary_as_old() {
     // the old process still sees the update pending: another apply does nothing
     service.apply().await;
     assert_eq!(service.status().state, "restarting");
+}
+
+// ---------------------------------------------------------------- the phone app
+
+/// A release of `version` with only the phone app and its checksum (no agent zip).
+fn app_release(f: &Fixture, version: &str) {
+    let apk = b"apk-v-test".to_vec();
+    let base = format!("https://example.invalid/{version}");
+    let release = serde_json::json!({
+        "tag_name": format!("v{version}"),
+        "html_url": "https://example.invalid/release",
+        "assets": [
+            { "name": format!("PhoneBox-{version}.apk"), "browser_download_url": format!("{base}/PhoneBox-{version}.apk") },
+            { "name": format!("SHA256SUMS-{version}.txt"), "browser_download_url": format!("{base}/SHA256SUMS-{version}.txt") },
+        ],
+    });
+    f.http.answer(
+        &format!("{API}/repos/{REPO}/releases?per_page=30"),
+        Ok(serde_json::json!([release]).to_string()),
+    );
+    f.http.answer(
+        &format!("{API}/repos/{REPO}/releases/latest"),
+        Ok(release.to_string()),
+    );
+    f.http.file(
+        &format!("{base}/SHA256SUMS-{version}.txt"),
+        format!("{}  PhoneBox-{version}.apk\n", sha256(&apk)).into_bytes(),
+    );
+    f.http.file(&format!("{base}/PhoneBox-{version}.apk"), apk);
+}
+
+fn set_app(f: &Fixture, version: &str) {
+    *f.state.phone.app_version.lock().unwrap() = Some(version.into());
+}
+
+#[tokio::test]
+async fn apply_clears_error_after_retry_success_and_zero_targets_preserve_app_version() {
+    let ver = crate::app_paths::version();
+    // a phone that refuses, then takes the update
+    let (f, svc1) = fixture(ver, None);
+    app_release(&f, ver);
+    set_app(&f, "0.0.1");
+    f.state.adb.set_seen_for_test(&["SER1"], &[]);
+    *f.adb.mode.lock().unwrap() = "fail".into();
+    svc1.check().await.unwrap();
+    svc1.apply().await;
+    assert!(svc1.status().error.is_some());
+    assert!(svc1.status().app_update);
+    *f.adb.mode.lock().unwrap() = "ok".into();
+    svc1.apply().await;
+    let s = svc1.status();
+    assert_eq!(
+        (s.error, s.app_update, s.app_version.as_deref()),
+        (None, false, Some(ver))
+    );
+
+    // the phone left while the app downloaded: nothing installed, the reported version stays
+    let (f, svc2) = fixture(ver, None);
+    app_release(&f, ver);
+    set_app(&f, "0.0.1");
+    f.state.adb.set_seen_for_test(&["SER1"], &[]);
+    let adb = f.state.adb.clone();
+    *f.http.on_download.lock().unwrap() = Some(Arc::new(move |url: &str| {
+        if url.ends_with(".apk") {
+            adb.set_seen_for_test(&[], &[]);
+        }
+    }));
+    *f.adb.mode.lock().unwrap() = "ok".into();
+    svc2.check().await.unwrap();
+    svc2.apply().await;
+    assert_eq!(svc2.status().app_version.as_deref(), Some("0.0.1"));
+    assert!(svc2.status().app_update);
+
+    // one of two phones fails; it stays pending after the other reports the new app and it is unplugged
+    let (f, svc3) = fixture(ver, None);
+    app_release(&f, ver);
+    set_app(&f, "0.0.1");
+    f.state.adb.set_seen_for_test(&["SERA", "SERB"], &[]);
+    *f.adb.mode.lock().unwrap() = "SERA".into();
+    svc3.check().await.unwrap();
+    svc3.apply().await;
+    let reason = svc3.status().error.unwrap();
+    assert!(reason.contains("SERA"), "{reason}");
+    set_app(&f, ver);
+    f.state.adb.set_seen_for_test(&["SERB"], &[]);
+    svc3.apply().await;
+    let s = svc3.status();
+    assert!(s.app_update);
+    assert_eq!(s.error.as_deref(), Some(reason.as_str()));
+}
+
+#[tokio::test]
+async fn installs_go_to_the_phones_missing_the_app_with_the_apk_path_as_one_argument() {
+    let ver = crate::app_paths::version();
+    let (f, service) = fixture(ver, None);
+    assert_eq!(
+        service.install_missing().await.as_deref(),
+        Some("no connected phone is missing the app")
+    );
+    f.state.adb.set_seen_for_test(&["SER1"], &["SER1", "SER2"]);
+    *f.adb.mode.lock().unwrap() = "SER2".into();
+    // no release yet: the install checks first
+    app_release(&f, ver);
+    let error = service.install_missing().await.unwrap();
+    assert_eq!(error, "installing on SER2 failed: Failure [LOCKED]");
+    let calls = f.adb.calls.lock().unwrap().clone();
+    let apk = f
+        ._dir
+        .path()
+        .join("updates")
+        .join(format!("PhoneBox-{ver}.apk"));
+    assert_eq!(
+        calls[0],
+        vec![
+            "-s".to_string(),
+            "SER1".into(),
+            "install".into(),
+            apk.to_string_lossy().into_owned()
+        ]
+    );
+    assert_eq!(service.status().state, "idle");
+    *f.adb.mode.lock().unwrap() = "ok".into();
+    assert_eq!(service.install_missing().await, None);
 }
