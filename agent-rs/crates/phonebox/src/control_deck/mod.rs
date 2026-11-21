@@ -13,17 +13,18 @@ pub mod radio_logos;
 pub mod tasks;
 #[cfg(test)]
 pub(crate) mod testing;
+pub mod windows;
 
-/// The deck's native side on this platform: the command-line players off Windows (Windows' own comes with the
-/// Windows tasks; until then nothing there).
+/// The deck's native side on this platform: Core Audio, the media sessions and the rest on Windows; the command-line
+/// players elsewhere.
 pub fn platform_native(
     audio: std::sync::Arc<crate::audio_control::AudioControl>,
     media: std::sync::Arc<dyn crate::media_monitor::SystemMedia>,
 ) -> std::sync::Arc<dyn models::DeckNative> {
     #[cfg(windows)]
     {
-        let _ = (audio, media);
-        std::sync::Arc::new(core::NoNative)
+        let _ = audio;
+        std::sync::Arc::new(windows::WindowsDeckNative::new(Some(media)))
     }
     #[cfg(not(windows))]
     {
