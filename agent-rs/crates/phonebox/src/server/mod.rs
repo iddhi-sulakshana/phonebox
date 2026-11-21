@@ -256,6 +256,7 @@ pub struct AppState {
     pub ha: Arc<crate::home_assistant::HomeAssistant>,
     pub obs: Arc<crate::obs_monitor::ObsMonitor>,
     pub discord: Arc<crate::discord_monitor::DiscordMonitor>,
+    pub spotify: Arc<crate::spotify_control::SpotifyControl>,
 }
 
 /// Serializes the writes that move the config version for shortcut icons (upload, removal) with the settings save.
@@ -310,6 +311,11 @@ impl AppState {
             ha: Arc::new(crate::home_assistant::HomeAssistant::new(cfg.clone())),
             obs: Arc::new(crate::obs_monitor::ObsMonitor::new(cfg.clone())),
             discord: Arc::new(crate::discord_monitor::DiscordMonitor::new(cfg.clone())),
+            spotify: Arc::new(crate::spotify_control::SpotifyControl::new(
+                cfg.clone(),
+                endpoint.port,
+                crate::spotify_control::spotify_http(),
+            )),
             quotas: Arc::new(crate::quota::QuotaMonitor::new(
                 Some(cfg.clone()),
                 &crate::app_paths::local_dir(),

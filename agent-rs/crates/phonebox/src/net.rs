@@ -161,6 +161,19 @@ fn without_os_error(text: &str) -> String {
     }
 }
 
+/// `Uri.EscapeDataString`: RFC 3986 unreserved characters stay, everything else is UTF-8 in upper-case `%XX`.
+pub(crate) fn escape_data_string(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for b in text.bytes() {
+        if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

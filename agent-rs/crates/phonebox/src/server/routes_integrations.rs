@@ -24,9 +24,88 @@ pub fn routes() -> Router<AppState> {
         .route("/api/obs-test", post(obs_test))
         .route("/api/controls/obs", get(obs_deck))
         .route("/api/controls/obs/{action}", post(obs_deck_act))
+        .route("/api/controls/spotify/state", get(spotify_state))
+        .route("/api/controls/spotify/action/{action}", post(spotify_act))
+        .route("/api/controls/spotify/connect", get(spotify_connect))
+        .route("/api/controls/spotify/disconnect", post(spotify_disconnect))
+        .route("/api/controls/spotify/callback", get(spotify_callback))
         .route("/api/discord", get(discord))
         .route("/api/discord/img", get(discord_image))
         .route("/api/discord/{action}", post(discord_act))
+}
+
+async fn spotify_state(State(s): State<AppState>) -> Response {
+    json_response(StatusCode::OK, &s.spotify.snapshot().await)
+}
+
+/// Always a `DeckResult`. Starting playback takes the deck's media focus and stops its radios when it worked.
+async fn spotify_act(
+    State(s): State<AppState>,
+    Path(action): Path<String>,
+    Query(q): QueryList,
+) -> Response {
+    let id = query::value(&q, "id");
+    let result = if action == "play-queued" || action == "playlist" {
+        crate::media_monitor::with_media_focus(s.deck.as_ref(), async {
+            let result = s.spotify.act(&action, id.as_deref()).await;
+            if result.ok {
+                s.deck.stop_all_radios();
+            }
+            result
+        })
+        .await
+    } else {
+        s.spotify.act(&action, id.as_deref()).await
+    };
+    json_response(StatusCode::OK, &result)
+}
+
+/// The sign-in link for the settings page (local only).
+async fn spotify_connect(State(s): State<AppState>) -> Response {
+    match s.spotify.begin() {
+        Ok(url) => json_response(
+            StatusCode::OK,
+            &json!({ "url": url, "redirectUri": s.spotify.redirect_uri() }),
+        ),
+        Err(error) => json_response(StatusCode::BAD_REQUEST, &json!({ "error": error })),
+    }
+}
+
+async fn spotify_disconnect(State(s): State<AppState>) -> Response {
+    match s.spotify.disconnect().await {
+        Ok(()) => StatusCode::OK.into_response(),
+        Err(error) => {
+            crate::log::warn(
+                "PhoneBox.Agent.SpotifyControl",
+                &format!("Spotify disconnect failed: {error}"),
+            );
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+/// Spotify's redirect after sign-in (a cross-site navigation the guard lets through for the pending state only).
+async fn spotify_callback(State(s): State<AppState>, Query(q): QueryList) -> Response {
+    let (state, code) = (query::value(&q, "state"), query::value(&q, "code"));
+    let completed = match (state, code) {
+        (Some(state), Some(code)) => s.spotify.complete(&state, &code).await,
+        _ => Ok(false),
+    };
+    match completed {
+        Ok(true) => (
+            [(axum::http::header::CONTENT_TYPE, "text/plain")],
+            "Spotify connected. Return to PhoneBox settings; this tab can be closed.",
+        )
+            .into_response(),
+        Ok(false) => json_response(
+            StatusCode::BAD_REQUEST,
+            "Spotify sign-in expired or was refused. Start again from desktop settings.",
+        ),
+        Err(_) => json_response(
+            StatusCode::BAD_REQUEST,
+            "Spotify sign-in failed. Start again from desktop settings.",
+        ),
+    }
 }
 
 /// The Discord widget: `{"enabled","snapshot","control"}`; buttons only if a widget allows control.
@@ -346,6 +425,221 @@ mod tests {
         );
         assert_eq!(
             send(&wifi, "POST", "/api/obs-test", &[key]).await.status(),
+            403
+        );
+    }
+
+    fn fake_spotify(
+        s: &crate::server::AppState,
+    ) -> std::sync::Arc<crate::spotify_control::SpotifyControl> {
+        use futures_util::FutureExt;
+        let http: crate::spotify_control::SpotifyHttp =
+            std::sync::Arc::new(|r: crate::spotify_control::SpotifyRequest| {
+                let bad = r.body.as_deref().is_some_and(|b| b.contains("code=bad"));
+                async move {
+                    Ok(crate::spotify_control::SpotifyReply {
+                        status: if bad { 500 } else { 200 },
+                        retry_after: None,
+                        body: r#"{"access_token":"a","refresh_token":"r","expires_in":3600}"#
+                            .into(),
+                    })
+                }
+                .boxed()
+            });
+        std::sync::Arc::new(crate::spotify_control::SpotifyControl::new(
+            s.cfg.clone(),
+            s.endpoint.port,
+            http,
+        ))
+    }
+
+    async fn text_of(res: axum::http::Response<Body>) -> (u16, String, String) {
+        let status = res.status().as_u16();
+        let content_type = res
+            .headers()
+            .get("content-type")
+            .map(|v| v.to_str().unwrap().to_string())
+            .unwrap_or_default();
+        let body = to_bytes(res.into_body(), usize::MAX).await.unwrap();
+        (
+            status,
+            content_type,
+            String::from_utf8(body.to_vec()).unwrap(),
+        )
+    }
+
+    #[tokio::test]
+    async fn the_spotify_routes_answer_with_their_shapes() {
+        let (_d, s) = test_state();
+        let app = crate::server::build_router(s.clone());
+        let r = json_of(send(&app, "GET", "/api/controls/spotify/state", &[LOCAL]).await).await;
+        assert_eq!(
+            r,
+            json!({"connected": false, "error": "Connect Spotify in desktop settings"})
+        );
+        let r = json_of(
+            send(
+                &app,
+                "POST",
+                "/api/controls/spotify/action/shuffle",
+                &[LOCAL],
+            )
+            .await,
+        )
+        .await;
+        assert_eq!(
+            r,
+            json!({"ok": false, "error": "Unknown Spotify control", "lease": null})
+        );
+        // play-queued and playlist run inside the deck's media focus
+        let r = json_of(
+            send(
+                &app,
+                "POST",
+                "/api/controls/spotify/action/playlist?id=x",
+                &[LOCAL],
+            )
+            .await,
+        )
+        .await;
+        assert_eq!(
+            r,
+            json!({"ok": false, "error": "Configure a Spotify playlist URI on the computer", "lease": null})
+        );
+        let res = send(&app, "GET", "/api/controls/spotify/connect", &[LOCAL]).await;
+        assert_eq!(res.status(), 400);
+        assert_eq!(
+            json_of(res).await,
+            json!({"error": "Save a Spotify Client ID in desktop settings first"})
+        );
+        let expired =
+            r#""Spotify sign-in expired or was refused. Start again from desktop settings.""#;
+        let res = send(
+            &app,
+            "GET",
+            "/api/controls/spotify/callback?state=x",
+            &[LOCAL],
+        )
+        .await;
+        assert_eq!(
+            text_of(res).await,
+            (
+                400,
+                "application/json; charset=utf-8".into(),
+                expired.into()
+            )
+        );
+        let res = send(&app, "POST", "/api/controls/spotify/disconnect", &[LOCAL]).await;
+        assert_eq!(text_of(res).await.0, 200);
+    }
+
+    #[tokio::test]
+    async fn a_cross_site_spotify_callback_passes_only_with_the_pending_state() {
+        let (_d, mut s) = test_state();
+        s.cfg
+            .save(r#"{"controls":{"spotifyClientId":"test-client"}}"#, None)
+            .unwrap();
+        s.spotify = fake_spotify(&s);
+        let app = crate::server::build_router(s.clone());
+        let r = json_of(send(&app, "GET", "/api/controls/spotify/connect", &[LOCAL]).await).await;
+        let url = r["url"].as_str().unwrap();
+        assert!(url.starts_with("https://accounts.spotify.com/authorize?client_id=test-client&"));
+        assert_eq!(
+            r["redirectUri"],
+            "http://127.0.0.1:8765/api/controls/spotify/callback"
+        );
+        let state = url
+            .split('&')
+            .find_map(|p| p.strip_prefix("state="))
+            .unwrap()
+            .to_string();
+        let site = ("sec-fetch-site", "cross-site");
+        let mode = ("sec-fetch-mode", "navigate");
+        let callback = |state: &str, code: &str| {
+            format!("/api/controls/spotify/callback?state={state}&code={code}")
+        };
+        // Spotify's redirect is a cross-site navigation: only the pending state lets it through
+        let res = send(&app, "GET", &callback("wrong", "c"), &[LOCAL, site, mode]).await;
+        assert_eq!(res.status(), 403);
+        let res = send(&app, "POST", &callback(&state, "c"), &[LOCAL, site, mode]).await;
+        assert_eq!(res.status(), 403);
+        let res = send(
+            &app,
+            "GET",
+            &callback(&state, "c"),
+            &[("host", "evil.example"), site, mode],
+        )
+        .await;
+        assert_eq!(res.status(), 403);
+        let res = send(&app, "GET", &callback(&state, "c"), &[LOCAL, site, mode]).await;
+        assert_eq!(
+            text_of(res).await,
+            (
+                200,
+                "text/plain".into(),
+                "Spotify connected. Return to PhoneBox settings; this tab can be closed.".into()
+            )
+        );
+        // single use
+        let res = send(&app, "GET", &callback(&state, "c"), &[LOCAL, site, mode]).await;
+        assert_eq!(res.status(), 403);
+        // a failed exchange
+        let r = json_of(send(&app, "GET", "/api/controls/spotify/connect", &[LOCAL]).await).await;
+        let url = r["url"].as_str().unwrap();
+        let state = url
+            .split('&')
+            .find_map(|p| p.strip_prefix("state="))
+            .unwrap()
+            .to_string();
+        let res = send(&app, "GET", &callback(&state, "bad"), &[LOCAL]).await;
+        assert_eq!(
+            text_of(res).await,
+            (
+                400,
+                "application/json; charset=utf-8".into(),
+                r#""Spotify sign-in failed. Start again from desktop settings.""#.into()
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn the_phone_reaches_only_the_spotify_deck_over_wifi() {
+        let (_d, s) = test_state();
+        s.cfg
+            .save(
+                r#"{"lan":{"enabled":true,"port":8766,"token":"phone-key"}}"#,
+                None,
+            )
+            .unwrap();
+        let wifi = crate::server::build_wifi_router(s);
+        let key = ("authorization", "Bearer phone-key");
+        let status = |res: axum::http::Response<Body>| res.status().as_u16();
+        assert_eq!(
+            status(send(&wifi, "GET", "/api/controls/spotify/state", &[key]).await),
+            200
+        );
+        assert_eq!(
+            status(
+                send(
+                    &wifi,
+                    "POST",
+                    "/api/controls/spotify/action/favorite",
+                    &[key]
+                )
+                .await
+            ),
+            200
+        );
+        assert_eq!(
+            status(send(&wifi, "GET", "/api/controls/spotify/connect", &[key]).await),
+            403
+        );
+        assert_eq!(
+            status(send(&wifi, "POST", "/api/controls/spotify/disconnect", &[key]).await),
+            403
+        );
+        assert_eq!(
+            status(send(&wifi, "GET", "/api/controls/spotify/callback", &[key]).await),
             403
         );
     }

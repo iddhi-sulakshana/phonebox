@@ -132,12 +132,23 @@ async fn guard(State(state): State<AppState>, req: Request, next: Next) -> Respo
             || origin == format!("http://127.0.0.1:{port}")
             || origin == format!("http://localhost:{port}")
     });
-    let foreign = is_foreign(
-        header_str(headers, "sec-fetch-site"),
-        header_str(headers, "sec-fetch-mode"),
-        req.method().as_str(),
-        path,
-    );
+    // Spotify's redirect after sign-in is a cross-site navigation to an /api path: let it through for the pending
+    // login only (the Host and Origin checks still apply)
+    let spotify_callback = req.method() == axum::http::Method::GET
+        && path.eq_ignore_ascii_case("/api/controls/spotify/callback")
+        && state.spotify.has_pending_state(
+            axum::extract::Query::<Vec<(String, String)>>::try_from_uri(req.uri())
+                .ok()
+                .and_then(|q| crate::server::query::value(&q.0, "state"))
+                .as_deref(),
+        );
+    let foreign = !spotify_callback
+        && is_foreign(
+            header_str(headers, "sec-fetch-site"),
+            header_str(headers, "sec-fetch-mode"),
+            req.method().as_str(),
+            path,
+        );
     if (host != "127.0.0.1" && host != "localhost") || !same_origin || foreign {
         return StatusCode::FORBIDDEN.into_response();
     }

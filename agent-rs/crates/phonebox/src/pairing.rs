@@ -6,6 +6,8 @@
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicI64, Ordering};
 
+use crate::net::escape_data_string;
+
 pub const LIFETIME_MS: i64 = 5 * 60_000;
 /// Wrong codes before the current one is dropped (a code has 128 random bits; this only stops noise).
 pub const MAX_FAILURES: i32 = 10;
@@ -150,19 +152,6 @@ pub fn read_claim_code(content_type: Option<&str>, body: &[u8]) -> Option<String
         return None;
     }
     json_code(body).filter(|c| (1..=64).contains(&c.encode_utf16().count()))
-}
-
-/// `Uri.EscapeDataString`: RFC 3986 unreserved characters stay, everything else is UTF-8 in upper-case `%XX`.
-fn escape_data_string(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for b in text.bytes() {
-        if b.is_ascii_alphanumeric() || b"-_.~".contains(&b) {
-            out.push(b as char);
-        } else {
-            out.push_str(&format!("%{b:02X}"));
-        }
-    }
-    out
 }
 
 /// The link in the QR code. Everything is in the fragment (after `#`), which browsers never send to a server, so
