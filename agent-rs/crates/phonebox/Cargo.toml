@@ -36,6 +36,15 @@ sysinfo = { version = "0.40", default-features = false, features = ["system"] }
 # shortcut icon uploads: the revision (SHA-256) and the SVG check (an XML parser that never fetches a DTD)
 sha2 = "0.10"
 roxmltree = "0.20"
+# the Wi-Fi certificate (plan 4): PKCS#12 and the self-signed P-256 certificate, all pure Rust so every target builds them
+p256 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
+sha1 = "0.10"
+hmac = "0.12"
+des = "0.8"
+rc2 = "0.8"
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = [
