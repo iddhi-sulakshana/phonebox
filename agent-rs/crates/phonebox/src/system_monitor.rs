@@ -450,6 +450,89 @@ fn find_temp(node: &serde_json::Value, names: &[&str]) -> Option<f64> {
         .find_map(|k| find_temp(k, names))
 }
 
+use std::collections::HashMap;
+
+use crate::net_adapters::AdapterKind;
+
+/// Whether the network meters count this adapter (`Counted`): the chosen ones by name, or else the automatic choice.
+pub fn counted(name: &str, description: &str, kind: AdapterKind, chosen: &[String]) -> bool {
+    if !chosen.is_empty() {
+        return chosen
+            .iter()
+            .any(|c| c.to_lowercase() == name.to_lowercase());
+    }
+    if !matches!(
+        kind,
+        AdapterKind::Ethernet | AdapterKind::Wireless80211 | AdapterKind::GigabitEthernet
+    ) {
+        return false;
+    }
+    if !cfg!(windows)
+        && ["docker", "veth", "br-", "virbr", "utun", "awdl", "llw"]
+            .iter()
+            .any(|p| name.starts_with(p))
+    {
+        return false;
+    }
+    let d = format!("{description} {name}");
+    let lower = d.to_lowercase();
+    !([
+        "virtual",
+        "hyper-v",
+        "vethernet",
+        "vmware",
+        "wsl",
+        "bluetooth",
+    ]
+    .iter()
+    .any(|w| lower.contains(w))
+        || d.contains("TAP"))
+}
+
+/// Up, non-loopback adapters for Settings › Ping & network: name, description, whether the automatic choice counts it.
+pub fn adapters() -> Vec<serde_json::Value> {
+    crate::net_adapters::all()
+        .into_iter()
+        .filter(|ni| ni.up && ni.kind != AdapterKind::Loopback)
+        .map(|ni| {
+            let auto = counted(&ni.name, &ni.description, ni.kind, &[]);
+            serde_json::json!({"name": ni.name, "description": ni.description, "auto": auto})
+        })
+        .collect()
+}
+
+/// Byte counters of the counted, up adapters by id.
+pub fn net_bytes(chosen: &[String]) -> HashMap<String, (i64, i64)> {
+    crate::net_adapters::all()
+        .into_iter()
+        .filter(|ni| ni.up && counted(&ni.name, &ni.description, ni.kind, chosen))
+        .filter_map(|ni| Some((ni.id, ni.bytes?)))
+        .collect()
+}
+
+/// Bytes per second down and up between two readings; only adapters in both count, and a counter that went back
+/// (a reset) adds nothing.
+pub fn network_rates(
+    before: &HashMap<String, (i64, i64)>,
+    after: &HashMap<String, (i64, i64)>,
+    seconds: f64,
+) -> (f64, f64) {
+    let (mut received, mut sent) = (0f64, 0f64);
+    for (id, now) in after {
+        // newly active adapters already carry lifetime totals: only compare adapters sampled in both readings
+        let Some(previous) = before.get(id) else {
+            continue;
+        };
+        if now.0 >= previous.0 {
+            received += (now.0 - previous.0) as f64;
+        }
+        if now.1 >= previous.1 {
+            sent += (now.1 - previous.1) as f64;
+        }
+    }
+    (received / seconds, sent / seconds)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -674,5 +757,118 @@ mod tests {
             temp(r#"{"Children":[{"Text":"CPU Package","Value":"57,0 °C","Type":null}]}"#),
             Some(57.0)
         );
+    }
+
+    // NetworkAdapterTests (#190 / #169): the meters count the adapters the user picked, or else the automatic choice.
+    fn none() -> Vec<String> {
+        Vec::new()
+    }
+
+    #[test]
+    fn automatic_counts_ethernet_and_wifi_but_not_virtual_or_vpn() {
+        use AdapterKind::*;
+        assert!(counted(
+            "Ethernet",
+            "Realtek Gaming USB 2.5GbE Family Controller",
+            Ethernet,
+            &none()
+        ));
+        assert!(counted(
+            "Wi-Fi",
+            "Intel(R) Wi-Fi 6 AX201 160MHz",
+            Wireless80211,
+            &none()
+        ));
+        assert!(!counted(
+            "vEthernet (WSL)",
+            "Hyper-V Virtual Ethernet Adapter",
+            Ethernet,
+            &none()
+        ));
+        assert!(!counted(
+            "Bluetooth Network Connection",
+            "Bluetooth Device (Personal Area Network)",
+            Ethernet,
+            &none()
+        ));
+        assert!(!counted("WireGuard", "WireGuard Tunnel", Unknown, &none())); // not Ethernet / Wi-Fi
+    }
+
+    #[test]
+    fn chosen_adapters_replace_the_automatic_choice() {
+        use AdapterKind::*;
+        let chosen = vec!["ethernet".to_string()]; // names match without case
+        assert!(counted(
+            "Ethernet",
+            "Realtek Gaming USB 2.5GbE Family Controller",
+            Ethernet,
+            &chosen
+        ));
+        assert!(!counted(
+            "Wi-Fi",
+            "Intel(R) Wi-Fi 6 AX201 160MHz",
+            Wireless80211,
+            &chosen
+        ));
+        // a pick may be anything the user wants counted, a VPN tunnel too
+        assert!(counted(
+            "WireGuard",
+            "WireGuard Tunnel",
+            Unknown,
+            &["WireGuard".to_string()]
+        ));
+    }
+
+    #[test]
+    fn the_setting_is_tidied_on_save() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(&path, "{}").unwrap();
+        let store = crate::config::store::ConfigStore::new(path);
+        assert!(store.save(r#"{ "ping": { "host": "1.1.1.1", "adapters": [" Ethernet ", "ethernet", "", "Wi-Fi"] } }"#, None).is_ok());
+        assert_eq!(store.get().ping.adapters, ["Ethernet", "Wi-Fi"]);
+    }
+
+    // NetworkRatesTests
+    fn rates(before: &[(&str, (i64, i64))], after: &[(&str, (i64, i64))]) -> (f64, f64) {
+        let map = |l: &[(&str, (i64, i64))]| {
+            l.iter()
+                .map(|(k, v)| (k.to_string(), *v))
+                .collect::<HashMap<_, _>>()
+        };
+        network_rates(&map(before), &map(after), 2.0)
+    }
+
+    #[test]
+    fn an_interface_that_appears_or_disappears_does_not_change_other_traffic() {
+        assert_eq!(
+            rates(
+                &[("wifi", (100, 200)), ("detached", (1000, 1000))],
+                &[("wifi", (140, 220)), ("attached", (9000, 9500))]
+            ),
+            (20.0, 10.0)
+        );
+    }
+
+    #[test]
+    fn reset_counters_do_not_hide_traffic_from_another_interface() {
+        assert_eq!(
+            rates(
+                &[("wifi", (100, 200)), ("ethernet", (1000, 1000))],
+                &[("wifi", (140, 220)), ("ethernet", (30, 20))]
+            ),
+            (20.0, 10.0)
+        );
+    }
+
+    #[test]
+    fn adapters_lists_up_non_loopback_adapters_with_the_automatic_choice() {
+        let list = adapters();
+        assert!(!list.is_empty());
+        for a in &list {
+            let keys: Vec<&String> = a.as_object().unwrap().keys().collect();
+            assert_eq!(keys, ["name", "description", "auto"], "{a}");
+            assert_ne!(a["name"], "lo");
+        }
     }
 }

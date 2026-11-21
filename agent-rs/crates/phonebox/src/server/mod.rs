@@ -4,6 +4,7 @@ pub mod guard;
 pub mod routes_info;
 pub mod routes_settings;
 pub mod routes_state;
+mod routes_system;
 pub mod static_files;
 #[cfg(test)]
 mod tests_task10;
@@ -55,6 +56,7 @@ fn routes(state: AppState) -> axum::Router {
         .merge(routes_settings::routes())
         .merge(routes_info::routes())
         .merge(routes_state::routes())
+        .merge(routes_system::routes())
         // Kestrel's default request body limit: a settings page with many pages still fits
         .layer(axum::extract::DefaultBodyLimit::max(30_000_000));
     guard::apply(routes, state)
