@@ -21,6 +21,7 @@ pub mod gpus;
 pub mod icon_text;
 pub mod key_sender;
 pub mod lan;
+pub mod lan_cert;
 pub mod listening_ports;
 pub mod log;
 pub mod media_artwork_cache;
