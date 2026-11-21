@@ -47,6 +47,12 @@ impl StateSources {
         self
     }
 
+    /// `audio` from the volume control.
+    pub fn with_audio(mut self, audio: Box<dyn StateSource>) -> StateSources {
+        self.audio = audio;
+        self
+    }
+
     /// `ping` from the ping monitor.
     pub fn with_ping(mut self, ping: Box<dyn StateSource>) -> StateSources {
         self.ping = ping;

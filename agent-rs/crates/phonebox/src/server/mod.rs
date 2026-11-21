@@ -2,6 +2,7 @@
 
 pub mod guard;
 pub mod query;
+mod routes_desk;
 pub mod routes_info;
 pub mod routes_settings;
 pub mod routes_state;
@@ -58,6 +59,7 @@ fn routes(state: AppState) -> axum::Router {
         .merge(routes_info::routes())
         .merge(routes_state::routes())
         .merge(routes_system::routes())
+        .merge(routes_desk::routes())
         // Kestrel's default request body limit: a settings page with many pages still fits
         .layer(axum::extract::DefaultBodyLimit::max(30_000_000));
     guard::apply(routes, state)
@@ -128,6 +130,8 @@ pub struct AppState {
     pub procs: Arc<crate::process_monitor::ProcessMonitor>,
     /// Wireless device batteries (`/api/batteries`); main starts its loop.
     pub batteries: Arc<crate::battery_monitor::BatteryMonitor>,
+    /// The output volume (`audio` in the state, `/api/volume`); main puts the same one in `sources`.
+    pub audio: Arc<crate::audio_control::AudioControl>,
 }
 
 impl AppState {
@@ -160,6 +164,7 @@ impl AppState {
                 crate::process_monitor::NoSessions,
             )),
             batteries: crate::battery_monitor::BatteryMonitor::new(),
+            audio: crate::audio_control::AudioControl::new(),
             cfg,
             endpoint,
             push,

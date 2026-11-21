@@ -56,12 +56,15 @@ fn main() -> ExitCode {
     // the monitors the state reads; serve starts them
     let system = phonebox::system_monitor::SystemMonitor::new(cfg.clone());
     let ping = phonebox::ping_monitor::PingMonitor::new(cfg.clone());
+    let audio = phonebox::audio_control::AudioControl::new();
     let sources = phonebox::state::StateSources::phase1()
         .with_pc(Box::new(system.clone()))
-        .with_ping(Box::new(ping.clone()));
+        .with_ping(Box::new(ping.clone()))
+        .with_audio(Box::new(audio.clone()));
     let mut state = AppState::new(cfg, endpoint, push.clone(), Arc::new(sources));
     state.system = system;
     state.ping = ping;
+    state.audio = audio;
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
     let result = runtime.block_on(serve(state, config_path));
     push.dispose();

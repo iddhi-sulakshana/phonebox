@@ -7,6 +7,7 @@ pub mod adb;
 pub mod agent_endpoint;
 pub mod app_paths;
 pub mod app_restart;
+pub mod audio_control;
 pub mod battery_monitor;
 pub mod browser_guard;
 pub mod catalog;
