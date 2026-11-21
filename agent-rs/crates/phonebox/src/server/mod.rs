@@ -238,6 +238,8 @@ pub struct AppState {
     /// Automation rules; [`AppState::rewire`] builds it over the monitors in place.
     pub rules: Arc<crate::rule_engine::RuleEngine>,
     pub stop: Stop,
+    /// The agent's and the phone app's updates (main starts its loop; tests never reach GitHub).
+    pub updates: Arc<crate::update::service::UpdateService>,
     /// The monitors behind `/api/state` and the live stream.
     pub sources: Arc<crate::state::StateSources>,
     /// The live stream's "state" frame, built once for all streams that wake on the same second.
@@ -371,6 +373,14 @@ impl AppState {
             Arc::new(crate::control_deck::core::NoNative),
             Default::default(),
         );
+        let stop = Stop::default();
+        let updates = crate::update::service::UpdateService::new(
+            cfg.clone(),
+            adb.clone(),
+            phone.clone(),
+            stop.clone(),
+            crate::update::service::UpdateDeps::real(),
+        );
         let state = AppState {
             // replaced below, once the monitors it reads are in place
             rules: crate::rule_engine::RuleEngine::new(
@@ -440,7 +450,8 @@ impl AppState {
             endpoint,
             push,
             timings: Default::default(),
-            stop: Stop::default(),
+            stop,
+            updates,
             sources,
             frames,
         };

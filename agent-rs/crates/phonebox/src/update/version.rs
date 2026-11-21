@@ -75,6 +75,11 @@ fn compare(a: &Version, b: &Version) -> Ordering {
         })
 }
 
+/// Whether the text reads as a version.
+pub fn parses(text: &str) -> bool {
+    parse(text).is_some()
+}
+
 /// Whether `candidate` is a newer version than `current`; false when either does not read as a version.
 pub fn newer(candidate: &str, current: &str) -> bool {
     matches!((parse(candidate), parse(current)), (Some(a), Some(b)) if compare(&a, &b) == Ordering::Greater)

@@ -93,9 +93,12 @@ fn main() -> ExitCode {
     let obs = Arc::new(phonebox::obs_monitor::ObsMonitor::new(cfg.clone()));
     let privacy = phonebox::privacy_monitor::PrivacyMonitor::new();
     let rules = Arc::new(phonebox::rule_engine::RulesSlot::default());
+    // the updater comes with the state, as the deck does
+    let update = Arc::new(phonebox::update::service::UpdateSlot::default());
     let sources = phonebox::state::StateSources::phase1()
         .with_pc(Box::new(system.clone()))
         .with_ping(Box::new(ping.clone()))
+        .with_update(Box::new(update.clone()))
         .with_audio(Box::new(audio.clone()))
         .with_media(Box::new(phonebox::media_monitor::MediaState {
             media: media.clone(),
@@ -135,6 +138,7 @@ fn main() -> ExitCode {
     let state = state.rewire().with_controls(native);
     rules.set(state.rules.clone());
     deck.set(state.controls.clone());
+    update.set(state.updates.clone());
     let controls = state.controls.clone();
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
     let result = runtime.block_on(serve(state, config_path));
@@ -203,6 +207,7 @@ async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Res
     state.rules.start(state.stop.clone()); // after 3 s, then every second
     state.charge.start(state.stop.clone()); // after 5 s, then every 30 s
     state.controls.start(state.stop.clone()); // every 250 ms: panic mutes, holds, stations, sleep timers, ducking
+    state.updates.start(); // after 20 s, then every minute: a check every 6 h (15 min after a failure); auto apply
     // every second: the phones' screens follow the Mac's lock while display.followComputerLock is on
     phonebox::session_lock_monitor::start(state.cfg.clone(), state.adb.clone(), state.stop.clone());
     log::info(

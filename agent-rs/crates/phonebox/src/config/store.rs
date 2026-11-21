@@ -160,9 +160,12 @@ impl ConfigStore {
                     .shortcuts
                     .iter()
                     .any(|s| icon_text::repair(Some(&s.icon)) != s.icon);
+            // a saved upstream update channel is rewritten to the fork on disk too, so a C# agent run on this config
+            // later cannot take upstream's release over the Rust one
             if !damaged_icons
                 && on_disk.lan.token == c.lan.token
                 && on_disk.lan.webhook_token == c.lan.webhook_token
+                && on_disk.updates.repo == c.updates.repo
             {
                 return;
             }
@@ -445,6 +448,30 @@ mod tests {
         std::fs::write(&path, invalid).unwrap();
         ConfigStore::new(path.clone()).persist_generated();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), invalid);
+    }
+
+    #[test]
+    fn a_saved_upstream_repo_is_rewritten_on_disk() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        let keys = r#""lan": { "token": "phoneKey00000000000000000000000000000000000A", "webhookToken": "hookKey000000000000000000000000000000000000A" }"#;
+        std::fs::write(
+            &path,
+            format!(r#"{{ {keys}, "updates": {{ "auto": false, "repo": "ersinkoc/phonebox" }} }}"#),
+        )
+        .unwrap();
+        ConfigStore::new(path.clone()).persist_generated();
+        let saved = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            saved.contains(r#""repo": "iddhi-sulakshana/phonebox""#),
+            "{saved}"
+        );
+        // a config already on the fork (or another repo) is left as it is
+        let mine =
+            format!(r#"{{ {keys}, "updates": {{ "auto": false, "repo": "someone/else" }} }}"#);
+        std::fs::write(&path, &mine).unwrap();
+        ConfigStore::new(path.clone()).persist_generated();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), mine);
     }
 
     #[test]

@@ -94,6 +94,12 @@ impl StateSources {
         self
     }
 
+    /// `update` from the update service.
+    pub fn with_update(mut self, update: Box<dyn StateSource>) -> StateSources {
+        self.update = update;
+        self
+    }
+
     /// `ping` from the ping monitor.
     pub fn with_ping(mut self, ping: Box<dyn StateSource>) -> StateSources {
         self.ping = ping;
