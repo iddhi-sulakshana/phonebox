@@ -98,24 +98,69 @@ fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
 /// Moves every staged file into `install_dir`, keeping each one it replaces as `<name>.old`; then the agent is made
 /// executable (the release zips carry no Unix modes). Blocks.
 pub fn replace(staged: &Path, install_dir: &Path) -> Result<(), String> {
+    replace_with(staged, install_dir, &|from, to| {
+        move_file_with(from, to, &|a, b| std::fs::rename(a, b))
+    })
+}
+
+/// Moves `from` to `to` with `rename`, or, onto another volume, by a copy (C#'s `File.Move`).
+fn move_file_with(
+    from: &Path,
+    to: &Path,
+    rename: &dyn Fn(&Path, &Path) -> std::io::Result<()>,
+) -> std::io::Result<()> {
+    match rename(from, to) {
+        Err(e) if e.kind() == std::io::ErrorKind::CrossesDevices => {
+            std::fs::copy(from, to)?;
+            std::fs::remove_file(from)
+        }
+        moved => moved,
+    }
+}
+
+/// [`replace`] with `mv` for every move. When a file cannot be moved in, the files moved so far are taken out again
+/// and the installed ones put back (a departure: C# left the folder half replaced, possibly with no agent in it).
+fn replace_with(
+    staged: &Path,
+    install_dir: &Path,
+    mv: &dyn Fn(&Path, &Path) -> std::io::Result<()>,
+) -> Result<(), String> {
     let mut files = Vec::new();
     files_under(staged, &mut files).map_err(|e| e.to_string())?;
-    for src in files {
-        let rel = src.strip_prefix(staged).map_err(|e| e.to_string())?;
-        let dst = install_dir.join(rel);
-        if let Some(parent) = dst.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
-        if dst.exists() {
-            let old = with_suffix(&dst, ".old");
-            if old.exists() {
-                std::fs::remove_file(&old).map_err(|e| e.to_string())?;
+    // each file moved (or being moved) in, with the installed one it replaced
+    let mut done: Vec<(PathBuf, Option<PathBuf>)> = Vec::new();
+    let swap = || -> Result<(), String> {
+        for src in files {
+            let rel = src.strip_prefix(staged).map_err(|e| e.to_string())?;
+            let dst = install_dir.join(rel);
+            if let Some(parent) = dst.parent() {
+                std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
-            std::fs::rename(&dst, &old).map_err(|e| e.to_string())?;
+            let mut kept = None;
+            if dst.exists() {
+                let old = with_suffix(&dst, ".old");
+                if old.exists() {
+                    std::fs::remove_file(&old).map_err(|e| e.to_string())?;
+                }
+                mv(&dst, &old).map_err(|e| e.to_string())?;
+                kept = Some(old);
+            }
+            let moved = mv(&src, &dst);
+            done.push((dst, kept));
+            moved.map_err(|e| e.to_string())?;
         }
-        std::fs::rename(&src, &dst).map_err(|e| e.to_string())?;
+        make_executable(&install_dir.join(EXE_NAME)).map_err(|e| e.to_string())
+    };
+    let result = swap();
+    if result.is_err() {
+        for (dst, kept) in done.into_iter().rev() {
+            let _ = std::fs::remove_file(&dst);
+            if let Some(old) = kept {
+                let _ = mv(&old, &dst);
+            }
+        }
     }
-    make_executable(&install_dir.join(EXE_NAME)).map_err(|e| e.to_string())
+    result
 }
 
 fn old_files(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -162,6 +207,55 @@ pub fn cleanup(install_dir: &Path, downloads: &Path, now: SystemTime) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn write_all(dir: &Path, files: &[(&str, &str)]) {
+        for (name, text) in files {
+            std::fs::create_dir_all(dir.join(name).parent().unwrap()).unwrap();
+            std::fs::write(dir.join(name), text).unwrap();
+        }
+    }
+
+    #[test]
+    fn a_failed_move_in_puts_the_installed_agent_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, staged) = (dir.path().join("app"), dir.path().join("agent-2"));
+        write_all(&app, &[(EXE_NAME, "old"), ("NOTICES.txt", "old notices")]);
+        write_all(
+            &staged,
+            &[(EXE_NAME, "new"), ("NOTICES.txt", "new notices")],
+        );
+        let staged_exe = staged.join(EXE_NAME);
+        // the new agent cannot be moved in (Windows: a scanner holds the file just unpacked)
+        let result = replace_with(&staged, &app, &|from, to| {
+            if from == staged_exe {
+                Err(std::io::Error::other("in use"))
+            } else {
+                std::fs::rename(from, to)
+            }
+        });
+        assert!(result.is_err());
+        assert_eq!(std::fs::read_to_string(app.join(EXE_NAME)).unwrap(), "old");
+        assert_eq!(
+            std::fs::read_to_string(app.join("NOTICES.txt")).unwrap(),
+            "old notices"
+        );
+        let mut left = Vec::new();
+        old_files(&app, &mut left);
+        assert!(left.is_empty(), "{left:?}");
+    }
+
+    #[test]
+    fn a_move_to_another_volume_copies() {
+        let dir = tempfile::tempdir().unwrap();
+        let (from, to) = (dir.path().join("a"), dir.path().join("b"));
+        std::fs::write(&from, "agent").unwrap();
+        move_file_with(&from, &to, &|_, _| {
+            Err(std::io::Error::from(std::io::ErrorKind::CrossesDevices))
+        })
+        .unwrap();
+        assert_eq!(std::fs::read_to_string(&to).unwrap(), "agent");
+        assert!(!from.exists());
+    }
 
     #[test]
     fn the_cleanup_removes_old_files_and_week_old_downloads() {

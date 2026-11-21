@@ -401,6 +401,27 @@ async fn a_bad_checksum_leaves_the_install_untouched() {
 }
 
 #[tokio::test]
+async fn a_refused_agent_update_waits_for_the_next_check_before_an_automatic_retry() {
+    let zip = zip_with(&[(crate::update::swap::EXE_NAME, b"new")]);
+    let (f, service) = updatable(zip, Some("0".repeat(64))).await;
+    let downloads = || f.http.calls().iter().filter(|(u, _)| u == ZIP_URL).count();
+    service.apply_auto().await;
+    assert_eq!(downloads(), 2);
+    assert!(service.status().error.is_some());
+    // the loop's next minutes
+    service.apply_auto().await;
+    service.apply_auto().await;
+    assert_eq!(downloads(), 2);
+    // Update now still tries
+    service.apply().await;
+    assert_eq!(downloads(), 4);
+    // and so does the loop after the next check
+    service.check().await.unwrap();
+    service.apply_auto().await;
+    assert_eq!(downloads(), 6);
+}
+
+#[tokio::test]
 async fn a_zip_without_the_agent_is_refused() {
     let (f, service) = updatable(zip_with(&[("README.txt", b"hello")]), None).await;
     service.apply().await;
@@ -569,6 +590,37 @@ async fn apply_clears_error_after_retry_success_and_zero_targets_preserve_app_ve
     let s = svc3.status();
     assert!(s.app_update);
     assert_eq!(s.error.as_deref(), Some(reason.as_str()));
+}
+
+#[tokio::test]
+async fn a_phone_that_refuses_the_app_is_not_asked_again_every_minute() {
+    let ver = crate::app_paths::version();
+    let (f, service) = fixture(ver, None);
+    app_release(&f, ver);
+    set_app(&f, "0.0.1");
+    f.state.adb.set_seen_for_test(&["SER1"], &[]);
+    // the upstream app, signed with another key
+    *f.adb.mode.lock().unwrap() = "fail".into();
+    let installs = || {
+        f.adb
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|a| a.get(2).map(String::as_str) == Some("install"))
+            .count()
+    };
+    service.check().await.unwrap();
+    service.apply_auto().await;
+    service.apply_auto().await;
+    service.apply_auto().await;
+    assert_eq!(installs(), 1);
+    assert!(service.status().app_update && service.status().error.is_some());
+    service.apply().await;
+    assert_eq!(installs(), 2);
+    service.check().await.unwrap();
+    service.apply_auto().await;
+    assert_eq!(installs(), 3);
 }
 
 #[tokio::test]

@@ -285,6 +285,15 @@ impl UpdateService {
     /// `ApplyAsync`: the phone app and this agent when newer ones are out; a busy gate (a check, an install, another
     /// apply) makes it a no-op. Only the copy in the install folder replaces itself.
     pub async fn apply(&self) {
+        self.apply_with(false).await
+    }
+
+    /// The loop's [`apply`](Self::apply) while automatic updates are on.
+    pub(crate) async fn apply_auto(&self) {
+        self.apply_with(true).await
+    }
+
+    async fn apply_with(&self, auto: bool) {
         let status = self.status();
         if !status.app_update && !status.agent_update {
             return;
@@ -292,10 +301,19 @@ impl UpdateService {
         let Ok(_gate) = self.gate.try_lock() else {
             return;
         };
-        if self.lock().state == "restarting" {
-            return;
-        }
-        let release = self.lock().latest.clone();
+        let release = {
+            let inner = self.lock();
+            if inner.state == "restarting" {
+                return;
+            }
+            let held = |r: &Release| inner.auto_held.as_deref() == Some(r.version.as_str());
+            if auto && inner.latest.as_ref().is_some_and(held) {
+                return;
+            }
+            inner.latest.clone()
+        };
+        let version = release.as_ref().map(|r| r.version.clone());
+        let mut phone_failed = false;
         let result: Result<(), String> = async {
             let Some(release) = release else {
                 return Ok(());
@@ -307,6 +325,7 @@ impl UpdateService {
                 attempted = true;
                 if let Err(message) = self.update_phone(&release).await {
                     failed = true;
+                    phone_failed = true;
                     let mut inner = self.lock();
                     if super::phone::log_once(&mut inner.phone_warning, &message) {
                         crate::log::warn(CATEGORY, &format!("phone update failed: {message}"));
@@ -326,6 +345,9 @@ impl UpdateService {
         }
         .await;
         let mut inner = self.lock();
+        if auto && (phone_failed || result.is_err()) {
+            inner.auto_held = version;
+        }
         if let Err(message) = result {
             crate::log::warn(CATEGORY, &format!("update failed: {message}"));
             inner.error = Some(message);

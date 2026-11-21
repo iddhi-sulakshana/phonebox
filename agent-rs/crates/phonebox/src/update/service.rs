@@ -80,6 +80,9 @@ pub(super) struct Inner {
     pub api_urls: HashMap<String, String>,
     /// The phone failure last logged (the same one is not logged every minute).
     pub phone_warning: Option<String>,
+    /// The release an automatic apply failed on: the loop leaves it until the next check (a departure: C# tried again
+    /// every minute, downloading the agent twice or pushing the app to a phone that refuses it each time).
+    pub auto_held: Option<String>,
 }
 
 impl Default for Inner {
@@ -93,6 +96,7 @@ impl Default for Inner {
             phone_retry_for: None,
             api_urls: HashMap::new(),
             phone_warning: None,
+            auto_held: None,
         }
     }
 }
@@ -232,7 +236,11 @@ impl UpdateService {
     /// `CheckCoreAsync` (the caller holds the gate): the release to follow, its assets, and the status fields; a
     /// failure keeps the release found before and shows `Update check failed: …`.
     pub(super) async fn check_core(&self) -> Result<(), Stopped> {
-        self.lock().state = "checking".into();
+        {
+            let mut inner = self.lock();
+            inner.state = "checking".into();
+            inner.auto_held = None;
+        }
         let repo = self.cfg.get().updates.repo.clone();
         let pre_release = self.deps.agent_version.contains('-');
         let url = if pre_release {
@@ -310,7 +318,7 @@ impl UpdateService {
                     next_check = (me.deps.now)() + wait;
                 }
                 if me.cfg.get().updates.auto {
-                    me.apply().await;
+                    me.apply_auto().await;
                 }
                 if me
                     .unless_stopped(tokio::time::sleep(Duration::from_secs(60)))
