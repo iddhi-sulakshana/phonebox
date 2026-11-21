@@ -136,6 +136,8 @@ pub struct AppState {
     pub icons: Arc<crate::shortcut_icon_uploads::ShortcutIconUploads>,
     /// Installed applications (the All apps widget, `/api/apps*`).
     pub apps: Arc<crate::app_catalog::AppCatalog>,
+    /// The Dictation widget's typing (`/api/dictate`).
+    pub dictation: Arc<crate::dictation::Dictation>,
 }
 
 /// Serializes the writes that move the config version for shortcut icons (upload, removal) with the settings save.
@@ -175,6 +177,7 @@ impl AppState {
         AppState {
             adb,
             apps: crate::app_catalog::AppCatalog::new(cfg.clone()),
+            dictation: crate::dictation::Dictation::new(cfg.clone()),
             icons: Arc::new(crate::shortcut_icon_uploads::ShortcutIconUploads::new(
                 icons_dir,
             )),

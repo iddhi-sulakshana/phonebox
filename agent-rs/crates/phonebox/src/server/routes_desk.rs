@@ -29,6 +29,24 @@ pub fn routes() -> Router<AppState> {
         .route("/api/apps/icon", get(app_icon))
         .route("/api/apps/open", post(open_app))
         .route("/api/trackpad", any(trackpad))
+        .route("/api/dictate", post(dictate))
+}
+
+/// The Dictation widget's text, typed into the app in front: `{"ok":true}`, or the reason with its status.
+async fn dictate(State(s): State<AppState>, Query(q): QueryList, headers: HeaderMap) -> Response {
+    let device = header_text(&headers, "x-phonebox-device").unwrap_or_default();
+    let (widget, text) = (value(&q, "widget"), value(&q, "text"));
+    let (status, error) = s
+        .dictation
+        .type_async(Some(&device), widget.as_deref(), text.as_deref())
+        .await;
+    match error {
+        None => json_response(StatusCode::OK, &json!({ "ok": true })),
+        Some(error) => json_response(
+            StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+            &json!({ "error": error }),
+        ),
+    }
 }
 
 /// `TrackpadHandler.HandleEndpoint`: 403 unless allowed (before any upgrade), then the socket, else a POST body as one
@@ -1322,5 +1340,57 @@ mod tests {
         }
         stop.stop();
         let _ = server.await;
+    }
+
+    // ---- dictation ----
+
+    #[tokio::test]
+    async fn dictation_types_for_a_widget_that_allows_it_and_says_why_not_otherwise() {
+        let (_dir, mut state) = test_state();
+        let page = serde_json::json!({"pages": [{"id": "p", "title": "P", "widgets": [
+            {"id": "d", "type": "dictate", "x": 0, "y": 0, "w": 4, "h": 3, "options": {"control": true}},
+            {"id": "off", "type": "dictate", "x": 4, "y": 0, "w": 4, "h": 3, "options": {"control": false}}
+        ]}]});
+        state.cfg.save(&page.to_string(), None).unwrap();
+        let typed = Arc::new(Mutex::new(Vec::<String>::new()));
+        let sink = typed.clone();
+        state.dictation = crate::dictation::test_dictation(
+            state.cfg.clone(),
+            Arc::new(move |t| {
+                sink.lock().unwrap().push(t.to_string());
+                Ok(true)
+            }),
+        );
+        let app = build_router(state);
+        let device = [("x-phonebox-device", "desk-phone")];
+        let r = request(
+            &app,
+            "POST",
+            "/api/dictate?widget=p/d&text=hello%20there",
+            &device,
+            vec![],
+        )
+        .await;
+        assert_eq!(r.status, StatusCode::OK);
+        assert_eq!(r.json(), serde_json::json!({"ok": true}));
+        assert_eq!(*typed.lock().unwrap(), ["hello there "]);
+
+        let r = request(
+            &app,
+            "POST",
+            "/api/dictate?widget=p/off&text=x",
+            &device,
+            vec![],
+        )
+        .await;
+        assert_eq!(r.status, StatusCode::FORBIDDEN);
+        assert_eq!(
+            r.json(),
+            serde_json::json!({"error": "typing is off: turn on \"Type the text on the computer\" in the dictation widget's settings"})
+        );
+        let r = request(&app, "POST", "/api/dictate?widget=p/d", &device, vec![]).await;
+        assert_eq!(r.status, StatusCode::BAD_REQUEST);
+        assert_eq!(r.json(), serde_json::json!({"error": "nothing to type"}));
+        assert_eq!(typed.lock().unwrap().len(), 1);
     }
 }

@@ -13,6 +13,7 @@ pub mod battery_monitor;
 pub mod browser_guard;
 pub mod catalog;
 pub mod config;
+pub mod dictation;
 pub mod drm_usage;
 pub mod file_logger;
 pub mod gpus;
