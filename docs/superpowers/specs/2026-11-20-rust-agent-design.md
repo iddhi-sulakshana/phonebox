@@ -75,6 +75,12 @@ release running: about 10% CPU continuously, about 270 MB memory, 40 threads, 10
 - **Config files from newer versions.** The C# `ConfigStore` drops properties it does not know. *My call, a
   deliberate departure from the C# behavior:* the Rust agent keeps unknown fields (at every level of `config.json`)
   when it saves, so a config last written by a newer C# agent loses nothing.
+- **Wi-Fi adb without a reverse rule.** Android 8 refuses `adb reverse` over Wi-Fi adb ("more than one
+  device/emulator") while its USB transport is still registered, and the C# agent then ends every 4-second round with
+  "adb error" (keep-awake and the "phone connected" state never run). *Owner's request, a deliberate departure from
+  the C# behavior:* when a phone on Wi-Fi adb (`host:port` or an mDNS `._tcp` serial) refuses the rule, the Rust agent
+  logs it once, does not ask again until that phone reconnects, and finishes the round; the panel uses its own Wi-Fi
+  link. Phones that accept the rule over Wi-Fi (Android 11+) keep it, and a refusal over USB still ends the round.
 
 ## Approaches considered
 

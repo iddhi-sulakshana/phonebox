@@ -135,6 +135,8 @@ struct Seen {
 struct Round {
     home_set: HashSet<String>,
     awake_set: HashSet<String>,
+    /// Phones on Wi-Fi adb that refused a reverse rule; not asked again until they reconnect.
+    no_rule: HashSet<String>,
     last_state: String,
     last_problem: Option<String>,
 }
@@ -298,6 +300,9 @@ impl AdbReverse {
         // more failure there would end the round before the phones after it. The next round tries it again.
         let mut unreachable = HashSet::new();
         for d in &devices {
+            if lock(&self.round).no_rule.contains(d) {
+                continue;
+            }
             let list = match self
                 .adb(&adb, &format!("-s {d} reverse --list"), false)
                 .await
@@ -337,12 +342,28 @@ impl AdbReverse {
             if ruled {
                 continue;
             }
-            self.adb(
-                &adb,
-                &format!("-s {d} reverse {RULE} {}", self.target_rule()),
-                false,
-            )
-            .await?;
+            let set = self
+                .adb(
+                    &adb,
+                    &format!("-s {d} reverse {RULE} {}", self.target_rule()),
+                    false,
+                )
+                .await;
+            // Android 8 refuses a rule over Wi-Fi adb ("more than one device/emulator") while its USB transport is still
+            // registered. The panel reaches the agent over its own Wi-Fi link, so go on without the rule.
+            if let Err(AdbError::Exit(_)) = &set
+                && over_network(d)
+            {
+                lock(&self.round).no_rule.insert(d.clone());
+                crate::log::info(
+                    CATEGORY,
+                    &format!(
+                        "{d}: the phone refused an adb reverse rule over Wi-Fi; going on without it"
+                    ),
+                );
+                continue;
+            }
+            set?;
             // Settings > Display > open on connect is off (a phone also used for app testing): the phone stays as it
             // is, and the panel opens when the user starts it
             if !cfg.display.open_on_connect {
@@ -434,7 +455,11 @@ impl AdbReverse {
     }
 
     fn set_devices(&self, devices: Vec<String>) {
-        lock(&self.round).awake_set.retain(|d| devices.contains(d));
+        {
+            let mut round = lock(&self.round);
+            round.awake_set.retain(|d| devices.contains(d));
+            round.no_rule.retain(|d| devices.contains(d));
+        }
         lock(&self.seen).devices = devices;
     }
 
@@ -446,6 +471,13 @@ impl AdbReverse {
             crate::log::info(CATEGORY, state);
         }
     }
+}
+
+/// True for a phone on adb over Wi-Fi: "host:port" (adb connect) or an mDNS name
+/// ("adb-<serial>-<id>._adb-tls-connect._tcp", Android 11+ wireless debugging). USB serials and emulators
+/// ("emulator-5554") have neither.
+fn over_network(serial: &str) -> bool {
+    serial.contains(':') || serial.ends_with("._tcp")
 }
 
 /// The adb to use: the configured path when it exists, else the first one on PATH or in the usual places.
@@ -542,8 +574,9 @@ mod tests {
 
     /// A fake adb (never the real adb or a real phone): `devices` attached, "reverse --list" prints `reverse_list`,
     /// the app is installed, "cmd package set-home-activity" fails on `home_refused` the way Android refuses it (an
-    /// error line, exit code 1), "reverse --list" fails on `reverse_refused`, and `broken` fails its "reverse --list"
-    /// and every "settings" command.
+    /// error line, exit code 1), "reverse --list" fails on `reverse_refused`, setting a reverse rule fails on
+    /// `rule_refused` (what Android 8 answers over Wi-Fi adb while its USB transport is still registered), and
+    /// `broken` fails its "reverse --list" and every "settings" command.
     #[derive(Default)]
     struct Fake {
         devices: Vec<String>,
@@ -551,6 +584,7 @@ mod tests {
         not_installed: bool,
         home_refused: Option<String>,
         reverse_refused: Option<String>,
+        rule_refused: Option<String>,
         broken: Option<String>,
         fail_all: Option<String>,
         calls: Vec<String>,
@@ -611,6 +645,9 @@ mod tests {
                 } else {
                     ok(&f.reverse_list.clone())
                 };
+            }
+            if arg(2) == "reverse" && is(&f.rule_refused) {
+                return fail("adb: error: more than one device/emulator\n");
             }
             if arg(3) == "pm" {
                 return if f.not_installed {
@@ -763,6 +800,56 @@ mod tests {
             "the next phone was not set up: {calls:?}"
         );
         assert!(!calls.iter().any(|c| c == first));
+    }
+
+    /// Android 8 refuses a reverse rule over Wi-Fi adb ("more than one device/emulator") while its USB transport is
+    /// still registered. The panel has its own Wi-Fi link, so that phone goes on without a rule: once logged, not
+    /// retried until it reconnects, and the round carries on (the C# agent ended the round with "adb error" every 4 s).
+    #[tokio::test]
+    async fn a_wifi_phone_that_refuses_a_reverse_rule_does_not_end_the_round() {
+        let wifi = "192.168.1.5:5555";
+        let usb = "8UE5T17A26006928";
+        let fake = FakeAdb::with(|f| {
+            f.devices = vec![wifi.into(), usb.into()];
+            f.rule_refused = Some(wifi.into());
+        });
+        let (_d, cfg) = test_cfg(r#"{"display":{"homeScreen":false,"keepAwake":true}}"#);
+        let adb = AdbReverse::new(cfg, 8765, Arc::new(fake.clone()));
+        let rule = |d: &str| format!("-s {d} reverse tcp:8765 tcp:8765");
+
+        let result = adb.ensure().await;
+        let calls = fake.calls();
+        assert!(result.is_ok(), "the round failed: {result:?}");
+        assert_eq!(count(&calls, &rule(usb)), 1, "{calls:?}");
+        assert_eq!(count(&calls, &format!("-s {usb} {AWAKE}")), 1);
+        assert_eq!(count(&calls, &format!("-s {wifi} {AWAKE}")), 1);
+        assert_eq!(
+            lock(&adb.round).last_state,
+            format!("phone connected: {wifi}, {usb}")
+        );
+
+        adb.ensure().await.unwrap(); // not asked again while it stays connected
+        assert_eq!(count(&fake.calls(), &rule(wifi)), 1);
+
+        fake.devices(&[usb]); // the Wi-Fi link drops, then comes back: one more try
+        adb.ensure().await.unwrap();
+        fake.devices(&[wifi, usb]);
+        adb.ensure().await.unwrap();
+        assert_eq!(count(&fake.calls(), &rule(wifi)), 2);
+    }
+
+    #[test]
+    fn wifi_adb_serials_are_told_apart_from_usb_ones() {
+        for serial in [
+            "192.168.1.5:5555",
+            "[fe80::1]:5555",
+            "adb-8UE5T17A26006928-AbCdEf._adb-tls-connect._tcp",
+        ] {
+            assert!(over_network(serial), "{serial}");
+        }
+        for serial in ["8UE5T17A26006928", "emulator-5554", "R58M123ABC"] {
+            assert!(!over_network(serial), "{serial}");
+        }
     }
 
     #[tokio::test]
@@ -980,7 +1067,8 @@ mod tests {
 
     #[tokio::test]
     async fn a_failing_command_ends_the_round_with_its_exit_code() {
-        // like the C# agent: only "reverse --list" is allowed to fail; a refused "reverse" ends the round
+        // like the C# agent: only "reverse --list" is allowed to fail; a refused "reverse" ends the round (except on
+        // Wi-Fi adb: a_wifi_phone_that_refuses_a_reverse_rule_does_not_end_the_round)
         let fake = FakeAdb::with(|f| f.devices = vec!["FAKE1".into()]);
         let (_d, cfg) = test_cfg("{}");
         let adb = AdbReverse::new(cfg, 8765, Arc::new(Refuses(fake, "reverse tcp:8765")));
