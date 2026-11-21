@@ -46,6 +46,8 @@ PHASE_BY_METHOD: dict[str, int] = {
     "LanTests.TheWebhookKeyOpensOnlyWebhooks": 4,
     "LanTests.TokensAreComparedExactly": 4,
     "LanTests.VirtualAdaptersAreSkippedUnlessTheyCarryTheDefaultRoute": 2,
+    # needs Lan.AllowedOverLan, which comes with the Wi-Fi listener
+    "SpectrumAnalyzerTests.ThePhoneMayAskForBandsOverWifi": 4,
     # AppRestartTests.cs also holds SessionEndingTests (Windows session end, with the tray in a later plan)
     "AppRestartTests.TheSetupLoginItemAndSystemdAreServiceManagers": 1,
     "AppRestartTests.ATerminalOrTheTrayIsNot": 1,

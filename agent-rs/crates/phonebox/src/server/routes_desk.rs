@@ -32,6 +32,26 @@ pub fn routes() -> Router<AppState> {
         .route("/api/dictate", post(dictate))
         .route("/api/media/{action}", post(media_action))
         .route("/api/art", get(art))
+        .route("/api/spectrum", get(spectrum))
+}
+
+/// The Spectrum bars widget: each call keeps capture running for a few seconds and answers the latest bands (the live
+/// stream also sends them as "spectrum" events; panels without the stream poll this instead). Only band levels leave
+/// the agent, never audio; nothing is captured unless an enabled page has the widget.
+async fn spectrum(State(s): State<AppState>) -> Response {
+    let analyzer = s.spectrum.clone();
+    let shown = tokio::task::spawn_blocking(move || analyzer.want())
+        .await
+        .unwrap_or(false);
+    json_response(
+        StatusCode::OK,
+        &json!({
+            "shown": shown,
+            "active": s.spectrum.active(),
+            "fps": crate::spectrum_analyzer::FPS,
+            "b": if shown { s.spectrum.frame() } else { None },
+        }),
+    )
 }
 
 /// playpause, next, prev, seek (`ms`): a radio station handles it when one is the current media, else the system's
@@ -1545,5 +1565,37 @@ mod tests {
         let v = crate::state::StateSource::snapshot(&source);
         assert_eq!(v["app"], "Spotify");
         assert_eq!(v["ageMs"], 0);
+    }
+
+    // ---- spectrum ----
+
+    #[tokio::test]
+    async fn the_spectrum_route_answers_whether_it_is_shown_and_the_bands() {
+        let (_dir, state) = test_state();
+        let app = build_router(state.clone());
+        let r = request(&app, "GET", "/api/spectrum", &[], vec![]).await;
+        assert_eq!(r.status, StatusCode::OK);
+        assert_eq!(
+            r.json(),
+            serde_json::json!({"shown": false, "active": false, "fps": 30, "b": null})
+        );
+
+        let page = serde_json::json!({"pages": [{"id": "p", "title": "P",
+            "widgets": [{"id": "s", "type": "spectrum", "x": 0, "y": 0, "w": 6, "h": 3}]}]});
+        state.cfg.save(&page.to_string(), None).unwrap();
+        state
+            .spectrum
+            .pretend_running(vec![7; crate::spectrum_analyzer::BANDS]);
+        let r = request(&app, "GET", "/api/spectrum", &[], vec![]).await;
+        let v = r.json();
+        assert_eq!(
+            (v["shown"].clone(), v["active"].clone(), v["fps"].clone()),
+            (
+                serde_json::json!(true),
+                serde_json::json!(true),
+                serde_json::json!(30)
+            )
+        );
+        assert_eq!(v["b"].as_array().unwrap().len(), 48);
     }
 }

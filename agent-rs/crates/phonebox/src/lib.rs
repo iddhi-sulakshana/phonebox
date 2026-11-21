@@ -37,6 +37,7 @@ pub mod shortcut_icon_uploads;
 pub mod shortcut_icons;
 pub mod shortcuts;
 pub mod single_instance;
+pub mod spectrum_analyzer;
 pub mod stack_widgets;
 pub mod state;
 pub mod state_frame_cache;

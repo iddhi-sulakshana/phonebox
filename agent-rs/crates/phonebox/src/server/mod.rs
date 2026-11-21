@@ -143,6 +143,8 @@ pub struct AppState {
     /// The control deck's radio stations in front of the system media (plan 6; [`crate::media_monitor::NoDeck`] until
     /// then).
     pub deck: Arc<dyn crate::media_monitor::MediaDeck>,
+    /// The Spectrum bars widget's band levels (`/api/spectrum`, the stream's "spectrum" events).
+    pub spectrum: Arc<crate::spectrum_analyzer::SpectrumAnalyzer>,
 }
 
 /// Serializes the writes that move the config version for shortcut icons (upload, removal) with the settings save.
@@ -185,6 +187,7 @@ impl AppState {
             dictation: crate::dictation::Dictation::new(cfg.clone()),
             media: crate::media_monitor::MediaMonitor::new(),
             deck: Arc::new(crate::media_monitor::NoDeck),
+            spectrum: crate::spectrum_analyzer::SpectrumAnalyzer::new(cfg.clone()),
             icons: Arc::new(crate::shortcut_icon_uploads::ShortcutIconUploads::new(
                 icons_dir,
             )),

@@ -82,6 +82,8 @@ async fn run_stream(s: AppState, is_phone: bool, via: &str, tx: mpsc::Sender<Byt
     let mut seq = s.push.seq();
     let mut last_work = String::new();
     let (mut next, mut last_state, mut tick, mut poked) = (0i64, 0i64, 0u64, false);
+    let mut last_spectrum = 0i64;
+    let spectrum_every = 1000 / crate::spectrum_analyzer::FPS;
     'stream: while !s.stop.is_stopped() {
         for e in s.push.since(seq) {
             if !send(&tx, &s, sse("event", &to_dotnet_json_compact(&e))).await {
@@ -116,10 +118,26 @@ async fn run_stream(s: AppState, is_phone: bool, via: &str, tx: mpsc::Sender<Byt
             tick += 1;
             next = (now / 1000 + 1) * 1000; // the next whole second, the same for every stream (see AppState.frames)
         }
+        // spectrum frames for a visualizer on screen (the analyzer runs only while a panel asks for it). While capture
+        // runs, every open stream gets them: the stream is opened by the app shell and /api/spectrum by the panel, and
+        // nothing ties the two together. The frames are small (48 numbers) and capture stops ~5 s after the last ask.
+        let spectrum_active = s.spectrum.active();
+        if spectrum_active && now_ms() - last_spectrum >= spectrum_every - 3 {
+            last_spectrum = now_ms();
+            if let Some(bands) = s.spectrum.frame() {
+                let json = to_dotnet_json_compact(&serde_json::json!({ "b": bands }));
+                if !send(&tx, &s, sse("spectrum", &json)).await {
+                    break;
+                }
+            }
+        }
         let mut wait = next - now_ms();
         // a change that arrived within 100 ms of the last state waits out the rest of that gap
         if poked {
             wait = wait.min(last_state + 100 - now_ms());
+        }
+        if spectrum_active {
+            wait = wait.min(last_spectrum + spectrum_every - now_ms());
         }
         tokio::select! {
             _ = tokio::time::sleep(Duration::from_millis(wait.max(5) as u64)) => {}
@@ -305,5 +323,34 @@ mod tests {
             "the server was still waiting for the client 5 s after the stop"
         );
         drop(client);
+    }
+
+    #[tokio::test]
+    async fn spectrum_frames_go_out_on_the_stream_while_capture_runs() {
+        let (_dir, state) = test_state();
+        let page = serde_json::json!({"pages": [{"id": "p", "title": "P",
+            "widgets": [{"id": "s", "type": "spectrum", "x": 0, "y": 0, "w": 6, "h": 3}]}]});
+        state.cfg.save(&page.to_string(), None).unwrap();
+        state
+            .spectrum
+            .pretend_running(vec![5; crate::spectrum_analyzer::BANDS]);
+        assert!(state.spectrum.want());
+        let app = build_router(state);
+        let mut body = send(&app, "GET", "/api/stream", &[LOCAL]).await.into_body();
+        let started = std::time::Instant::now();
+        let mut frames = 0;
+        while started.elapsed() < Duration::from_millis(600) {
+            if let Some(f) = next_frame(&mut body, Duration::from_millis(600)).await
+                && f.starts_with("event: spectrum\n")
+            {
+                assert!(f.contains(r#"data: {"b":[5,5,5"#), "{f}");
+                frames += 1;
+            }
+        }
+        // 30 a second: well over ten in 600 ms, and never more than the rate allows
+        assert!(
+            (10..=20).contains(&frames),
+            "{frames} spectrum frames in 600 ms"
+        );
     }
 }
