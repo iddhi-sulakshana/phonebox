@@ -15,6 +15,7 @@ pub mod drm_usage;
 pub mod file_logger;
 pub mod gpus;
 pub mod icon_text;
+pub mod key_sender;
 pub mod lan;
 pub mod listening_ports;
 pub mod log;
