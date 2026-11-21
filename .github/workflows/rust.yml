@@ -2,9 +2,11 @@ name: rust
 
 on:
   push:
-    paths: ["agent-rs/**", "tools/parity/**", "tools/check-notices.py", "tools/zip-agent.py", "tools/smoke-agent.py", "tools/test-release-metadata.py", ".github/workflows/rust.yml"]
+    # the agent embeds the panel and (until the switch) the settings page and catalogs from agent/, the C# oracle
+    paths: ["agent-rs/**", "agent/**", "android/app/src/main/assets/www/**", "tools/parity/**", "tools/ui-tests/**", "tools/check-notices.py", "tools/zip-agent.py", "tools/smoke-agent.py", "tools/test-release-metadata.py", ".github/workflows/rust.yml"]
   pull_request:
-    paths: ["agent-rs/**", "tools/parity/**", "tools/check-notices.py", "tools/zip-agent.py", "tools/smoke-agent.py", "tools/test-release-metadata.py", ".github/workflows/rust.yml"]
+    # the agent embeds the panel and (until the switch) the settings page and catalogs from agent/, the C# oracle
+    paths: ["agent-rs/**", "agent/**", "android/app/src/main/assets/www/**", "tools/parity/**", "tools/ui-tests/**", "tools/check-notices.py", "tools/zip-agent.py", "tools/smoke-agent.py", "tools/test-release-metadata.py", ".github/workflows/rust.yml"]
   workflow_dispatch:
   # the release workflow runs the same checks first
   workflow_call:

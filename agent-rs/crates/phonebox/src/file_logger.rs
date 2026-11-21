@@ -8,6 +8,9 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+/// C#'s `WriteLine` ends a line with `Environment.NewLine`: CRLF on Windows, LF elsewhere.
+const NEW_LINE: &str = if cfg!(windows) { "\r\n" } else { "\n" };
+
 /// Start over once the log exceeds 2 MB (checked at start-up).
 const MAX_BYTES: u64 = 2 * 1024 * 1024;
 
@@ -76,7 +79,7 @@ impl FileLogger {
         }
         let message = format();
         let line = format!(
-            "{} {} {}: {}\n",
+            "{} {} {}: {}{NEW_LINE}",
             chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
             level.short(),
             short_category(category),
@@ -189,6 +192,25 @@ mod tests {
                 .unwrap()
                 .starts_with("kept\n")
         );
+    }
+
+    // review of PR 1: agent.log had LF line ends on Windows, where C#'s WriteLine writes CRLF (Notepad shows both)
+    #[test]
+    fn log_lines_end_as_the_platform_writes_them() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("agent.log");
+        let logger = FileLogger::new(&path).unwrap();
+        logger.log(Level::Information, "PhoneBox.Fixture", "one");
+        logger.log(Level::Information, "PhoneBox.Fixture", "two");
+        let text = std::fs::read_to_string(&path).unwrap();
+        if cfg!(windows) {
+            assert!(
+                text.ends_with("two\r\n") && text.contains("one\r\n"),
+                "{text:?}"
+            );
+        } else {
+            assert!(text.ends_with("two\n") && !text.contains('\r'), "{text:?}");
+        }
     }
 
     #[test]
