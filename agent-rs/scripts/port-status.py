@@ -39,6 +39,12 @@ PHASE_BY_FILE = {
     "MediaArtworkTests": 3, "MediaArtworkBackoffTests": 3, "IconEncodingTests": 3, "AudioCacheTests": 3,
     "TerminalStandInTests": 3,
     "PairingTests": 4,
+    # phase 5 (AI and dev)
+    "QuestionPromptTests": 5, "ApprovalOutcomeTests": 5, "ApprovalExpiryTests": 5, "SessionDetailsTests": 5,
+    "SessionTitleTests": 5, "WorkBuddyNamesTests": 5, "ClaudeQuotaBackoffTests": 5, "ClaudeQuotaCacheTests": 5,
+    "ClaudeQuotaScheduleTests": 5, "CodexQuotaTests": 5, "QuotaConnectTests": 5, "AntigravityTests": 5,
+    "CodexBarTests": 5, "ClaudeTranscriptTests": 5, "DockerTests": 5, "DockerActionTests": 5, "ToolProcessTests": 5,
+    "CommandVisibilityTests": 5,
 }
 # Files that mix phases: the phase of single methods ("Class.Method"); the rest of such a file stays unassigned.
 PHASE_BY_METHOD: dict[str, int] = {
@@ -75,6 +81,16 @@ PHASE_BY_METHOD: dict[str, int] = {
     "RuleTests.MacroShortcutStepsUpdateToggleStateAndRunOffCmd": 3,
     # StateSignal.MediaChanged compares media snapshots: it comes with the media monitor
     "StateSignalTests.AMediaChangeThatMattersPokesButTheTickingPositionDoesNot": 3,
+    # mixed files: the AI and dev monitors' checks (phase 5); CodexBarTests' RuleEngine check comes with the rules (6)
+    "MonitorAuditTests.CodexBarTextsDoNotDependOnTheWindowsLocale": 5,
+    "MonitorAuditTests.ClaudeSessionFileOfAReusedPidIsNotShownAsALiveSession": 5,
+    "MonitorAuditTests.QuotaLimitWhoseWindowHasResetIsNotReportedAsUsedUp": 5,
+    "MonitorAuditTests.CodexRolloutsUnderOneMegabyteDoNotDropFirstLineTurnContextOrRateLimits": 5,
+    "MonitorAuditTests.CodexProjectComesFromALongOrBomPrefixedFirstRecordAndWaitsForAnIncompleteOne": 5,
+    "AuditRegressionTests.ABackgroundProcessLeftByTheCommandDoesNotBlockTheWidget": 5,
+    "StoreFollowUpTests.ReplacingClaudeSettingsKeepsThemOwnerOnly": 5,
+    "StoreFollowUpTests.AMalformedHooksValueIsLeftAsItIs": 5,
+    "CodexBarTests.QuotaAboveRuleKeepsFiringForCachedLimitsWithErrorAndSkipsOmittedProviders": 6,
 }
 
 # xUnit test classes are public; private helpers (Fixture, Handler, FakeRun…) and text such as "<class AGX…>" inside a
