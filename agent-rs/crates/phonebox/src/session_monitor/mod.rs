@@ -1,6 +1,14 @@
 //! Port of `SessionMonitor.cs`: the AI coding sessions running on this PC (Claude Code, Codex, Cursor), for the
 //! phone's Sessions widget (`/api/work` and the stream's `work` event).
 
+mod codex;
+mod cursor;
+
+pub use codex::{CodexDetails, read_codex_cwd, read_codex_details};
+pub use cursor::{
+    cursor_project_fallback, cursor_project_slug, default_workspace_storage, read_cursor_last_role,
+};
+
 use serde::Serialize;
 
 use std::collections::HashMap;
@@ -88,6 +96,8 @@ pub struct SessionMonitor {
     sessions: RwLock<Vec<AgentSession>>,
     titles: Mutex<HashMap<PathBuf, TitleEntry>>,
     transcripts: Arc<ClaudeTranscript>,
+    codex: Mutex<codex::CodexState>,
+    cursor: Mutex<cursor::CursorState>,
 }
 
 impl SessionMonitor {
@@ -98,6 +108,8 @@ impl SessionMonitor {
             sessions: RwLock::new(Vec::new()),
             titles: Mutex::new(HashMap::new()),
             transcripts: Arc::new(ClaudeTranscript::new()),
+            codex: Mutex::new(codex::CodexState::default()),
+            cursor: Mutex::new(cursor::CursorState::default()),
         })
     }
 
@@ -129,6 +141,30 @@ impl SessionMonitor {
     /// What the monitor has read (the loop; tests seed it).
     pub fn set_sessions(&self, sessions: Vec<AgentSession>) {
         *self.sessions.write().unwrap_or_else(|e| e.into_inner()) = sessions;
+    }
+
+    /// One pass: Claude Code, Codex and (when Settings › General › Cursor sessions is on) Cursor, then the
+    /// conversation cache drops what can no longer be asked for. Blocking file reads: run it off the async workers.
+    pub fn tick(&self) {
+        let titles = self.share_titles();
+        let mut list = self.read_claude(&self.home, &alive, titles);
+        list.extend(self.read_codex(&self.home.join(".codex").join("sessions")));
+        // Cursor sessions are off until Settings › General › Cursor sessions is on
+        if self.cfg.as_ref().is_some_and(|c| c.get().cursor.sessions) {
+            let storage = cursor::default_workspace_storage(&self.home);
+            list.extend(self.read_cursor(&self.home.join(".cursor").join("projects"), &storage));
+        }
+        let claude: Vec<String> = list
+            .iter()
+            .filter(|s| s.tool == "claude")
+            .map(|s| s.id.strip_prefix("claude:").unwrap_or(&s.id).to_string())
+            .collect();
+        let share = self
+            .cfg
+            .as_ref()
+            .is_some_and(|c| c.get().claude.share_conversation);
+        self.set_sessions(list);
+        self.transcripts.trim(&claude, share, None);
     }
 
     fn share_titles(&self) -> bool {
@@ -407,6 +443,29 @@ fn str_of<'a>(e: &'a Value, key: &str) -> Option<&'a str> {
 
 fn long_of(e: &Value, key: &str) -> Option<i64> {
     e.get(key).and_then(Value::as_i64)
+}
+
+/// Every file under `root` (folders followed recursively, symbolic links not) that `accept` takes.
+fn walk_files(root: &Path, accept: &dyn Fn(&Path, &std::fs::Metadata) -> bool) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut dirs = vec![root.to_path_buf()];
+    while let Some(dir) = dirs.pop() {
+        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            let path = entry.path();
+            if kind.is_dir() {
+                dirs.push(path);
+            } else if kind.is_file()
+                && let Ok(meta) = entry.metadata()
+                && accept(&path, &meta)
+            {
+                found.push(path);
+            }
+        }
+    }
+    found
 }
 
 /// The "work" data the phone gets, on the live stream and on the polling path alike: sessions and GitHub.
@@ -862,6 +921,52 @@ mod tests {
             ),
             ("claude:7", "app", "idle", 5, 3)
         );
+    }
+
+    #[test]
+    fn a_pass_reads_every_tool_and_trims_the_conversation_cache() {
+        let home = tempfile::tempdir().unwrap();
+        let pid = std::process::id();
+        let sessions = home.path().join(".claude").join("sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        std::fs::write(
+            sessions.join("a.json"),
+            json!({"pid": pid, "sessionId": "abcdef12-3456", "cwd": "/w/app", "status": "busy"})
+                .to_string(),
+        )
+        .unwrap();
+        let codex = home.path().join(".codex").join("sessions").join("2026");
+        std::fs::create_dir_all(&codex).unwrap();
+        std::fs::write(
+            codex.join("rollout-2026-11-17-0000-12345678.jsonl"),
+            codex::tests::line("session_meta", json!({"cwd": "/w/other"})),
+        )
+        .unwrap();
+        // a cached chat whose session is not running goes on the pass
+        let chats = home.path().join(".claude").join("projects").join("-w");
+        std::fs::create_dir_all(&chats).unwrap();
+        let ended = chats.join("bbbbbbbb-0001.jsonl");
+        std::fs::write(
+            &ended,
+            "{\"type\":\"user\",\"message\":{\"content\":\"hi\"}}\n",
+        )
+        .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = dir.path().join("config.json");
+        std::fs::write(&cfg, r#"{"claude":{"shareConversation":true}}"#).unwrap();
+        let m = SessionMonitor::new(Some(Arc::new(ConfigStore::new(cfg))), home.path().into());
+        m.transcripts().read(&ended);
+        assert!(m.transcripts().is_cached(&ended));
+        m.tick();
+        let tools: Vec<String> = m.snapshot().iter().map(|s| s.id.clone()).collect();
+        assert_eq!(
+            tools,
+            [
+                "claude:abcdef12-3456",
+                "codex:rollout-2026-11-17-0000-12345678.jsonl"
+            ]
+        );
+        assert!(!m.transcripts().is_cached(&ended));
     }
 
     #[test]
