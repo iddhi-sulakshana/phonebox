@@ -57,10 +57,17 @@ fn main() -> ExitCode {
     let system = phonebox::system_monitor::SystemMonitor::new(cfg.clone());
     let ping = phonebox::ping_monitor::PingMonitor::new(cfg.clone());
     let audio = phonebox::audio_control::AudioControl::new();
+    let media = phonebox::media_monitor::MediaMonitor::new();
+    let deck: Arc<dyn phonebox::media_monitor::MediaDeck> =
+        Arc::new(phonebox::media_monitor::NoDeck);
     let sources = phonebox::state::StateSources::phase1()
         .with_pc(Box::new(system.clone()))
         .with_ping(Box::new(ping.clone()))
         .with_audio(Box::new(audio.clone()))
+        .with_media(Box::new(phonebox::media_monitor::MediaState {
+            media: media.clone(),
+            deck: deck.clone(),
+        }))
         .with_toggles(Box::new(phonebox::shortcuts::Toggles {
             cfg: cfg.clone(),
             push: push.clone(),
@@ -70,6 +77,10 @@ fn main() -> ExitCode {
     state.system = system;
     state.ping = ping;
     state.audio = audio;
+    state.deck = deck;
+    // started here, on its own thread: the server never stops it before the process ends
+    media.start(state.stop.clone());
+    state.media = media;
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
     let result = runtime.block_on(serve(state, config_path));
     push.dispose();

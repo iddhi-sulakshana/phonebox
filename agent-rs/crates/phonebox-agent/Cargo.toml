@@ -10,11 +10,15 @@ publish.workspace = true
 [lints]
 workspace = true
 
+[features]
+default = ["tls"]
+tls = ["phonebox/tls"]
+
 [[bin]]
 name = "PhoneBoxAgent"
 path = "src/main.rs"
 
 [dependencies]
 axum = "0.8"
-phonebox = { path = "../phonebox" }
+phonebox = { path = "../phonebox", default-features = false }
 tokio = { version = "1", features = ["full"] }

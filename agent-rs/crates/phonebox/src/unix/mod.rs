@@ -4,6 +4,7 @@
 pub mod apple_smc;
 pub mod audio_control;
 pub mod mac_audio_probe;
+pub mod media_monitor;
 pub mod sh;
 pub mod unix_proc;
 pub mod unix_system;

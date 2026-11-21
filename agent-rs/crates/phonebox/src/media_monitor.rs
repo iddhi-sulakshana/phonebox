@@ -135,8 +135,53 @@ pub fn friendly_app(id: &str) -> String {
     file.rfind('.').map_or(file, |dot| &file[..dot]).to_string()
 }
 
+/// What the media routes and the state ask of the platform's monitor (a fake in tests).
+pub trait SystemMedia: Send + Sync {
+    fn snapshot(&self) -> Option<MediaSnapshot>;
+    fn art(&self) -> Option<std::sync::Arc<AlbumArt>>;
+    /// playpause, next, prev or seek (to `ms`); false when it did not work or the action is unknown.
+    fn control(&self, action: &str, ms: Option<i64>) -> bool;
+    fn pause(&self) -> bool;
+}
+
+/// `media` in the state: the deck's view of the system media (a playing station first).
+pub struct MediaState {
+    pub media: std::sync::Arc<dyn SystemMedia>,
+    pub deck: std::sync::Arc<dyn MediaDeck>,
+}
+
+impl crate::state::StateSource for MediaState {
+    fn snapshot(&self) -> serde_json::Value {
+        serde_json::to_value(self.deck.effective_media(self.media.snapshot()))
+            .unwrap_or(serde_json::Value::Null)
+    }
+}
+
+/// The platform's monitor: GSMTC on Windows, playerctl / nowplaying-cli elsewhere.
+#[cfg(not(windows))]
+pub use crate::unix::media_monitor::MediaMonitor;
 #[cfg(windows)]
 pub use win::MediaMonitor;
+
+macro_rules! system_media_for {
+    ($t:ty) => {
+        impl SystemMedia for $t {
+            fn snapshot(&self) -> Option<MediaSnapshot> {
+                <$t>::snapshot(self)
+            }
+            fn art(&self) -> Option<std::sync::Arc<AlbumArt>> {
+                <$t>::art(self)
+            }
+            fn control(&self, action: &str, ms: Option<i64>) -> bool {
+                <$t>::control(self, action, ms)
+            }
+            fn pause(&self) -> bool {
+                <$t>::pause(self)
+            }
+        }
+    };
+}
+system_media_for!(MediaMonitor);
 
 /// Windows: the current GSMTC media session (Spotify, browsers, ...). One thread owns the WinRT objects: it reads the
 /// session every second, and control and pause requests reach it over a channel.

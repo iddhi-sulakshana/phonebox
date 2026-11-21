@@ -53,6 +53,12 @@ impl StateSources {
         self
     }
 
+    /// `media` from the media monitor, through the control deck.
+    pub fn with_media(mut self, media: Box<dyn StateSource>) -> StateSources {
+        self.media = media;
+        self
+    }
+
     /// `toggles` from the shortcuts.
     pub fn with_toggles(mut self, toggles: Box<dyn StateSource>) -> StateSources {
         self.toggles = toggles;

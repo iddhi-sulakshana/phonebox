@@ -138,6 +138,11 @@ pub struct AppState {
     pub apps: Arc<crate::app_catalog::AppCatalog>,
     /// The Dictation widget's typing (`/api/dictate`).
     pub dictation: Arc<crate::dictation::Dictation>,
+    /// What is playing (`/api/media`, `/api/art`); main starts the platform's monitor and puts it here.
+    pub media: Arc<dyn crate::media_monitor::SystemMedia>,
+    /// The control deck's radio stations in front of the system media (plan 6; [`crate::media_monitor::NoDeck`] until
+    /// then).
+    pub deck: Arc<dyn crate::media_monitor::MediaDeck>,
 }
 
 /// Serializes the writes that move the config version for shortcut icons (upload, removal) with the settings save.
@@ -178,6 +183,8 @@ impl AppState {
             adb,
             apps: crate::app_catalog::AppCatalog::new(cfg.clone()),
             dictation: crate::dictation::Dictation::new(cfg.clone()),
+            media: crate::media_monitor::MediaMonitor::new(),
+            deck: Arc::new(crate::media_monitor::NoDeck),
             icons: Arc::new(crate::shortcut_icon_uploads::ShortcutIconUploads::new(
                 icons_dir,
             )),

@@ -30,6 +30,58 @@ pub fn routes() -> Router<AppState> {
         .route("/api/apps/open", post(open_app))
         .route("/api/trackpad", any(trackpad))
         .route("/api/dictate", post(dictate))
+        .route("/api/media/{action}", post(media_action))
+        .route("/api/art", get(art))
+}
+
+/// playpause, next, prev, seek (`ms`): a radio station handles it when one is the current media, else the system's
+/// player; `{"ok":true,"media":…}` with what plays now, or 400. The phone's other screens see it at once.
+async fn media_action(
+    State(s): State<AppState>,
+    Path(action): Path<String>,
+    Query(q): QueryList,
+) -> Response {
+    let Ok(ms) = super::query::int64(&q, "ms") else {
+        return bad_request();
+    };
+    let (media, deck) = (s.media.clone(), s.deck.clone());
+    let outcome = tokio::task::spawn_blocking(move || {
+        let mut outcome = (false, None);
+        deck.run_with_media_focus(&mut || {
+            let system = media.snapshot();
+            if let Some(handled) = deck.try_control_radio(&action, system.as_ref()) {
+                outcome = (handled, deck.effective_media(media.snapshot()));
+                return;
+            }
+            let starting = action == "next"
+                || action == "prev"
+                || (action == "playpause" && system.as_ref().map(|m| m.playing) != Some(true));
+            let ok = media.control(&action, ms);
+            if ok && starting {
+                deck.stop_all_radios();
+            }
+            outcome = (ok, deck.effective_media(media.snapshot()));
+        });
+        outcome
+    })
+    .await;
+    crate::state_signal::poke();
+    match outcome {
+        Ok((true, now)) => json_response(StatusCode::OK, &json!({ "ok": true, "media": now })),
+        _ => bad_request(),
+    }
+}
+
+/// The current cover, or 404.
+async fn art(State(s): State<AppState>) -> Response {
+    match s.media.art() {
+        Some(art) => (
+            [(header::CONTENT_TYPE, art.mime.clone())],
+            art.bytes.clone(),
+        )
+            .into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 /// The Dictation widget's text, typed into the app in front: `{"ok":true}`, or the reason with its status.
@@ -1392,5 +1444,106 @@ mod tests {
         assert_eq!(r.status, StatusCode::BAD_REQUEST);
         assert_eq!(r.json(), serde_json::json!({"error": "nothing to type"}));
         assert_eq!(typed.lock().unwrap().len(), 1);
+    }
+
+    // ---- media ----
+
+    struct FakeMedia {
+        playing: Mutex<bool>,
+        calls: Mutex<Vec<String>>,
+    }
+
+    impl crate::media_monitor::SystemMedia for FakeMedia {
+        fn snapshot(&self) -> Option<crate::media_monitor::MediaSnapshot> {
+            Some(crate::media_monitor::MediaSnapshot::new(
+                "Spotify",
+                "One",
+                "A",
+                "B",
+                *self.playing.lock().unwrap(),
+                1000,
+                200000,
+                0,
+                true,
+            ))
+        }
+        fn art(&self) -> Option<Arc<crate::media_monitor::AlbumArt>> {
+            Some(Arc::new(crate::media_monitor::AlbumArt {
+                bytes: vec![0xff, 0xd8, 0xff],
+                mime: "image/jpeg".into(),
+            }))
+        }
+        fn control(&self, action: &str, ms: Option<i64>) -> bool {
+            self.calls.lock().unwrap().push(format!("{action} {ms:?}"));
+            if action == "playpause" {
+                let mut p = self.playing.lock().unwrap();
+                *p = !*p;
+            }
+            matches!(action, "playpause" | "next" | "prev" | "seek")
+        }
+        fn pause(&self) -> bool {
+            false
+        }
+    }
+
+    #[tokio::test]
+    async fn media_actions_answer_what_plays_now_and_bind_like_asp_net() {
+        let (_dir, mut state) = test_state();
+        let fake = Arc::new(FakeMedia {
+            playing: Mutex::new(false),
+            calls: Mutex::new(vec![]),
+        });
+        state.media = fake.clone();
+        let app = build_router(state);
+        let before = crate::state_signal::version();
+        let r = request(&app, "POST", "/api/media/playpause", &[], vec![]).await;
+        assert_eq!(r.status, StatusCode::OK);
+        let v = r.json();
+        assert_eq!(v["ok"], true);
+        assert_eq!(v["media"]["playing"], true);
+        assert_eq!(v["media"]["title"], "One");
+        assert!(
+            crate::state_signal::version() > before,
+            "the phone's other screens are poked"
+        );
+
+        let r = request(&app, "POST", "/api/media/seek?MS=5000", &[], vec![]).await;
+        assert_eq!(r.status, StatusCode::OK);
+        let r = request(&app, "POST", "/api/media/bogus", &[], vec![]).await;
+        assert_eq!((r.status, r.body.len()), (StatusCode::BAD_REQUEST, 0));
+        let r = request(&app, "POST", "/api/media/seek?ms=x", &[], vec![]).await;
+        assert_eq!(r.status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            *fake.calls.lock().unwrap(),
+            ["playpause None", "seek Some(5000)", "bogus None"]
+        );
+
+        let r = request(&app, "GET", "/api/art", &[], vec![]).await;
+        assert_eq!(r.status, StatusCode::OK);
+        assert_eq!(
+            (r.header("content-type"), r.body.as_slice()),
+            ("image/jpeg", &[0xff, 0xd8, 0xff][..])
+        );
+    }
+
+    #[tokio::test]
+    async fn without_a_cover_the_art_is_404_and_the_state_has_no_media() {
+        let (_dir, state) = test_state();
+        let media = state.media.clone();
+        let app = build_router(state);
+        if media.art().is_none() {
+            let r = request(&app, "GET", "/api/art", &[], vec![]).await;
+            assert_eq!((r.status, r.body.len()), (StatusCode::NOT_FOUND, 0));
+        }
+        let source = crate::media_monitor::MediaState {
+            media: Arc::new(FakeMedia {
+                playing: Mutex::new(true),
+                calls: Mutex::new(vec![]),
+            }),
+            deck: Arc::new(crate::media_monitor::NoDeck),
+        };
+        let v = crate::state::StateSource::snapshot(&source);
+        assert_eq!(v["app"], "Spotify");
+        assert_eq!(v["ageMs"], 0);
     }
 }
