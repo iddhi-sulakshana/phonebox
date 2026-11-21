@@ -1,0 +1,70 @@
+name: lifecycle
+
+# The self-update across two real releases on a clean Mac: setup.sh installs release `from` under a scratch HOME, the
+# agent starts on a spare port, and POST /api/update/check and /api/update/apply must bring it to release `to` (a
+# newer one, normally the next pre-release) from this repository's GitHub releases. Run it by hand once both releases
+# are published; agent-rs/scripts/remote-update-check.sh proves the same path against a local fake GitHub before that.
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: The release setup.sh installs first (for example 1.0.0-alpha.1)
+        required: true
+      to:
+        description: The release the agent must update itself to (for example 1.0.0-alpha.2)
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  self-update:
+    runs-on: macos-latest
+    env:
+      FROM: ${{ inputs.from }}
+      TO: ${{ inputs.to }}
+      PORT: '18765'
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false   # the job runs downloaded programs and needs no Git access
+      - name: Install the first release under a scratch HOME
+        run: |
+          export HOME="$RUNNER_TEMP/home"; mkdir -p "$HOME"
+          bash setup.sh --version "$FROM" --no-autostart --no-start --no-phone --yes
+          app="$HOME/Library/Application Support/PhoneBox/app"
+          test -x "$app/PhoneBoxAgent"
+          echo "APP=$app" >> "$GITHUB_ENV"
+      - name: Start it on a spare port
+        run: |
+          export HOME="$RUNNER_TEMP/home"
+          printf '{"deviceSerial": "__lifecycle__", "updates": {"auto": false, "repo": "%s"}, "lan": {"enabled": false}}\n' \
+            "${{ github.repository }}" > "$RUNNER_TEMP/config.json"
+          nohup "$APP/PhoneBoxAgent" --config "$RUNNER_TEMP/config.json" --port "$PORT" > "$RUNNER_TEMP/agent.log" 2>&1 &
+          for _ in $(seq 1 60); do curl -fsS "http://127.0.0.1:$PORT/api/info" > info.json 2>/dev/null && break; sleep 1; done
+          python3 -c 'import json, os; v = json.load(open("info.json"))["version"]; assert v == os.environ["FROM"], v; print("running", v)'
+      - name: Check and apply the update
+        run: |
+          curl -fsS -X POST "http://127.0.0.1:$PORT/api/update/check" | tee check.json; echo
+          python3 -c 'import json, os; s = json.load(open("check.json")); assert s["latest"] == os.environ["TO"] and s["agentUpdate"], s'
+          test "$(curl -sS -o /dev/null -w '%{http_code}' -X POST "http://127.0.0.1:$PORT/api/update/apply")" = 202
+          for _ in $(seq 1 120); do
+            v=$(curl -fsS "http://127.0.0.1:$PORT/api/info" 2>/dev/null | python3 -c 'import json, sys; print(json.load(sys.stdin)["version"])' 2>/dev/null || true)
+            [ "$v" = "$TO" ] && break
+            sleep 1
+          done
+          echo "now running $v"
+          test "$v" = "$TO"
+      - name: The updated agent is the release's signed binary
+        run: |
+          codesign --verify --strict --verbose=2 "$APP/PhoneBoxAgent"
+          codesign -d -r- "$APP/PhoneBoxAgent" 2>&1 | grep 'identifier "net.oxog.phonebox.agent"'
+      - name: Agent log
+        if: always()
+        run: cat "$RUNNER_TEMP/agent.log" || true
+      - name: Stop the agent
+        if: always()
+        run: |
+          pid=$(lsof -ti "tcp:$PORT" -sTCP:LISTEN || true)
+          if [ -n "$pid" ]; then kill "$pid"; fi

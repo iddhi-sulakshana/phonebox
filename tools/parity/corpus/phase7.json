@@ -1,0 +1,72 @@
+[
+ {
+  "name": "update: status before any check (no network yet; neither agent runs from the install folder)",
+  "path": "/api/update",
+  "ignore": [
+   "/status/agentVersion"
+  ]
+ },
+ {
+  "name": "update: install the app with no phone connected",
+  "method": "POST",
+  "path": "/api/phone/install"
+ },
+ {
+  "name": "update: apply with no release found (202, empty)",
+  "method": "POST",
+  "path": "/api/update/apply",
+  "compare": "bytes"
+ },
+ {
+  "name": "update: the status after apply",
+  "path": "/api/update",
+  "wait": 1,
+  "ignore": [
+   "/status/agentVersion"
+  ]
+ },
+ {
+  "name": "wifi: the update status is local only",
+  "wifi": true,
+  "path": "/api/update",
+  "headers": {
+   "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A",
+   "X-PhoneBox-App": "0.9.22"
+  }
+ },
+ {
+  "name": "wifi: installing the phone app is local only",
+  "wifi": true,
+  "method": "POST",
+  "path": "/api/phone/install",
+  "headers": {
+   "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A",
+   "X-PhoneBox-App": "0.9.22"
+  }
+ },
+ {
+  "name": "wifi: an update check is local only",
+  "wifi": true,
+  "method": "POST",
+  "path": "/api/update/check",
+  "headers": {
+   "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A",
+   "X-PhoneBox-App": "0.9.22"
+  }
+ },
+ {
+  "name": "wifi: applying an update is local only",
+  "wifi": true,
+  "method": "POST",
+  "path": "/api/update/apply",
+  "headers": {
+   "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A",
+   "X-PhoneBox-App": "0.9.22"
+  }
+ },
+ {
+  "name": "wifi: the update status without the phone key",
+  "wifi": true,
+  "path": "/api/update"
+ }
+]
