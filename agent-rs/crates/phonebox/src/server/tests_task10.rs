@@ -174,7 +174,7 @@ async fn settings_page_and_icon() {
     assert_eq!(page.headers()["content-type"], "text/html; charset=utf-8");
     assert_eq!(
         body(page).await,
-        include_bytes!("../../../../../agent/PhoneBox.Agent/settings.html")
+        include_bytes!("../../../../assets/settings.html")
     );
     let icon = send(&app, "GET", "/favicon.ico", &[LOCAL]).await;
     assert_eq!(icon.headers()["content-type"], "image/x-icon");

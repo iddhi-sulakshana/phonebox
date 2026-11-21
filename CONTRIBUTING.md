@@ -45,7 +45,7 @@ page lists what reviews keep asking for; following it gets a pull request merged
 - **A new setting** goes in `Config.cs` (with a default and normalization of bad values), in all three
   `config.default*.json` files, and in the settings page. Decide whether the phone needs it; if not, keep it out of
   `ToPublic()`.
-- **A new widget** needs its entry in `agent/PhoneBox.Agent/widgets.json`, the widget in
+- **A new widget** needs its entry in `agent-rs/assets/widgets.json`, the widget in
   `android/app/src/main/assets/www/widgets/`, an icon in `WIDGET_ICONS`, the README count (`tools/check-release.py`
   checks it) and, if it calls the agent, a mock in `tools/pages/demo.js` so the web demo and the UI tests can render
   it. Outside the app (no native bridge) it must show an empty state, not throw.

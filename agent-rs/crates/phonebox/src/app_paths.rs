@@ -156,11 +156,11 @@ pub fn ensure_config() -> io::Result<()> {
     }
     std::fs::create_dir_all(config_dir())?;
     let defaults: &[u8] = if cfg!(target_os = "macos") {
-        include_bytes!("../../../../agent/PhoneBox.Agent/config.default.macos.json")
+        include_bytes!("../../../assets/config.default.macos.json")
     } else if cfg!(windows) {
-        include_bytes!("../../../../agent/PhoneBox.Agent/config.default.json")
+        include_bytes!("../../../assets/config.default.json")
     } else {
-        include_bytes!("../../../../agent/PhoneBox.Agent/config.default.linux.json")
+        include_bytes!("../../../assets/config.default.linux.json")
     };
     let mut file = create_private(&path)?;
     io::Write::write_all(&mut file, defaults)

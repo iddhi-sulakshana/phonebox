@@ -59,7 +59,7 @@ fn resources() {
         | part("CARGO_PKG_VERSION_MINOR") << 32
         | part("CARGO_PKG_VERSION_PATCH") << 16
         | build;
-    let icon = "../../../agent/PhoneBox.Agent/phonebox.ico";
+    let icon = "../../assets/phonebox.ico";
     println!("cargo:rerun-if-changed={icon}");
     let mut res = winresource::WindowsResource::new();
     res.set_icon(icon)

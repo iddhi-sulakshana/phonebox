@@ -8,9 +8,8 @@ use axum::routing::get;
 
 use super::AppState;
 
-pub const SETTINGS_HTML: &[u8] =
-    include_bytes!("../../../../../agent/PhoneBox.Agent/settings.html");
-pub const FAVICON: &[u8] = include_bytes!("../../../../../agent/PhoneBox.Agent/phonebox.ico");
+pub const SETTINGS_HTML: &[u8] = include_bytes!("../../../../assets/settings.html");
+pub const FAVICON: &[u8] = include_bytes!("../../../../assets/phonebox.ico");
 
 /// The panel's files (index.html, main.js, style.css and the widget modules), embedded from the Android app's assets.
 #[derive(rust_embed::RustEmbed)]

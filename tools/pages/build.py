@@ -5,7 +5,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 WWW = ROOT / 'android' / 'app' / 'src' / 'main' / 'assets' / 'www'
-AGENT = ROOT / 'agent' / 'PhoneBox.Agent'
+# the settings page, catalogs and icon the agent embeds
+AGENT = ROOT / 'agent-rs' / 'assets'
 PAGES = Path(__file__).resolve().parent
 
 

@@ -1,4 +1,4 @@
-<p align="center"><img src="agent/PhoneBox.Agent/phonebox.ico" width="72" alt="PhoneBox icon"></p>
+<p align="center"><img src="agent-rs/assets/phonebox.ico" width="72" alt="PhoneBox icon"></p>
 
 <h1 align="center">PhoneBox</h1>
 

@@ -31,7 +31,7 @@ reviews:
         minSdk is 24 (Android 7.0): newer APIs need a Build.VERSION check or a values-vNN resource. Flag new
         permissions, broadcast receivers registered without the right export flag on Android 13+,
         and any change that lets a sandboxed frame or a non-panel request reach the native bridge or the agent.
-    - path: "agent/PhoneBox.Agent/settings.html"
+    - path: "agent-rs/assets/settings.html"
       instructions: |
         Local settings page (127.0.0.1 only). Same DOM rules as the panel. Settings saves use the X-Config-Version
         check; flag writes that bypass it.

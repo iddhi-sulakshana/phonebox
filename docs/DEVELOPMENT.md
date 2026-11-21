@@ -115,8 +115,8 @@ repository root to regenerate the application icon.
 The panel is plain ES modules: [`main.js`](../android/app/src/main/assets/www/main.js) (core, pages, navigation, data
 from the agent) and the widgets in [`widgets/`](../android/app/src/main/assets/www/widgets). A widget is a
 `{ needs, create(box, ctx) → { update(kind) } }` entry in the `W` registry, plus its styles in `style.css` and its catalogue entry
-(name, size, options) in [`widgets.json`](../agent/PhoneBox.Agent/widgets.json), which drives the settings editor.
-Templates live in [`templates.json`](../agent/PhoneBox.Agent/templates.json).
+(name, size, options) in [`widgets.json`](../agent-rs/assets/widgets.json), which drives the settings editor.
+Templates live in [`templates.json`](../agent-rs/assets/templates.json).
 
 ### Isolated agent runs
 

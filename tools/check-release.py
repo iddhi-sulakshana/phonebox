@@ -28,8 +28,8 @@ def check_version(root, final=False):
 
 
 def check_catalog(root, version):
-    widgets = json.loads((root / 'agent/PhoneBox.Agent/widgets.json').read_text(encoding='utf-8'))
-    templates = json.loads((root / 'agent/PhoneBox.Agent/templates.json').read_text(encoding='utf-8'))
+    widgets = json.loads((root / 'agent-rs/assets/widgets.json').read_text(encoding='utf-8'))
+    templates = json.loads((root / 'agent-rs/assets/templates.json').read_text(encoding='utf-8'))
     types = {w['type'] for w in widgets}
     assert len(types) == len(widgets), 'Duplicate widget types'
     assert len({t['id'] for t in templates}) == len(templates), 'Duplicate templates'

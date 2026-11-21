@@ -159,7 +159,7 @@ test('every string in widgets.json and templates.json has a Vietnamese catalog e
 });
 
 test('settings.html keeps no English literal in a position that reaches the screen', async () => {
-  const file = path.join(__dirname, '..', '..', 'agent', 'PhoneBox.Agent', 'settings.html');
+  const file = path.join(__dirname, '..', '..', 'agent-rs', 'assets', 'settings.html');
   const src = fs.readFileSync(file, 'utf8');
   const marker = src.indexOf('<script>');
   const script = marker === -1 ? '' : src.slice(marker);

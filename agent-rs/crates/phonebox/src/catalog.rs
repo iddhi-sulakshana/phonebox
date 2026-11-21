@@ -11,8 +11,8 @@ use crate::config::WidgetConfig;
 pub const COLS: i32 = 12;
 pub const ROWS: i32 = 6;
 
-pub const WIDGETS_JSON: &str = include_str!("../../../../agent/PhoneBox.Agent/widgets.json");
-pub const TEMPLATES_JSON: &str = include_str!("../../../../agent/PhoneBox.Agent/templates.json");
+pub const WIDGETS_JSON: &str = include_str!("../../../assets/widgets.json");
+pub const TEMPLATES_JSON: &str = include_str!("../../../assets/templates.json");
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]

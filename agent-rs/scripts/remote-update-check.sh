@@ -45,9 +45,9 @@ cd "$repo_dir/agent-rs"
 cargo build --release --locked -q -p phonebox-agent
 mkdir -p "$work/a1" "$work/a2" "$work/src" "$work/gh"
 cp target/release/PhoneBoxAgent THIRD-PARTY-NOTICES.txt "$work/a1/"
-# the copy embeds the panel, the settings page and the catalogs from beside it, as the tree does
+# the copy embeds the panel from beside it (android/), as the tree does; the settings page and catalogs come with it
 rsync -a --exclude target ./ "$work/src/agent-rs/"
-ln -s "$repo_dir/agent" "$work/src/agent"; ln -s "$repo_dir/android" "$work/src/android"
+ln -s "$repo_dir/android" "$work/src/android"
 sed -i 's/^version = "1.0.0-alpha.1"$/version = "1.0.0-alpha.2"/' "$work/src/agent-rs/Cargo.toml"
 grep -q '^version = "1.0.0-alpha.2"$' "$work/src/agent-rs/Cargo.toml" || fail "could not bump the copy"
 (cd "$work/src/agent-rs" && CARGO_TARGET_DIR="$repo_dir/agent-rs/target/update-check" cargo build --release --offline -q -p phonebox-agent)
