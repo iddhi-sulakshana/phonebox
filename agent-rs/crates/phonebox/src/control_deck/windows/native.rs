@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use futures_util::future::BoxFuture;
 
 use super::super::models::*;
-use super::{audio, hardware, media, playback, service_state_name};
+use super::{audio, hardware, listen, media, playback, service_state_name, winmm};
 use crate::media_monitor::SystemMedia;
 
 pub struct WindowsDeckNative {
@@ -162,10 +162,14 @@ impl DeckNative for WindowsDeckNative {
     }
 
     fn midi_ports(&self) -> Vec<DeckItem> {
-        vec![]
+        winmm::ports()
     }
 
-    fn midi(&self, _: i32, _: &str, _: i32) -> Result<(), String> {
-        Err("MIDI is unavailable".into())
+    fn midi(&self, port: i32, message: &str, value: i32) -> Result<(), String> {
+        winmm::send(port, message, value)
+    }
+
+    fn listen(&self) -> Option<futures_util::stream::BoxStream<'static, DeckAudioPacket>> {
+        listen::start()
     }
 }

@@ -8,6 +8,19 @@ pub enum MidiError {
     Invalid(&'static str),
 }
 
+/// The texts C# gave the phone: `ArgumentOutOfRangeException`'s for the value, the `ArgumentException` messages as they
+/// are.
+impl std::fmt::Display for MidiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MidiError::ValueOutOfRange => f.write_str(
+                "Specified argument was out of the range of valid values. (Parameter 'value')",
+            ),
+            MidiError::Invalid(message) => f.write_str(message),
+        }
+    }
+}
+
 /// The message packed as WinMM's `midiOutShortMsg` wants it: `b0 | b1 << 8 | b2 << 16`.
 pub fn parse(message: &str, value: i32) -> Result<i32, MidiError> {
     if !(0..=127).contains(&value) {
@@ -69,5 +82,17 @@ mod tests {
         assert_eq!(parse("B0,07:{value}", 1), Ok(0x0107B0));
         assert!(matches!(parse("B0 0x07 1", 0), Err(MidiError::Invalid(_))));
         assert!(matches!(parse("B0", 0), Err(MidiError::Invalid(_))));
+    }
+
+    #[test]
+    fn midi_errors_read_as_the_dotnet_exceptions_did() {
+        assert_eq!(
+            parse("B0 07 {value}", 200).unwrap_err().to_string(),
+            "Specified argument was out of the range of valid values. (Parameter 'value')"
+        );
+        assert_eq!(
+            parse("90 3C", 0).unwrap_err().to_string(),
+            "Wrong MIDI message length"
+        );
     }
 }

@@ -242,17 +242,28 @@ impl ControlDeck {
 
     /// A Voicemeeter parameter's value for the card (`0.##`), or None when it cannot be read.
     pub(super) fn mixer_value(&self, action: &DeckAction) -> Option<String> {
-        if !mixer_parameter(&action.target) || !self.connect_mixer() {
+        if !mixer_parameter(&action.target) {
             return None;
         }
-        self.read_mixer(&action.target)
+        let path = self.cfg.get().controls.mixer_library.clone();
+        let mut mixer = lock(&self.mixer);
+        if !mixer.connect(path.as_deref()) {
+            return None;
+        }
+        mixer
+            .get(&action.target)
             .filter(|v| v.is_finite())
             .map(|v| crate::dotnet_text::format_custom(f64::from(v), 2, false))
     }
 
     /// Sets a Voicemeeter parameter: a gain from -60 to 12 dB, anything else 0 or 1.
     pub(super) fn mixer_action(&self, action: &DeckAction, value: i32) -> DeckResult {
-        if !mixer_parameter(&action.target) || !self.connect_mixer() {
+        if !mixer_parameter(&action.target) {
+            return DeckResult::fail(MIXER_UNSET);
+        }
+        let path = self.cfg.get().controls.mixer_library.clone();
+        let mut mixer = lock(&self.mixer);
+        if !mixer.connect(path.as_deref()) {
             return DeckResult::fail(MIXER_UNSET);
         }
         let level = if action.target.ends_with(".Gain") {
@@ -260,24 +271,11 @@ impl ControlDeck {
         } else {
             value.clamp(0, 1)
         };
-        if self.set_mixer(&action.target, level as f32) {
+        if mixer.set(&action.target, level as f32) {
             DeckResult::ok()
         } else {
             DeckResult::fail("Voicemeeter refused the parameter")
         }
-    }
-
-    /// The Voicemeeter Remote DLL, logged in with its parameters readable (Windows; loaded with the Windows extras).
-    fn connect_mixer(&self) -> bool {
-        false
-    }
-
-    fn read_mixer(&self, _parameter: &str) -> Option<f32> {
-        None
-    }
-
-    fn set_mixer(&self, _parameter: &str, _value: f32) -> bool {
-        false
     }
 }
 

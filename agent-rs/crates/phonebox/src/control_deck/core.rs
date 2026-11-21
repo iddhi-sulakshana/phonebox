@@ -153,6 +153,8 @@ pub struct ControlDeck {
     spotify: Option<Arc<crate::spotify_control::SpotifyControl>>,
     /// What a workflow or routing control last did, shown on its card (`_actionResults`).
     action_results: Mutex<std::collections::HashMap<String, String>>,
+    /// `_mixerGate` and the Voicemeeter DLL it guards.
+    mixer: Mutex<super::windows::Mixer>,
     /// At most two `/api/controls/listen` streams.
     listeners: Arc<tokio::sync::Semaphore>,
     logos: Arc<super::radio_logos::RadioLogoCache>,
@@ -216,6 +218,7 @@ impl ControlDeck {
                 master: options.master,
                 spotify: options.spotify,
                 action_results: Mutex::default(),
+                mixer: Mutex::default(),
                 listeners: Arc::new(tokio::sync::Semaphore::new(2)),
                 logos: options.logos.unwrap_or_else(|| {
                     super::radio_logos::RadioLogoCache::new(
@@ -941,6 +944,7 @@ impl ControlDeck {
             }
         }
         self.tasks.stop_all(Duration::from_secs(8));
+        lock(&self.mixer).dispose();
         self.native.dispose();
     }
 }

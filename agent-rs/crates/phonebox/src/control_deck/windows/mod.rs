@@ -7,11 +7,17 @@ mod audio;
 #[cfg(windows)]
 mod hardware;
 #[cfg(windows)]
+mod listen;
+#[cfg(windows)]
 mod media;
+#[cfg(windows)]
+mod mixer;
 #[cfg(windows)]
 mod native;
 #[cfg(windows)]
 mod playback;
+#[cfg(windows)]
+mod winmm;
 
 #[cfg(windows)]
 pub use native::WindowsDeckNative;
@@ -192,6 +198,208 @@ pub fn parse_display_profile(json: &str) -> Option<DisplayProfile> {
         hz: hz as u32,
         position,
     })
+}
+
+/// The note-off that follows a note-on with a velocity (status 0x9n → 0x8n, same note, velocity 0).
+pub fn note_off(packed: i32) -> Option<i32> {
+    ((packed & 0xF0) == 0x90 && (packed >> 16 & 127) > 0).then_some((packed & 0xFF0F) | 0x80)
+}
+
+/// A WinMM result as NAudio's `MmResult` names it (its number when it has no name).
+pub fn mm_result_name(code: u32) -> String {
+    const NAMES: [&str; 22] = [
+        "NoError",
+        "UnspecifiedError",
+        "BadDeviceId",
+        "NotEnabled",
+        "AlreadyAllocated",
+        "InvalidHandle",
+        "NoDriver",
+        "MemoryAllocationError",
+        "NotSupported",
+        "BadErrorNumber",
+        "InvalidFlag",
+        "InvalidParameter",
+        "HandleBusy",
+        "InvalidAlias",
+        "BadRegistryDatabase",
+        "RegistryKeyNotFound",
+        "RegistryReadError",
+        "RegistryWriteError",
+        "RegistryDeleteError",
+        "RegistryValueNotFound",
+        "NoDriverCallback",
+        "MoreData",
+    ];
+    NAMES
+        .get(code as usize)
+        .map_or_else(|| code.to_string(), |n| n.to_string())
+}
+
+/// A capture format's encoding as NAudio names it: an extensible format by its sub-format (float or PCM), else by its
+/// tag.
+pub fn wave_encoding(tag: u16, float_subformat: bool) -> String {
+    match tag {
+        0xFFFE if float_subformat => "IeeeFloat".into(),
+        0xFFFE => "Pcm".into(),
+        0 => "Unknown".into(),
+        1 => "Pcm".into(),
+        2 => "Adpcm".into(),
+        3 => "IeeeFloat".into(),
+        6 => "ALaw".into(),
+        7 => "MuLaw".into(),
+        other => other.to_string(),
+    }
+}
+
+/// What `/api/controls/listen` tells the phone about the captured audio.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ListenFormat {
+    pub rate: i32,
+    pub channels: i32,
+    pub bits: i32,
+    pub encoding: String,
+}
+
+/// `Channel.CreateBounded(n, DropOldest)`: the capture never waits for the phone; a slow one loses the oldest packets.
+pub struct PacketQueue {
+    items: std::sync::Mutex<std::collections::VecDeque<super::models::DeckAudioPacket>>,
+    capacity: usize,
+}
+
+impl PacketQueue {
+    pub fn new(capacity: usize) -> PacketQueue {
+        PacketQueue {
+            items: Default::default(),
+            capacity,
+        }
+    }
+
+    pub fn push(&self, packet: super::models::DeckAudioPacket) {
+        let mut items = self.items.lock().unwrap_or_else(|e| e.into_inner());
+        if items.len() >= self.capacity {
+            items.pop_front();
+        }
+        items.push_back(packet);
+    }
+
+    fn pop(&self) -> Option<super::models::DeckAudioPacket> {
+        self.items
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .pop_front()
+    }
+}
+
+/// The listen stream's pace: queued packets go out as they come (checked every 30 ms); after 500 ms without one, a
+/// packet with no data in the capture's format keeps the phone's connection (and its settings check) alive. `guard`
+/// lives as long as the stream.
+pub fn listen_stream<G: Send + 'static>(
+    queue: std::sync::Arc<PacketQueue>,
+    format: ListenFormat,
+    guard: G,
+) -> futures_util::stream::BoxStream<'static, super::models::DeckAudioPacket> {
+    use futures_util::StreamExt;
+    use tokio::time::{Duration, Instant};
+    struct State<G> {
+        queue: std::sync::Arc<PacketQueue>,
+        format: ListenFormat,
+        last: Instant,
+        _guard: G,
+    }
+    let state = State {
+        queue,
+        format,
+        last: Instant::now(),
+        _guard: guard,
+    };
+    futures_util::stream::unfold(state, |mut s| async move {
+        loop {
+            if let Some(packet) = s.queue.pop() {
+                s.last = Instant::now();
+                return Some((packet, s));
+            }
+            if s.last.elapsed() > Duration::from_millis(500) {
+                s.last = Instant::now();
+                let f = &s.format;
+                let silence = super::models::DeckAudioPacket {
+                    rate: f.rate,
+                    channels: f.channels,
+                    bits: f.bits,
+                    encoding: f.encoding.clone(),
+                    data: None,
+                };
+                return Some((silence, s));
+            }
+            tokio::time::sleep(Duration::from_millis(30)).await;
+        }
+    })
+    .boxed()
+}
+
+/// The Voicemeeter Remote DLL the mixer controls talk to: loaded from the configured path (again when the path
+/// changes), logged in, and ready when its engine answers. Windows only; elsewhere it never connects.
+#[derive(Default)]
+pub struct Mixer {
+    #[cfg(windows)]
+    link: Option<mixer::Link>,
+}
+
+impl Mixer {
+    /// Connected to the DLL at `path` with its parameters readable (`ConnectMixer` and the dirty check).
+    pub fn connect(&mut self, path: Option<&str>) -> bool {
+        #[cfg(windows)]
+        {
+            let Some(path) =
+                path.filter(|p| !p.trim().is_empty() && std::path::Path::new(p).is_file())
+            else {
+                return false;
+            };
+            if !self.link.as_ref().is_some_and(|l| l.path() == path) {
+                // the old DLL logs out and goes first
+                self.link = None;
+                self.link = mixer::Link::load(path);
+            }
+            self.link.as_ref().is_some_and(|l| l.ready())
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = path;
+            false
+        }
+    }
+
+    pub fn get(&self, name: &str) -> Option<f32> {
+        #[cfg(windows)]
+        {
+            self.link.as_ref()?.get(name)
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = name;
+            None
+        }
+    }
+
+    pub fn set(&self, name: &str, value: f32) -> bool {
+        #[cfg(windows)]
+        {
+            self.link.as_ref().is_some_and(|l| l.set(name, value))
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = (name, value);
+            false
+        }
+    }
+
+    /// Logs out and frees the DLL.
+    pub fn dispose(&mut self) {
+        #[cfg(windows)]
+        {
+            self.link = None;
+        }
+    }
 }
 
 /// A screen's name: its device name, and " (primary)" on the primary one.
@@ -446,5 +654,101 @@ mod tests {
             r"\\.\DISPLAY1 (primary)"
         );
         assert_eq!(monitor_name(r"\\.\DISPLAY2", false), r"\\.\DISPLAY2");
+    }
+
+    #[test]
+    fn note_offs_winmm_errors_and_capture_encodings() {
+        assert_eq!(note_off(0x7F3C91), Some(0x003C81));
+        assert_eq!(note_off(0x003C90), None); // velocity 0 is already a note-off
+        assert_eq!(note_off(0x6407B0), None);
+        assert_eq!(note_off(0x7F3C80), None);
+        assert_eq!(mm_result_name(4), "AlreadyAllocated");
+        assert_eq!(mm_result_name(68), "68");
+        assert_eq!(wave_encoding(0xFFFE, true), "IeeeFloat");
+        assert_eq!(wave_encoding(0xFFFE, false), "Pcm");
+        assert_eq!(wave_encoding(3, false), "IeeeFloat");
+        assert_eq!(wave_encoding(0x1234, false), "4660");
+    }
+
+    fn packet(data: &str) -> crate::control_deck::models::DeckAudioPacket {
+        crate::control_deck::models::DeckAudioPacket {
+            rate: 48000,
+            channels: 2,
+            bits: 32,
+            encoding: "IeeeFloat".into(),
+            data: Some(data.into()),
+        }
+    }
+
+    #[test]
+    fn the_listen_queue_drops_the_oldest_packets() {
+        let queue = PacketQueue::new(12);
+        for i in 0..14 {
+            queue.push(packet(&i.to_string()));
+        }
+        let kept: Vec<String> = std::iter::from_fn(|| queue.pop())
+            .filter_map(|p| p.data)
+            .collect();
+        assert_eq!(kept, (2..14).map(|i| i.to_string()).collect::<Vec<_>>());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn the_listen_stream_sends_packets_then_keeps_alive_and_stops_the_capture_when_dropped() {
+        use futures_util::StreamExt;
+        struct Guard(std::sync::Arc<std::sync::atomic::AtomicBool>);
+        impl Drop for Guard {
+            fn drop(&mut self) {
+                self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+        }
+        let stopped = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let queue = std::sync::Arc::new(PacketQueue::new(12));
+        let format = ListenFormat {
+            rate: 48000,
+            channels: 2,
+            bits: 32,
+            encoding: "IeeeFloat".into(),
+        };
+        let mut stream = listen_stream(queue.clone(), format, Guard(stopped.clone()));
+        queue.push(packet("a"));
+        queue.push(packet("b"));
+        let started = tokio::time::Instant::now();
+        assert_eq!(
+            stream.next().await.and_then(|p| p.data).as_deref(),
+            Some("a")
+        );
+        assert_eq!(
+            stream.next().await.and_then(|p| p.data).as_deref(),
+            Some("b")
+        );
+        let quiet = stream.next().await.expect("a keep-alive packet");
+        assert_eq!(
+            (quiet.rate, quiet.channels, quiet.bits, quiet.data),
+            (48000, 2, 32, None)
+        );
+        let waited = started.elapsed();
+        assert!(
+            waited > tokio::time::Duration::from_millis(500)
+                && waited < tokio::time::Duration::from_millis(600),
+            "{waited:?}"
+        );
+        queue.push(packet("c"));
+        assert_eq!(
+            stream.next().await.and_then(|p| p.data).as_deref(),
+            Some("c")
+        );
+        assert!(!stopped.load(std::sync::atomic::Ordering::SeqCst));
+        drop(stream);
+        assert!(stopped.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn the_mixer_never_connects_off_windows() {
+        let file = std::env::current_exe().unwrap();
+        let mut mixer = Mixer::default();
+        assert!(!mixer.connect(file.to_str()));
+        assert_eq!(mixer.get("Strip[0].Gain"), None);
+        assert!(!mixer.set("Strip[0].Gain", 1.0));
     }
 }
