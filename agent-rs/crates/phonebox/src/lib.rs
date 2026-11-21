@@ -15,6 +15,7 @@ pub mod file_logger;
 pub mod gpus;
 pub mod icon_text;
 pub mod lan;
+pub mod listening_ports;
 pub mod log;
 pub mod net_adapters;
 pub mod phone_registry;

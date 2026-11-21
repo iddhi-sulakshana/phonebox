@@ -50,6 +50,16 @@ pub fn run(tool: &str, args: &[&str]) -> Option<String> {
 /// passes, a process that is still running is killed with its process group; a child that outlived it and still
 /// holds the output open is left alone, and the answer is None.
 pub fn run_with_timeout(timeout_ms: u64, tool: &str, args: &[&str]) -> Option<String> {
+    run_inner(timeout_ms, tool, args, true)
+}
+
+/// [`run_with_timeout`] for tools whose exit code says nothing useful (lsof exits with 1 when nothing matches): the
+/// output counts whatever the exit code.
+pub fn run_any_exit(timeout_ms: u64, tool: &str, args: &[&str]) -> Option<String> {
+    run_inner(timeout_ms, tool, args, false)
+}
+
+fn run_inner(timeout_ms: u64, tool: &str, args: &[&str], need_success: bool) -> Option<String> {
     let path = if tool.contains('/') {
         PathBuf::from(tool)
     } else {
@@ -122,7 +132,7 @@ pub fn run_with_timeout(timeout_ms: u64, tool: &str, args: &[&str]) -> Option<St
             Err(_) => return None, // a child still holds the output open: the deadline wins
         }
     }
-    if !status.success() {
+    if need_success && !status.success() {
         return None;
     }
     output.map(|b| String::from_utf8_lossy(&b).into_owned())
