@@ -24,6 +24,24 @@ class DiffTests(unittest.TestCase):
         b = resp(body=b'{"phones": [{"id": "a", "lastSeen": 9}]}')
         self.assertEqual(parity.diff(entry, a, b), [])
 
+    def test_shape_pointers_compare_keys_and_kinds_only(self):
+        entry = {"name": "state", "compare": "json", "shape": ["/pc", "/ping"]}
+        a = resp(body=b'{"pc": {"cpu": 3.5, "disks": [{"name": "C:", "free": 1}], "gpus": []}, "ping": {"ms": null}, "x": 1}')
+        b = resp(body=b'{"pc": {"cpu": 9, "disks": [{"name": "D:", "free": 2}], "gpus": []}, "ping": {"ms": 12}, "x": 1}')
+        self.assertEqual(parity.diff(entry, a, b), [])
+
+    def test_shape_pointers_still_report_keys_order_and_lengths(self):
+        entry = {"name": "state", "compare": "json", "shape": ["/pc"]}
+        base = b'{"pc": {"cpu": 1, "disks": [{"name": "C:"}]}}'
+        missing = b'{"pc": {"disks": [{"name": "C:"}]}}'
+        reordered = b'{"pc": {"disks": [{"name": "C:"}], "cpu": 1}}'
+        longer = b'{"pc": {"cpu": 1, "disks": [{"name": "C:"}, {"name": "D:"}]}}'
+        null_pc = b'{"pc": null}'
+        for other in (missing, reordered, longer, null_pc):
+            self.assertEqual(len(parity.diff(entry, resp(body=base), resp(body=other))), 1, other)
+        # outside the shape pointers values still count
+        self.assertEqual(len(parity.diff(entry, resp(body=b'{"pc": 1, "x": 1}'), resp(body=b'{"pc": 2, "x": 2}'))), 1)
+
     def test_diff_reports_json_value(self):
         entry = {"name": "info", "compare": "json", "ignore": []}
         problems = parity.diff(entry, resp(body=b'{"os": "linux"}'), resp(body=b'{"os": "macos"}'))

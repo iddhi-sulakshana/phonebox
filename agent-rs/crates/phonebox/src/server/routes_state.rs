@@ -28,17 +28,9 @@ async fn get_state(
     State(s): State<AppState>,
     Query(query): Query<Vec<(String, String)>>,
 ) -> Response {
-    // ASP.NET binds `long? ev` from the query: names in any case, empty is null, anything else not a number is a 400
-    let ev = match query
-        .iter()
-        .find(|(k, _)| k.eq_ignore_ascii_case("ev"))
-        .map(|(_, v)| v.trim())
-    {
-        None | Some("") => None,
-        Some(v) => match v.parse::<i64>() {
-            Ok(n) => Some(n),
-            Err(_) => return StatusCode::BAD_REQUEST.into_response(),
-        },
+    // ASP.NET binds `long? ev` from the query: names in any case; present but not a number (empty too) is a 400
+    let Ok(ev) = super::query::int64(&query, "ev") else {
+        return StatusCode::BAD_REQUEST.into_response();
     };
     json_response(
         StatusCode::OK,
@@ -269,6 +261,14 @@ mod tests {
         assert_eq!(v["events"][0]["data"], serde_json::Value::Null);
         let r = send(&app, "GET", "/api/state?ev=abc", &[LOCAL]).await;
         assert_eq!(r.status(), 400);
+        // ASP.NET binds long? ev with TryParse: empty and repeated values are 400s too (seen in phase-2 parity)
+        for path in ["/api/state?ev=", "/api/state?ev=1&ev=2"] {
+            assert_eq!(
+                send(&app, "GET", path, &[LOCAL]).await.status(),
+                400,
+                "{path}"
+            );
+        }
     }
 
     /// Review #10: a client that opened the stream and stopped reading (its socket buffers full) cannot keep the agent

@@ -1,0 +1,158 @@
+[
+  {
+    "name": "network adapters",
+    "path": "/api/network/adapters"
+  },
+  {
+    "name": "batteries",
+    "path": "/api/batteries"
+  },
+  {
+    "name": "procs",
+    "path": "/api/procs",
+    "compare": "status"
+  },
+  {
+    "name": "procs-top-0",
+    "path": "/api/procs?top=0",
+    "compare": "status"
+  },
+  {
+    "name": "procs-top--1",
+    "path": "/api/procs?top=-1",
+    "compare": "status"
+  },
+  {
+    "name": "procs-top-1000000",
+    "path": "/api/procs?top=1000000",
+    "compare": "status"
+  },
+  {
+    "name": "procs-top-x",
+    "path": "/api/procs?top=x",
+    "compare": "status"
+  },
+  {
+    "name": "procs-top-overflow",
+    "path": "/api/procs?top=99999999999",
+    "compare": "status"
+  },
+  {
+    "name": "procs-top-empty",
+    "path": "/api/procs?top=",
+    "compare": "status"
+  },
+  {
+    "name": "proc detail: missing name",
+    "path": "/api/procs/detail",
+    "compare": "status"
+  },
+  {
+    "name": "proc detail: unknown process",
+    "path": "/api/procs/detail?name=phonebox-no-such-proc"
+  },
+  {
+    "name": "proc icon: missing name",
+    "path": "/api/procs/icon",
+    "compare": "status"
+  },
+  {
+    "name": "proc icon: unknown process",
+    "path": "/api/procs/icon?name=phonebox-no-such-proc",
+    "compare": "status"
+  },
+  {
+    "name": "proc kill: no arguments",
+    "method": "POST",
+    "path": "/api/procs/kill"
+  },
+  {
+    "name": "proc kill: pid out of range",
+    "method": "POST",
+    "path": "/api/procs/kill?pid=4294967295",
+    "compare": "status"
+  },
+  {
+    "name": "proc kill: pid not a number",
+    "method": "POST",
+    "path": "/api/procs/kill?pid=x",
+    "compare": "status"
+  },
+  {
+    "name": "proc kill: negative pid",
+    "method": "POST",
+    "path": "/api/procs/kill?pid=-5"
+  },
+  {
+    "name": "proc kill: unknown process",
+    "method": "POST",
+    "path": "/api/procs/kill?name=phonebox-no-such-proc"
+  },
+  {
+    "name": "state: empty ev",
+    "path": "/api/state?ev=",
+    "compare": "status"
+  },
+  {
+    "name": "state: ev with spaces",
+    "path": "/api/state?ev=%205%20",
+    "ignore": [
+      "/ts",
+      "/cfgVersion",
+      "/host",
+      "/pushVersion",
+      "/pc",
+      "/ping"
+    ]
+  },
+  {
+    "name": "state: two ev values",
+    "path": "/api/state?ev=1&ev=2",
+    "compare": "status"
+  },
+  {
+    "name": "state: ev with plus sign",
+    "path": "/api/state?ev=%2B3",
+    "ignore": [
+      "/ts",
+      "/cfgVersion",
+      "/host",
+      "/pushVersion",
+      "/pc",
+      "/ping"
+    ]
+  },
+  {
+    "name": "procs: top twice",
+    "path": "/api/procs?top=1&top=2",
+    "compare": "status"
+  },
+  {
+    "name": "proc kill: empty pid",
+    "method": "POST",
+    "path": "/api/procs/kill?pid=",
+    "compare": "status"
+  },
+  {
+    "name": "proc detail: two names",
+    "path": "/api/procs/detail?name=a&name=b"
+  },
+  {
+    "name": "state: pc and ping",
+    "path": "/api/state",
+    "wait": 4,
+    "headers": {
+      "X-PhoneBox-App": "0.9.22"
+    },
+    "ignore": [
+      "/ts",
+      "/cfgVersion",
+      "/host",
+      "/pushVersion"
+    ],
+    "shape": [
+      "/pc",
+      "/ping"
+    ]
+  }
+]

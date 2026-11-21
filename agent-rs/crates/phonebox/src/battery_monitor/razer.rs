@@ -824,7 +824,7 @@ mod tests {
     }
 
     #[test]
-    fn build_report_constructs_valid_battery_and_charging_requests() {
+    fn build_razer_report_constructs_valid_battery_and_charging_requests() {
         let battery = build_report(0x1F, CMD_BATTERY);
         assert_eq!(battery.len(), REPORT_LENGTH);
         assert_eq!(
@@ -845,7 +845,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_battery_and_charging_from_captured_device_responses() {
+    fn parse_razer_battery_and_charging_from_captured_device_responses() {
         // real 91-byte HidD_GetFeature responses captured from a Razer Basilisk V3 Pro (PID 0x00AB, wireless)
         assert_eq!(
             parse_battery(&frame("00021F0000000207800039", "BC00")),
@@ -980,7 +980,7 @@ mod tests {
     }
 
     #[test]
-    fn query_feature_device_every_sent_frame_has_read_bit_set() {
+    fn query_razer_feature_device_every_sent_frame_has_read_bit_set() {
         let mut sent: Vec<Vec<u8>> = vec![];
         for pid in feature_pids() {
             // a device that answers NotSupported for every transaction id
@@ -1023,7 +1023,7 @@ mod tests {
     }
 
     #[test]
-    fn query_feature_device_never_sends_to_unknown_or_headset_only_pids() {
+    fn query_razer_feature_device_never_sends_to_unknown_or_headset_only_pids() {
         let mut sent = 0;
         let mut spy = |_: &[u8]| -> Option<Vec<u8>> {
             sent += 1;
@@ -1041,7 +1041,7 @@ mod tests {
     }
 
     #[test]
-    fn query_feature_device_stops_on_ok_and_uses_preferred_tx_first() {
+    fn query_razer_feature_device_stops_on_ok_and_uses_preferred_tx_first() {
         let mut sent_tx = vec![];
         let r = query_feature_device(
             0x00AB,

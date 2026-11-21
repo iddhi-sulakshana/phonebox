@@ -35,25 +35,7 @@ async fn network_adapters() -> Response {
 
 type QueryList = Query<Vec<(String, String)>>;
 
-/// A query value as ASP.NET binds one: the name in any case, the first one given.
-fn query<'a>(q: &'a [(String, String)], name: &str) -> Option<&'a str> {
-    q.iter()
-        .find(|(k, _)| k.eq_ignore_ascii_case(name))
-        .map(|(_, v)| v.as_str())
-}
-
-/// An `int?` parameter: missing or empty is null; anything `int.TryParse` refuses is Err (a 400).
-fn query_int(q: &[(String, String)], name: &str) -> Result<Option<i32>, ()> {
-    match query(q, name).map(str::trim) {
-        None | Some("") => Ok(None),
-        Some(v) => v
-            .strip_prefix('+')
-            .unwrap_or(v)
-            .parse::<i32>()
-            .map(Some)
-            .map_err(|_| ()),
-    }
-}
+use super::query::{int32 as query_int, value as query};
 
 fn bad_request() -> Response {
     StatusCode::BAD_REQUEST.into_response()
@@ -76,7 +58,7 @@ async fn procs(State(s): State<AppState>, Query(q): QueryList) -> Response {
 
 /// A process group's icon as PNG, or 404.
 async fn proc_icon(State(s): State<AppState>, Query(q): QueryList) -> Response {
-    let Some(name) = query(&q, "name").map(String::from) else {
+    let Some(name) = query(&q, "name") else {
         return bad_request();
     };
     let procs = s.procs.clone();
@@ -91,7 +73,7 @@ async fn proc_icon(State(s): State<AppState>, Query(q): QueryList) -> Response {
 }
 
 async fn proc_detail(State(s): State<AppState>, Query(q): QueryList) -> Response {
-    let Some(name) = query(&q, "name").map(String::from) else {
+    let Some(name) = query(&q, "name") else {
         return bad_request();
     };
     let procs = s.procs.clone();
@@ -115,7 +97,7 @@ async fn proc_kill(State(s): State<AppState>, Query(q): QueryList) -> Response {
         };
         return json_response(StatusCode::FORBIDDEN, &refused);
     }
-    let name = query(&q, "name").unwrap_or_default().to_string();
+    let name = query(&q, "name").unwrap_or_default();
     let procs = s.procs.clone();
     let result = tokio::task::spawn_blocking(move || match pid {
         Some(id) => match u32::try_from(id) {
@@ -205,7 +187,19 @@ mod tests {
             call(&app, "GET", "/api/procs?top=abc").await.0,
             StatusCode::BAD_REQUEST
         );
-        assert_eq!(call(&app, "GET", "/api/procs?top=").await.0, StatusCode::OK);
+        // ASP.NET: an int? that is present must parse; several values are joined with "," (so not a number)
+        assert_eq!(
+            call(&app, "GET", "/api/procs?top=").await.0,
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            call(&app, "GET", "/api/procs?top=1&top=2").await.0,
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            call(&app, "GET", "/api/procs?top=%205%20").await.0,
+            StatusCode::OK
+        );
     }
 
     #[tokio::test]
@@ -240,6 +234,8 @@ mod tests {
                 .0,
             StatusCode::NOT_FOUND
         );
+        let (_, _, json) = call(&app, "GET", "/api/procs/detail?name=a&name=b").await;
+        assert_eq!(json["name"], "a,b");
         let (status, _, json) = call(&app, "GET", "/api/procs/detail?NAME=missing-proc-f390").await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(

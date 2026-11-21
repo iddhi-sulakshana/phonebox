@@ -1,6 +1,7 @@
 //! The HTTP server (Kestrel in the C# agent): shared state, routes and the request pipeline of `Program.cs`.
 
 pub mod guard;
+pub mod query;
 pub mod routes_info;
 pub mod routes_settings;
 pub mod routes_state;

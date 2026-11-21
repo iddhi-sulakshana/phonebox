@@ -14,6 +14,9 @@ Corpus: a JSON list of requests. Fields:
   headers   extra headers ("{port}" filled in); a "Host" here replaces the default 127.0.0.1:<port>
   body      request body text or null
   ignore    JSON pointers removed from both bodies before comparing ("*" matches every array item / object key)
+  shape     JSON pointers compared by shape only: object keys (in order), array lengths and which values are objects
+            or arrays; numbers, strings, booleans and null all count as the same (live readings such as CPU or ping)
+  wait      seconds to wait before sending this request (lets the agents' monitors take their first samples)
   compare   "json" (default), "bytes" or "status"
   config_version  true: send X-Config-Version with the value GET /api/settings just returned on that agent
   config_file     true: also compare the agents' config.json files byte for byte after the request
@@ -89,6 +92,39 @@ def strip_pointers(doc, pointers: list[str]):
     return doc
 
 
+def shape_of(doc):
+    """Objects keep their keys in order, arrays their length; every other value becomes None."""
+    if isinstance(doc, dict):
+        return {k: shape_of(v) for k, v in doc.items()}
+    if isinstance(doc, list):
+        return [shape_of(v) for v in doc]
+    return None
+
+
+def _shape(doc, parts: list[str]):
+    head, rest = parts[0], parts[1:]
+    if isinstance(doc, dict):
+        keys = list(doc.keys()) if head == "*" else ([head] if head in doc else [])
+    elif isinstance(doc, list):
+        keys = list(range(len(doc))) if head == "*" else ([int(head)] if head.isdigit() and int(head) < len(doc) else [])
+    else:
+        keys = []
+    for k in keys:
+        if rest:
+            _shape(doc[k], rest)
+        elif isinstance(doc[k], (dict, list)):
+            doc[k] = shape_of(doc[k])
+
+
+def shape_pointers(doc, pointers: list[str]):
+    doc = copy.deepcopy(doc)
+    for p in pointers:
+        parts = [x.replace("~1", "/").replace("~0", "~") for x in p.split("/")[1:]]
+        if parts:
+            _shape(doc, parts)
+    return doc
+
+
 def _first_json_difference(a, b, path="") -> str | None:
     if type(a) is not type(b):
         return f"{path or '/'}: {json.dumps(a)[:120]} != {json.dumps(b)[:120]}"
@@ -131,7 +167,9 @@ def diff(entry: dict, a: Response, b: Response) -> list[str]:
         except ValueError as e:
             problems.append(f"{name}: body is not JSON ({e})")
         else:
-            d = _first_json_difference(strip_pointers(ja, entry.get("ignore", [])), strip_pointers(jb, entry.get("ignore", [])))
+            ignore, shape = entry.get("ignore", []), entry.get("shape", [])
+            d = _first_json_difference(shape_pointers(strip_pointers(ja, ignore), shape),
+                                       shape_pointers(strip_pointers(jb, ignore), shape))
             if d:
                 problems.append(f"{name}: {d}")
     return problems
@@ -216,6 +254,8 @@ def run(csharp_cmd: str, rust_cmd: str, corpus: list[dict], fixture: Path, keep:
         for a in agents:
             a.wait_ready()
         for entry in corpus:
+            if entry.get("wait"):
+                time.sleep(float(entry["wait"]))
             answers = []
             for a in agents:
                 extra = {"X-Config-Version": a.config_version()} if entry.get("config_version") else None
