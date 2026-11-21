@@ -29,6 +29,8 @@ pub mod process_monitor;
 pub mod push_store;
 pub mod request_timings;
 pub mod server;
+pub mod shortcut_icon_uploads;
+pub mod shortcut_icons;
 pub mod shortcuts;
 pub mod single_instance;
 pub mod stack_widgets;

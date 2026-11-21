@@ -132,7 +132,14 @@ pub struct AppState {
     pub batteries: Arc<crate::battery_monitor::BatteryMonitor>,
     /// The output volume (`audio` in the state, `/api/volume`); main puts the same one in `sources`.
     pub audio: Arc<crate::audio_control::AudioControl>,
+    /// Shortcut icons the user uploaded, in `icons/` next to the config file.
+    pub icons: Arc<crate::shortcut_icon_uploads::ShortcutIconUploads>,
 }
+
+/// Serializes the writes that move the config version for shortcut icons (upload, removal) with the settings save.
+/// Taken before the icon store's own lock, never inside it (its cleanup reads the settings), and never held across an
+/// await.
+pub static ICON_COMMIT: Mutex<()> = Mutex::new(());
 
 impl AppState {
     pub fn new(
@@ -156,8 +163,18 @@ impl AppState {
             endpoint.port,
             Arc::new(crate::adb::ProcessRunner::default()),
         );
+        let icons_dir = cfg
+            .path()
+            .parent()
+            .filter(|d| !d.as_os_str().is_empty())
+            .map(std::path::Path::to_path_buf)
+            .unwrap_or_else(crate::app_paths::config_dir)
+            .join("icons");
         AppState {
             adb,
+            icons: Arc::new(crate::shortcut_icon_uploads::ShortcutIconUploads::new(
+                icons_dir,
+            )),
             system: crate::system_monitor::SystemMonitor::new(cfg.clone()),
             ping: crate::ping_monitor::PingMonitor::new(cfg.clone()),
             procs: crate::process_monitor::ProcessMonitor::new(Arc::new(

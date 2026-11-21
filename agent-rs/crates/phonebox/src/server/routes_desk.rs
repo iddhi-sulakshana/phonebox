@@ -5,16 +5,24 @@ use axum::Router;
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::post;
+use axum::routing::{get, post};
+use serde_json::json;
 
-use super::query::{int32, value};
-use super::{AppState, json_response};
+use super::query::{boolean, int32, value};
+use super::{AppState, ICON_COMMIT, json_response};
+use crate::config::store::{CONFLICT, ConfigStore};
+use crate::shortcut_icon_uploads::ShortcutIconUploads;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/api/volume", post(volume))
         .route("/api/run/{id}", post(run_shortcut))
         .route("/api/shortcuts/test", post(test_shortcut))
+        .route("/api/shortcuts/icon", get(shortcut_icon))
+        .route(
+            "/api/settings/shortcut-icon",
+            post(upload_icon).delete(remove_icon),
+        )
 }
 
 type QueryList = Query<Vec<(String, String)>>;
@@ -115,6 +123,170 @@ async fn volume(State(s): State<AppState>, Query(q): QueryList) -> Response {
         }
         _ => bad_request(),
     }
+}
+
+/// A request header as ASP.NET reads one into a string: several values joined with ",".
+fn header_text(headers: &HeaderMap, name: &str) -> Option<String> {
+    let values: Vec<&str> = headers
+        .get_all(name)
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .collect();
+    (!values.is_empty()).then(|| values.join(","))
+}
+
+fn conflict() -> Response {
+    json_response(StatusCode::CONFLICT, &json!({ "error": CONFLICT }))
+}
+
+fn commit_lock() -> std::sync::MutexGuard<'static, ()> {
+    ICON_COMMIT.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// A shortcut's picture: an image the user uploaded (settings page) first, else its program's own icon when its
+/// command is an actual file on disk. 404 when neither exists, so the phone shows the emoji. `upload=true`: the upload
+/// only (see [`crate::shortcut_icons::picture`]). Served so a browser never runs an SVG's script or sniffs a type.
+async fn shortcut_icon(State(s): State<AppState>, Query(q): QueryList) -> Response {
+    let (Some(id), Ok(upload)) = (value(&q, "id"), boolean(&q, "upload")) else {
+        return bad_request();
+    };
+    let Some(sc) = s.cfg.get().shortcuts.iter().find(|x| x.id == id).cloned() else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let icons = s.icons.clone();
+    let found = tokio::task::spawn_blocking(move || {
+        crate::shortcut_icons::picture(&sc, &icons, upload == Some(true))
+    })
+    .await
+    .ok()
+    .flatten();
+    let Some((bytes, content_type)) = found else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    (
+        [
+            (header::CONTENT_TYPE, content_type),
+            (
+                header::CONTENT_SECURITY_POLICY,
+                "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+            ),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+        ],
+        bytes,
+    )
+        .into_response()
+}
+
+/// Uploads a custom icon for a shortcut (PNG, WEBP or SVG, 512 KB max), replacing any earlier one. Under
+/// `/api/settings`, so local-only like the rest of the settings API: over Wi-Fi the phone only ever reads an icon.
+async fn upload_icon(
+    State(s): State<AppState>,
+    Query(q): QueryList,
+    headers: HeaderMap,
+    body: axum::body::Body,
+) -> Response {
+    let Some(id) = value(&q, "id") else {
+        return bad_request();
+    };
+    let version = header_text(&headers, "x-config-version");
+    let content_type = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok());
+    upload_shortcut_icon(
+        &id,
+        version.as_deref(),
+        body,
+        content_type,
+        &s.cfg,
+        &s.icons,
+    )
+    .await
+}
+
+/// Removes a shortcut's uploaded icon; it falls back to its program's own icon, or the emoji.
+async fn remove_icon(
+    State(s): State<AppState>,
+    Query(q): QueryList,
+    headers: HeaderMap,
+) -> Response {
+    let Some(id) = value(&q, "id") else {
+        return bad_request();
+    };
+    let version = header_text(&headers, "x-config-version");
+    let _commit = commit_lock();
+    if !s.cfg.get().shortcuts.iter().any(|x| x.id == id) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    if s.cfg.version_conflict(version.as_deref()) {
+        return conflict();
+    }
+    s.icons.remove(&id);
+    s.cfg.touch();
+    json_response(StatusCode::OK, &json!({ "version": s.cfg.version_text() }))
+}
+
+/// `UploadShortcutIconAsync`: the checks, then the body (read outside the lock), then the checks again, the write and
+/// the version bump as one step under [`ICON_COMMIT`]: of two uploads that started from the same version the second
+/// gets 409 instead of replacing the first one's icon, and a settings save that deleted the shortcut meanwhile wins.
+pub(crate) async fn upload_shortcut_icon(
+    id: &str,
+    config_version: Option<&str>,
+    body: axum::body::Body,
+    content_type: Option<&str>,
+    cfg: &ConfigStore,
+    icons: &ShortcutIconUploads,
+) -> Response {
+    let unknown = || {
+        json_response(
+            StatusCode::NOT_FOUND,
+            &json!({ "error": "Unknown shortcut (save it once first)" }),
+        )
+    };
+    let known = || cfg.get().shortcuts.iter().any(|s| s.id == id);
+    if !known() {
+        return unknown();
+    }
+    if cfg.version_conflict(config_version) {
+        return conflict();
+    }
+    // a body that breaks off is Kestrel's "unexpected end of request content", a 400
+    let Ok(bytes) = ShortcutIconUploads::read_bounded(body).await else {
+        return bad_request();
+    };
+    let _commit = commit_lock();
+    if cfg.version_conflict(config_version) {
+        return conflict();
+    }
+    if !known() {
+        return unknown();
+    }
+    match icons.save(id, content_type, bytes.as_deref()) {
+        Err(e) => {
+            // the C# agent throws here: an unhandled exception, a 500 with no body
+            crate::log::warn("Program", &format!("saving the icon failed: {e}"));
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+        Ok(Some(error)) => {
+            return json_response(StatusCode::BAD_REQUEST, &json!({ "error": error }));
+        }
+        Ok(None) => {}
+    }
+    if !known() {
+        icons.cleanup(|| {
+            cfg.get()
+                .shortcuts
+                .iter()
+                .map(|s| s.id.clone())
+                .collect::<Vec<_>>()
+        });
+        return if cfg.version_conflict(config_version) {
+            conflict()
+        } else {
+            unknown()
+        };
+    }
+    cfg.touch();
+    json_response(StatusCode::OK, &json!({ "version": cfg.version_text() }))
 }
 
 #[cfg(test)]
@@ -389,5 +561,422 @@ mod tests {
             v,
             serde_json::json!({"volume": 20, "muted": true, "canControl": true})
         );
+    }
+
+    // ---- shortcut icons ----
+
+    const PNG_1PX: &[u8] = &[
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f,
+        0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00,
+        0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+        0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+    ];
+
+    struct Sent {
+        status: StatusCode,
+        headers: axum::http::HeaderMap,
+        body: Vec<u8>,
+    }
+
+    impl Sent {
+        fn json(&self) -> serde_json::Value {
+            serde_json::from_slice(&self.body).unwrap()
+        }
+        fn header(&self, name: &str) -> &str {
+            self.headers
+                .get(name)
+                .map(|v| v.to_str().unwrap())
+                .unwrap_or("")
+        }
+    }
+
+    async fn request(
+        app: &crate::server::App,
+        method: &str,
+        path: &str,
+        headers: &[(&str, &str)],
+        body: Vec<u8>,
+    ) -> Sent {
+        use tower::ServiceExt;
+        let mut req = axum::http::Request::builder()
+            .method(method)
+            .uri(path)
+            .header("host", "127.0.0.1:8765");
+        for (k, v) in headers {
+            req = req.header(*k, *v);
+        }
+        let res = app
+            .clone()
+            .oneshot(req.body(axum::body::Body::from(body)).unwrap())
+            .await
+            .unwrap();
+        Sent {
+            status: res.status(),
+            headers: res.headers().clone(),
+            body: res.into_body().collect().await.unwrap().to_bytes().to_vec(),
+        }
+    }
+
+    fn shortcut_of(config: &serde_json::Value, id: &str) -> serde_json::Value {
+        config["config"]["shortcuts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["id"] == id)
+            .unwrap()
+            .clone()
+    }
+
+    #[tokio::test]
+    async fn an_uploaded_icon_is_served_reported_to_the_phone_and_removed() {
+        let (_dir, state) = test_state();
+        let page =
+            serde_json::json!({"shortcuts": [{"id": "sc", "label": "Sc", "cmd": "builtin:mute"}]});
+        state.cfg.save(&page.to_string(), None).unwrap();
+        let (cfg, icons) = (state.cfg.clone(), state.icons.clone());
+        let app = build_router(state);
+
+        let none = request(&app, "GET", "/api/shortcuts/icon?id=sc", &[], vec![]).await;
+        assert_eq!((none.status, none.body.len()), (StatusCode::NOT_FOUND, 0));
+        let config = request(&app, "GET", "/api/config", &[], vec![])
+            .await
+            .json();
+        assert_eq!(
+            shortcut_of(&config, "sc")["iconRev"],
+            serde_json::Value::Null
+        );
+        assert_eq!(shortcut_of(&config, "sc")["iconUpload"], false);
+
+        let before = cfg.version();
+        let version = cfg.version_text();
+        let up = request(
+            &app,
+            "POST",
+            "/api/settings/shortcut-icon?id=sc",
+            &[
+                ("content-type", "image/png"),
+                ("x-config-version", &version),
+            ],
+            PNG_1PX.to_vec(),
+        )
+        .await;
+        assert_eq!(up.status, StatusCode::OK);
+        assert_eq!(
+            up.json(),
+            serde_json::json!({"version": cfg.version_text()})
+        );
+        assert_ne!(cfg.version(), before, "other tabs must notice the upload");
+
+        for path in [
+            "/api/shortcuts/icon?id=sc",
+            "/api/shortcuts/icon?id=sc&upload=true",
+            "/api/shortcuts/icon?ID=sc&Upload=False",
+        ] {
+            let got = request(&app, "GET", path, &[], vec![]).await;
+            assert_eq!(got.status, StatusCode::OK, "{path}");
+            assert_eq!(got.body, PNG_1PX);
+            assert_eq!(got.header("content-type"), "image/png");
+            assert_eq!(
+                got.header("content-security-policy"),
+                "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+            );
+            assert_eq!(got.header("x-content-type-options"), "nosniff");
+        }
+        let config = request(&app, "GET", "/api/config", &[], vec![])
+            .await
+            .json();
+        assert_eq!(shortcut_of(&config, "sc")["iconUpload"], true);
+        assert_eq!(
+            shortcut_of(&config, "sc")["iconRev"],
+            serde_json::json!(icons.revision("sc").unwrap())
+        );
+
+        let gone = request(
+            &app,
+            "DELETE",
+            "/api/settings/shortcut-icon?id=sc",
+            &[],
+            vec![],
+        )
+        .await;
+        assert_eq!(gone.status, StatusCode::OK);
+        assert_eq!(
+            gone.json(),
+            serde_json::json!({"version": cfg.version_text()})
+        );
+        assert!(!icons.exists("sc"));
+        let none = request(&app, "GET", "/api/shortcuts/icon?id=sc", &[], vec![]).await;
+        assert_eq!(none.status, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn icon_uploads_refuse_unknown_shortcuts_stale_pages_and_bad_files() {
+        let (_dir, state) = test_state();
+        let page =
+            serde_json::json!({"shortcuts": [{"id": "sc", "label": "Sc", "cmd": "builtin:mute"}]});
+        state.cfg.save(&page.to_string(), None).unwrap();
+        let icons = state.icons.clone();
+        let app = build_router(state);
+        let png = &[("content-type", "image/png")];
+
+        let unknown = request(
+            &app,
+            "POST",
+            "/api/settings/shortcut-icon?id=nope",
+            png,
+            PNG_1PX.to_vec(),
+        )
+        .await;
+        assert_eq!(unknown.status, StatusCode::NOT_FOUND);
+        assert_eq!(
+            unknown.json(),
+            serde_json::json!({"error": "Unknown shortcut (save it once first)"})
+        );
+        let unknown = request(
+            &app,
+            "DELETE",
+            "/api/settings/shortcut-icon?id=nope",
+            &[],
+            vec![],
+        )
+        .await;
+        assert_eq!(
+            (unknown.status, unknown.body.len()),
+            (StatusCode::NOT_FOUND, 0)
+        );
+
+        let stale = [("content-type", "image/png"), ("x-config-version", "12345")];
+        for method in ["POST", "DELETE"] {
+            let r = request(
+                &app,
+                method,
+                "/api/settings/shortcut-icon?id=sc",
+                &stale,
+                PNG_1PX.to_vec(),
+            )
+            .await;
+            assert_eq!(r.status, StatusCode::CONFLICT, "{method}");
+            assert_eq!(
+                r.json(),
+                serde_json::json!({"error": crate::config::store::CONFLICT})
+            );
+        }
+        // a version that is not a number never conflicts (scripts)
+        let r = request(
+            &app,
+            "POST",
+            "/api/settings/shortcut-icon?id=sc",
+            &[("content-type", "image/png"), ("x-config-version", "x")],
+            PNG_1PX.to_vec(),
+        )
+        .await;
+        assert_eq!(r.status, StatusCode::OK);
+
+        let gif = request(
+            &app,
+            "POST",
+            "/api/settings/shortcut-icon?id=sc",
+            &[("content-type", "image/gif")],
+            vec![1, 2, 3],
+        )
+        .await;
+        assert_eq!(gif.status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            gif.json(),
+            serde_json::json!({"error": "Only PNG, WEBP or SVG icons are supported"})
+        );
+        let big = request(
+            &app,
+            "POST",
+            "/api/settings/shortcut-icon?id=sc",
+            png,
+            vec![0x89; crate::shortcut_icon_uploads::MAX_BYTES + 1],
+        )
+        .await;
+        assert_eq!(
+            big.json(),
+            serde_json::json!({"error": "The icon is larger than 512 KB"})
+        );
+        assert_eq!(
+            icons.read("sc").unwrap().0,
+            PNG_1PX,
+            "a refused upload keeps the icon"
+        );
+
+        // ASP.NET's binding: a missing id, or an upload flag that is not a bool, is a 400
+        for (method, path) in [
+            ("GET", "/api/shortcuts/icon"),
+            ("GET", "/api/shortcuts/icon?id=sc&upload=maybe"),
+            ("GET", "/api/shortcuts/icon?id=sc&upload="),
+            ("POST", "/api/settings/shortcut-icon"),
+            ("DELETE", "/api/settings/shortcut-icon"),
+        ] {
+            let r = request(&app, method, path, png, PNG_1PX.to_vec()).await;
+            assert_eq!(r.status, StatusCode::BAD_REQUEST, "{method} {path}");
+        }
+        let r = request(
+            &app,
+            "GET",
+            "/api/shortcuts/icon?id=sc&upload=%20TRUE%20",
+            &[],
+            vec![],
+        )
+        .await;
+        assert_eq!(r.status, StatusCode::OK);
+        let r = request(&app, "GET", "/api/shortcuts/icon?id=nope", &[], vec![]).await;
+        assert_eq!((r.status, r.body.len()), (StatusCode::NOT_FOUND, 0));
+    }
+
+    #[tokio::test]
+    async fn a_failed_move_is_a_500_and_keeps_the_icon() {
+        let (_dir, state) = test_state();
+        let page =
+            serde_json::json!({"shortcuts": [{"id": "sc", "label": "Sc", "cmd": "builtin:mute"}]});
+        state.cfg.save(&page.to_string(), None).unwrap();
+        let icons = state.icons.clone();
+        let icons_dir = state.cfg.path().parent().unwrap().join("icons");
+        let app = build_router(state);
+        let r = request(
+            &app,
+            "POST",
+            "/api/settings/shortcut-icon?id=sc",
+            &[("content-type", "image/png")],
+            PNG_1PX.to_vec(),
+        )
+        .await;
+        assert_eq!(r.status, StatusCode::OK);
+        std::fs::create_dir(icons_dir.join("sc.svg")).unwrap();
+        let svg = b"<svg xmlns='http://www.w3.org/2000/svg'/>".to_vec();
+        let r = request(
+            &app,
+            "POST",
+            "/api/settings/shortcut-icon?id=sc",
+            &[("content-type", "image/svg+xml")],
+            svg,
+        )
+        .await;
+        assert_eq!(
+            (r.status, r.body.len()),
+            (StatusCode::INTERNAL_SERVER_ERROR, 0)
+        );
+        assert_eq!(icons.read("sc").unwrap().1, "image/png");
+    }
+
+    #[tokio::test]
+    async fn a_settings_save_drops_the_icons_of_deleted_shortcuts() {
+        let (_dir, state) = test_state();
+        let page = serde_json::json!({"shortcuts": [
+            {"id": "keep-me", "label": "Keep", "cmd": "builtin:mute"},
+            {"id": "temp-sc", "label": "Temp", "cmd": "builtin:mute"}
+        ]});
+        state.cfg.save(&page.to_string(), None).unwrap();
+        let icons = state.icons.clone();
+        let app = build_router(state);
+        for id in ["keep-me", "temp-sc"] {
+            let r = request(
+                &app,
+                "POST",
+                &format!("/api/settings/shortcut-icon?id={id}"),
+                &[("content-type", "image/png")],
+                PNG_1PX.to_vec(),
+            )
+            .await;
+            assert_eq!(r.status, StatusCode::OK);
+        }
+        let page = serde_json::json!({"shortcuts": [{"id": "keep-me", "label": "Keep", "cmd": "builtin:mute"}]});
+        let r = request(
+            &app,
+            "PUT",
+            "/api/settings",
+            &[("content-type", "application/json")],
+            page.to_string().into_bytes(),
+        )
+        .await;
+        assert_eq!(r.status, StatusCode::OK);
+        assert!(icons.exists("keep-me"));
+        assert!(!icons.exists("temp-sc"));
+    }
+
+    /// The body is read outside the commit lock: a settings save that lands while it is read (deleting the shortcut)
+    /// makes the upload a 409, and leaves no orphaned file behind.
+    #[tokio::test]
+    async fn shortcut_icon_upload_rejects_concurrent_settings_save_across_body_read_without_orphans()
+     {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg_path = dir.path().join("config.json");
+        let cfg = Arc::new(crate::config::store::ConfigStore::new(cfg_path.clone()));
+        cfg.save(
+            r#"{"shortcuts":[{"id":"keep-me","label":"Keep","cmd":"builtin:mute"},{"id":"temp-sc","label":"Temp","cmd":"builtin:mute"}]}"#,
+            None,
+        )
+        .unwrap();
+        let icons = Arc::new(crate::shortcut_icon_uploads::ShortcutIconUploads::new(
+            dir.path().join("icons"),
+        ));
+
+        let v1 = cfg.version_text();
+        let (entered_tx, entered_rx) = tokio::sync::oneshot::channel::<()>();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel::<()>();
+        let body = axum::body::Body::from_stream(futures_util::stream::once(async move {
+            let _ = entered_tx.send(());
+            let _ = release_rx.await;
+            Ok::<_, std::io::Error>(axum::body::Bytes::from_static(PNG_1PX))
+        }));
+        let upload = {
+            let (cfg, icons) = (cfg.clone(), icons.clone());
+            tokio::spawn(async move {
+                super::upload_shortcut_icon(
+                    "temp-sc",
+                    Some(&v1),
+                    body,
+                    Some("image/png"),
+                    &cfg,
+                    &icons,
+                )
+                .await
+            })
+        };
+        // an upload that returns before reading the body fails here instead of hanging the test
+        tokio::time::timeout(std::time::Duration::from_secs(10), entered_rx)
+            .await
+            .expect("the upload read the body")
+            .expect("the upload read the body");
+
+        // move the file's time back so the save below gets a new version, and delete temp-sc while the body is read
+        let back = std::time::UNIX_EPOCH
+            + std::time::Duration::from_nanos(
+                ((cfg.version() - crate::config::store::UNIX_EPOCH_TICKS) * 100) as u64,
+            )
+            - std::time::Duration::from_secs(2);
+        std::fs::File::options()
+            .write(true)
+            .open(&cfg_path)
+            .unwrap()
+            .set_modified(back)
+            .unwrap();
+        let _ = cfg.get();
+        let saved_v2 = cfg
+            .save(
+                r#"{"shortcuts":[{"id":"keep-me","label":"Keep","cmd":"builtin:mute"}]}"#,
+                Some(cfg.version()),
+            )
+            .unwrap();
+        icons.cleanup(|| {
+            cfg.get()
+                .shortcuts
+                .iter()
+                .map(|s| s.id.clone())
+                .collect::<Vec<_>>()
+        });
+
+        let _ = release_tx.send(());
+        let result = tokio::time::timeout(std::time::Duration::from_secs(10), upload)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(result.status(), StatusCode::CONFLICT);
+        assert!(!icons.exists("temp-sc"));
+        assert_eq!(saved_v2, cfg.version());
     }
 }

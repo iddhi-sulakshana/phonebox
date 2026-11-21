@@ -76,8 +76,24 @@ async fn put_settings(State(s): State<AppState>, headers: HeaderMap, body: Strin
             &json!({ "error": "The Wi-Fi key and the webhook key must be different: make a new key for one of them" }),
         );
     }
-    match s.cfg.save(&body, expected) {
+    // the same lock as the icon commits, so an icon upload can't report a version that already holds a save it never
+    // checked
+    let saved = {
+        let _commit = super::ICON_COMMIT.lock().unwrap_or_else(|e| e.into_inner());
+        s.cfg.save(&body, expected)
+    };
+    match saved {
         Ok(version) => {
+            // drop uploads for shortcuts that got deleted; commands may have changed, so resolve the program icons again
+            s.icons.cleanup(|| {
+                s.cfg
+                    .get()
+                    .shortcuts
+                    .iter()
+                    .map(|x| x.id.clone())
+                    .collect::<Vec<_>>()
+            });
+            crate::shortcut_icons::clear_has_icon_cache();
             crate::log::info("Program", "settings saved");
             json_response(StatusCode::OK, &json!({ "version": version.to_string() }))
         }
@@ -92,8 +108,13 @@ async fn get_config(State(s): State<AppState>, headers: HeaderMap) -> Response {
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
     let version = s.cfg.version_text();
-    // shortcut pictures (uploads, program icons) come with the shortcut icons (phase 3)
-    let config = crate::config::public::to_public(&s.cfg.get(), Some(device), None);
+    // a shortcut's picture: the upload's revision, else its program icon's
+    let icons = s.icons.clone();
+    let lookup = move |sc: &crate::config::Shortcut| match icons.revision(&sc.id) {
+        Some(upload) => (Some(upload), true),
+        None => (crate::shortcut_icons::revision(sc), false),
+    };
+    let config = crate::config::public::to_public(&s.cfg.get(), Some(device), Some(&lookup));
     json_response(
         StatusCode::OK,
         &json!({ "version": version, "config": config }),

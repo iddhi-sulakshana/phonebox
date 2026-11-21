@@ -38,6 +38,23 @@ pub fn int64(q: &Pairs, name: &str) -> Result<Option<i64>, NotANumber> {
         .transpose()
 }
 
+/// A `bool?` parameter: Ok(None) when absent, Err (a 400) when present but not `bool.TryParse`-able ("true" or
+/// "false" in any case, white space and NULs around allowed).
+pub fn boolean(q: &Pairs, name: &str) -> Result<Option<bool>, NotANumber> {
+    value(q, name)
+        .map(|v| {
+            let v = v.trim_matches(|c: char| c.is_whitespace() || c == '\0');
+            if v.eq_ignore_ascii_case("true") {
+                Ok(true)
+            } else if v.eq_ignore_ascii_case("false") {
+                Ok(false)
+            } else {
+                Err(NotANumber)
+            }
+        })
+        .transpose()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -58,6 +75,23 @@ mod tests {
         );
         assert_eq!(value(&q(&[("name", "")]), "name").as_deref(), Some(""));
         assert_eq!(value(&q(&[]), "name"), None);
+    }
+
+    #[test]
+    fn bools_follow_try_parse() {
+        assert_eq!(boolean(&q(&[]), "upload"), Ok(None));
+        assert_eq!(boolean(&q(&[("Upload", "TRUE")]), "upload"), Ok(Some(true)));
+        assert_eq!(
+            boolean(&q(&[("upload", " false\0")]), "upload"),
+            Ok(Some(false))
+        );
+        for bad in ["", "1", "yes", "true,true", "tru e"] {
+            assert_eq!(
+                boolean(&q(&[("upload", bad)]), "upload"),
+                Err(NotANumber),
+                "{bad:?}"
+            );
+        }
     }
 
     #[test]
