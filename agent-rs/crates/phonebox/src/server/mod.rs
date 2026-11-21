@@ -202,6 +202,8 @@ pub struct AppState {
     pub timings: Arc<RequestTimings>,
     pub phone: Arc<PhoneSeenState>,
     pub adb: Arc<crate::adb::AdbReverse>,
+    /// Microphone and camera use (the "On air" widget and rules); main shares it with the state sources.
+    pub privacy: Arc<crate::privacy_monitor::PrivacyMonitor>,
     pub stop: Stop,
     /// The monitors behind `/api/state` and the live stream.
     pub sources: Arc<crate::state::StateSources>,
@@ -330,6 +332,7 @@ impl AppState {
             settings_hooks.add(Arc::new(move || cameras.settings_saved()));
         }
         AppState {
+            privacy: crate::privacy_monitor::PrivacyMonitor::new(),
             photos,
             cameras,
             transcripts: sessions.transcripts(),

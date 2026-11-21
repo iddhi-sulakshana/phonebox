@@ -9,6 +9,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use crate::config::store::ConfigStore;
+use crate::screen_sync::{ReadLock, ScreenSynchronizer, SyncError};
+use crate::server::Stop;
 
 pub const PANEL_ACTIVITY: &str = "net.oxog.phonebox.deskpanel/.MainActivity";
 const HOME_ALIAS: &str = "net.oxog.phonebox.deskpanel/.HomeAlias";
@@ -147,6 +149,10 @@ pub struct AdbReverse {
     runner: Arc<dyn AdbRunner>,
     seen: Mutex<Seen>,
     round: Mutex<Round>,
+    /// display.followComputerLock applies (macOS only).
+    mac: bool,
+    /// Puts the phones' screens in the computer's lock state (display.followComputerLock).
+    screen: ScreenSynchronizer,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -156,13 +162,46 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 impl AdbReverse {
     /// Not running yet: [`AdbReverse::start`] starts the loop.
     pub fn new(cfg: Arc<ConfigStore>, port: u16, runner: Arc<dyn AdbRunner>) -> Arc<AdbReverse> {
+        Self::with_session_lock(
+            cfg,
+            port,
+            runner,
+            Arc::new(crate::session_lock_monitor::is_locked),
+            cfg!(target_os = "macos"),
+        )
+    }
+
+    /// [`AdbReverse::new`] with the computer's lock state read by `read_lock`, and display.followComputerLock in
+    /// effect when `mac` is set.
+    pub fn with_session_lock(
+        cfg: Arc<ConfigStore>,
+        port: u16,
+        runner: Arc<dyn AdbRunner>,
+        read_lock: ReadLock,
+        mac: bool,
+    ) -> Arc<AdbReverse> {
+        let screen = ScreenSynchronizer::new(read_lock, apply_screen(runner.clone(), cfg.clone()));
         Arc::new(AdbReverse {
             cfg,
             port,
             runner,
             seen: Default::default(),
             round: Default::default(),
+            mac,
+            screen,
         })
+    }
+
+    /// Puts every phone in use in the computer's lock state, once per change (`force`: again). Ok(false) when the
+    /// lock state cannot be read (the agent is not in the macOS GUI session).
+    pub async fn sync_session(&self, cancel: &Stop, force: bool) -> Result<bool, SyncError> {
+        let devices = lock(&self.seen).devices.clone();
+        self.screen.reconcile(&devices, cancel, force).await
+    }
+
+    /// Forgets the phones' screen states (display.followComputerLock is off).
+    pub async fn reset_session(&self, cancel: &Stop) -> Result<(), SyncError> {
+        self.screen.reset(cancel).await
     }
 
     /// The real adb, running.
@@ -388,14 +427,19 @@ impl AdbReverse {
                 continue;
             }
             set?;
+            // a newly plugged-in phone must not light up while the computer is locked
+            if cfg.display.follow_computer_lock && self.mac {
+                self.sync_session(&Stop::default(), true)
+                    .await
+                    .map_err(|e| AdbError::Failed(e.to_string()))?;
+                continue;
+            }
             // Settings > Display > open on connect is off (a phone also used for app testing): the phone stays as it
             // is, and the panel opens when the user starts it
             if !cfg.display.open_on_connect {
                 crate::log::info(CATEGORY, &format!("{d}: adb reverse set up"));
                 continue;
             }
-            // display.followComputerLock (macOS) keeps a phone plugged in while the Mac is locked dark; it needs the
-            // Mac's lock state, which comes with the session lock monitor (plan 6). Until then: wake and open.
             self.adb(
                 &adb,
                 &format!("-s {d} shell input keyevent KEYCODE_WAKEUP"),
@@ -495,6 +539,38 @@ impl AdbReverse {
             crate::log::info(CATEGORY, state);
         }
     }
+}
+
+/// `ApplyScreenAsync`: puts one phone's screen to sleep (locked), or wakes it, dismisses a keyguard without a PIN
+/// and shows the panel.
+fn apply_screen(runner: Arc<dyn AdbRunner>, cfg: Arc<ConfigStore>) -> crate::screen_sync::Apply {
+    Arc::new(move |device: String, locked: bool| {
+        let (runner, cfg) = (runner.clone(), cfg.clone());
+        Box::pin(async move {
+            let Some(adb) = runner.locate(cfg.get().adb_path.as_deref()) else {
+                return Err("ADB is not available".to_string());
+            };
+            let commands = if locked {
+                vec!["shell input keyevent KEYCODE_SLEEP".to_string()]
+            } else {
+                // a secure PIN or password keyguard still needs the user's unlock
+                vec![
+                    "shell input keyevent KEYCODE_WAKEUP".to_string(),
+                    "shell wm dismiss-keyguard".to_string(),
+                    format!("shell am start -n {PANEL_ACTIVITY}"),
+                ]
+            };
+            for command in commands {
+                let out = runner.run(&adb, &format!("-s {device} {command}")).await?;
+                if out.code != 0 {
+                    return Err(AdbError::Exit(out.code).to_string());
+                }
+            }
+            let state = if locked { "asleep" } else { "awake" };
+            crate::log::info(CATEGORY, &format!("{device}: phone screen {state}"));
+            Ok(())
+        })
+    })
 }
 
 /// True for a phone on adb over Wi-Fi: "host:port" (adb connect) or an mDNS name
@@ -1109,6 +1185,45 @@ mod tests {
         let wake = at("-s FAKE1 shell input keyevent KEYCODE_WAKEUP");
         let open = at("-s FAKE1 shell am start -n net.oxog.phonebox.deskpanel/.MainActivity");
         assert!(reverse < wake && wake < open);
+    }
+
+    /// display.followComputerLock (macOS): a newly plugged-in phone takes the computer's lock state instead of being
+    /// woken, so it does not light up while the Mac is locked; it is checked before display.openOnConnect.
+    #[tokio::test]
+    async fn a_new_phone_follows_the_computer_lock_before_open_on_connect() {
+        let wake = "-s FAKE1 shell input keyevent KEYCODE_WAKEUP";
+        let open = "-s FAKE1 shell am start -n net.oxog.phonebox.deskpanel/.MainActivity";
+        let dismiss = "-s FAKE1 shell wm dismiss-keyguard";
+        let sleep = "-s FAKE1 shell input keyevent KEYCODE_SLEEP";
+        for (mac, locked, expected) in [
+            (true, Some(true), vec![sleep]),
+            (true, Some(false), vec![wake, dismiss, open]),
+            (true, None, vec![]), // no GUI session: the phone is left as it is
+            (false, Some(true), vec![wake, open]), // not a Mac: open on connect
+        ] {
+            let fake = FakeAdb::with(|f| f.devices = vec!["FAKE1".into()]);
+            let (_d, cfg) = test_cfg(
+                r#"{"display":{"homeScreen":false,"keepAwake":false,"followComputerLock":true,"openOnConnect":true}}"#,
+            );
+            let adb = AdbReverse::with_session_lock(
+                cfg,
+                8765,
+                Arc::new(fake.clone()),
+                Arc::new(move || locked),
+                mac,
+            );
+            adb.ensure().await.unwrap();
+            let calls = fake.calls();
+            let rule = calls
+                .iter()
+                .position(|c| c == "-s FAKE1 reverse tcp:8765 tcp:8765")
+                .expect("the reverse rule");
+            assert_eq!(
+                calls[rule + 1..],
+                expected[..],
+                "mac {mac}, locked {locked:?}"
+            );
+        }
     }
 
     #[tokio::test]

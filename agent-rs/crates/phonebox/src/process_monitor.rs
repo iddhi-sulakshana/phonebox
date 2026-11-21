@@ -235,7 +235,7 @@ pub(crate) fn group_rows(
 use crate::system_monitor::round_dotnet;
 
 /// The process table as .NET's `Process.GetProcesses` sees it. `only` limits it to some pids.
-fn list_processes(only: Option<&[u32]>) -> Vec<ProcRow> {
+pub(crate) fn list_processes(only: Option<&[u32]>) -> Vec<ProcRow> {
     use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
     let Ok(mut sys) = System::new() else {
         return vec![];

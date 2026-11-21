@@ -64,6 +64,8 @@ cbc = { version = "0.1", features = ["alloc"] }
 pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 
 [target.'cfg(windows)'.dependencies]
+# the privacy monitor's camera callback (#[implement] expands to windows_core paths)
+windows-core = "0.62"
 # the photo frame's scaled copies on Windows (C# used GDI+): JPEG and PNG in, JPEG out
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 windows = { version = "0.62", features = [
@@ -77,6 +79,7 @@ windows = { version = "0.62", features = [
     "Win32_Graphics_Gdi",
     "Win32_Media_Audio",
     "Win32_Media_Audio_Endpoints",
+    "Win32_Media_MediaFoundation",
     "Win32_NetworkManagement_IpHelper",
     "Win32_NetworkManagement_Ndis",
     "Win32_Networking_WinSock",
@@ -88,6 +91,7 @@ windows = { version = "0.62", features = [
     "Win32_System_Registry",
     "Win32_System_RemoteDesktop",
     "Win32_System_IO",
+    "Win32_System_LibraryLoader",
     "Win32_System_Shutdown",
     "Win32_System_SystemInformation",
     "Win32_System_Threading",

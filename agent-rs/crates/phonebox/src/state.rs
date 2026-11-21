@@ -77,6 +77,12 @@ impl StateSources {
         self
     }
 
+    /// `privacy` from the privacy monitor.
+    pub fn with_privacy(mut self, privacy: Box<dyn StateSource>) -> StateSources {
+        self.privacy = privacy;
+        self
+    }
+
     /// `ping` from the ping monitor.
     pub fn with_ping(mut self, ping: Box<dyn StateSource>) -> StateSources {
         self.ping = ping;

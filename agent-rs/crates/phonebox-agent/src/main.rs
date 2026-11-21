@@ -81,6 +81,7 @@ fn main() -> ExitCode {
         phonebox::session_monitor::SessionMonitor::new(Some(cfg.clone()), app_paths::home());
     let github = Arc::new(phonebox::github_monitor::GitHubMonitor::new());
     let obs = Arc::new(phonebox::obs_monitor::ObsMonitor::new(cfg.clone()));
+    let privacy = phonebox::privacy_monitor::PrivacyMonitor::new();
     let sources = phonebox::state::StateSources::phase1()
         .with_pc(Box::new(system.clone()))
         .with_ping(Box::new(ping.clone()))
@@ -95,6 +96,9 @@ fn main() -> ExitCode {
             audio: audio.clone(),
         }))
         .with_obs(Box::new(obs.clone()))
+        .with_privacy(Box::new(phonebox::privacy_monitor::PrivacyState(
+            privacy.clone(),
+        )))
         .with_work(Box::new(phonebox::session_monitor::WorkFeed {
             sessions: sessions.clone(),
             github: github.clone(),
@@ -106,6 +110,7 @@ fn main() -> ExitCode {
     state.audio = audio;
     state.deck = deck;
     state.obs = obs;
+    state.privacy = privacy;
     state.wifi = Arc::new(wifi);
     // started here, on its own thread: the server never stops it before the process ends
     media.start(state.stop.clone());
@@ -170,6 +175,9 @@ async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Res
     state.feeds.start(state.stop.clone()); // every 5 s; each feed at most every 15 min, only while a Feeds widget shows
     state.calendar.start(state.stop.clone()); // at once, then every 10 min, on calendar changes and on /api/refresh
     state.cameras.start(state.stop.clone()); // every second: stops cameras off screen, restarts stalled ffmpegs
+    state.privacy.start(state.stop.clone()); // every 2 s (macOS: unknown)
+    // every second: the phones' screens follow the Mac's lock while display.followComputerLock is on
+    phonebox::session_lock_monitor::start(state.cfg.clone(), state.adb.clone(), state.stop.clone());
     log::info(
         "PhoneBoxAgent",
         &format!(
