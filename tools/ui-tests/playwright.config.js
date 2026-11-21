@@ -8,6 +8,8 @@ const python = process.platform === 'win32' ? 'python' : 'python3';
 
 module.exports = defineConfig({
   testDir: __dirname,
+  // live/ is the suite against a live agent (its own config: npx playwright test -c live)
+  testIgnore: ['live/**'],
   timeout: 30_000,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never', outputFolder: path.join(root, 'ui-test-report') }]] : 'list',
