@@ -95,6 +95,7 @@ async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Res
     state.adb.start(); // the USB tunnel to the phone
     state.system.start(state.stop.clone());
     state.ping.start(state.stop.clone());
+    state.procs.start(state.stop.clone());
     log::info(
         "PhoneBoxAgent",
         &format!(

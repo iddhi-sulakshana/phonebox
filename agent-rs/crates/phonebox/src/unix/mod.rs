@@ -3,4 +3,5 @@
 
 pub mod apple_smc;
 pub mod sh;
+pub mod unix_proc;
 pub mod unix_system;

@@ -20,6 +20,8 @@ pub mod log;
 pub mod net_adapters;
 pub mod phone_registry;
 pub mod ping_monitor;
+pub mod png;
+pub mod process_monitor;
 pub mod push_store;
 pub mod request_timings;
 pub mod server;
@@ -32,6 +34,7 @@ pub mod system_monitor;
 pub mod unix;
 pub mod usb_doctor;
 pub mod webview_doctor;
+pub mod win_icon;
 pub mod windows_gpu;
 
 #[cfg(test)]

@@ -123,6 +123,8 @@ pub struct AppState {
     pub system: Arc<crate::system_monitor::SystemMonitor>,
     /// The ping monitor (`ping` in the state); main starts it and puts the same one in `sources`.
     pub ping: Arc<crate::ping_monitor::PingMonitor>,
+    /// The process list (`/api/procs*`); main starts its sampling loop.
+    pub procs: Arc<crate::process_monitor::ProcessMonitor>,
 }
 
 impl AppState {
@@ -151,6 +153,9 @@ impl AppState {
             adb,
             system: crate::system_monitor::SystemMonitor::new(cfg.clone()),
             ping: crate::ping_monitor::PingMonitor::new(cfg.clone()),
+            procs: crate::process_monitor::ProcessMonitor::new(Arc::new(
+                crate::process_monitor::NoSessions,
+            )),
             cfg,
             endpoint,
             push,
