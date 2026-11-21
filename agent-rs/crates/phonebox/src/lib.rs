@@ -8,6 +8,7 @@ pub mod agent_endpoint;
 pub mod app_catalog;
 pub mod app_paths;
 pub mod app_restart;
+pub mod approval_store;
 pub mod audio_control;
 pub mod battery_monitor;
 pub mod browser_guard;
