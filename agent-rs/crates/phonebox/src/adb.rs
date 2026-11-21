@@ -103,6 +103,8 @@ pub enum AdbError {
     Exit(i32),
     /// adb did not run to its end.
     Failed(String),
+    /// Windows is ending the session: no adb is started (#179).
+    SessionEnding,
 }
 
 impl std::fmt::Display for AdbError {
@@ -110,6 +112,7 @@ impl std::fmt::Display for AdbError {
         match self {
             AdbError::Exit(code) => write!(f, "ADB exited with code {code}"),
             AdbError::Failed(message) => f.write_str(message),
+            AdbError::SessionEnding => f.write_str("the session is ending"),
         }
     }
 }
@@ -143,6 +146,48 @@ struct Round {
     last_problem: Option<String>,
 }
 
+/// Unix ms on a clock that only moves forward.
+pub type Clock = Arc<dyn Fn() -> i64 + Send + Sync>;
+
+/// How long after Windows starts ending the session no adb is started.
+pub const ENDING_WINDOW_MS: i64 = 60_000;
+
+/// `SessionEnding` (#179): for a minute after Windows starts ending the session (shutdown, restart, sign-out), no adb
+/// is started: a process started then cannot initialize, and Windows shows "adb.exe - Application Error (0xc0000142)"
+/// for it. Windows sends no event when a shutdown is cancelled; still running a minute later, adb runs again.
+pub struct SessionEnding {
+    since: std::sync::atomic::AtomicI64,
+    clock: Clock,
+}
+
+impl SessionEnding {
+    pub fn new(clock: Clock) -> SessionEnding {
+        SessionEnding {
+            since: std::sync::atomic::AtomicI64::new(0),
+            clock,
+        }
+    }
+
+    /// Windows started ending the session (the tray window's `WM_QUERYENDSESSION`).
+    pub fn mark(&self) {
+        self.since
+            .store((self.clock)().max(1), std::sync::atomic::Ordering::SeqCst);
+    }
+
+    pub fn active(&self) -> bool {
+        let since = self.since.load(std::sync::atomic::Ordering::SeqCst);
+        since != 0 && (self.clock)() - since < ENDING_WINDOW_MS
+    }
+}
+
+/// What the loop reports for a round that failed; nothing for one the ending session refused.
+pub fn round_problem(e: &AdbError) -> Option<String> {
+    match e {
+        AdbError::SessionEnding => None,
+        other => Some(format!("adb error: {other}")),
+    }
+}
+
 pub struct AdbReverse {
     cfg: Arc<ConfigStore>,
     port: u16,
@@ -153,6 +198,7 @@ pub struct AdbReverse {
     mac: bool,
     /// Puts the phones' screens in the computer's lock state (display.followComputerLock).
     screen: ScreenSynchronizer,
+    ending: Arc<SessionEnding>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -180,7 +226,13 @@ impl AdbReverse {
         read_lock: ReadLock,
         mac: bool,
     ) -> Arc<AdbReverse> {
-        let screen = ScreenSynchronizer::new(read_lock, apply_screen(runner.clone(), cfg.clone()));
+        let ending = Arc::new(SessionEnding::new(Arc::new(
+            crate::control_deck::monotonic_ms,
+        )));
+        let screen = ScreenSynchronizer::new(
+            read_lock,
+            apply_screen(runner.clone(), cfg.clone(), ending.clone()),
+        );
         Arc::new(AdbReverse {
             cfg,
             port,
@@ -189,6 +241,7 @@ impl AdbReverse {
             round: Default::default(),
             mac,
             screen,
+            ending,
         })
     }
 
@@ -224,8 +277,13 @@ impl AdbReverse {
         let this = self.clone();
         tokio::spawn(async move {
             loop {
-                if let Err(e) = this.ensure().await {
-                    this.report(&format!("adb error: {e}"));
+                // while the session is ending nothing is started; the loop goes on, for a shutdown that is cancelled
+                // (a refused call ends its round, not the loop as in C#)
+                if !this.ending.active()
+                    && let Err(e) = this.ensure().await
+                    && let Some(problem) = round_problem(&e)
+                {
+                    this.report(&problem);
                 }
                 tokio::time::sleep(ROUND_PAUSE).await;
             }
@@ -270,6 +328,15 @@ impl AdbReverse {
         lock(&self.seen).missing_app.clone()
     }
 
+    /// Windows started ending the session: no adb for a minute.
+    pub fn mark_session_ending(&self) {
+        self.ending.mark();
+    }
+
+    pub fn session_ending(&self) -> bool {
+        self.ending.active()
+    }
+
     /// The phones in use (`Devices`, after the deviceSerial filter).
     pub fn devices(&self) -> Vec<String> {
         lock(&self.seen).devices.clone()
@@ -305,6 +372,9 @@ impl AdbReverse {
     }
 
     async fn adb(&self, adb: &Path, args: &str, any_exit: bool) -> Result<String, AdbError> {
+        if self.ending.active() {
+            return Err(AdbError::SessionEnding);
+        }
         let out = self.runner.run(adb, args).await.map_err(AdbError::Failed)?;
         if out.code != 0 && !any_exit {
             return Err(AdbError::Exit(out.code));
@@ -324,6 +394,8 @@ impl AdbReverse {
         };
         let listed = match self.adb(&adb, "devices", false).await {
             Ok(listed) => listed,
+            // the session is ending: the phones are not gone
+            Err(AdbError::SessionEnding) => return Err(AdbError::SessionEnding),
             Err(e) => {
                 // adb that cannot list its devices keeps no phone connected (the C# agent kept the last list)
                 self.set_devices(Vec::new());
@@ -383,6 +455,7 @@ impl AdbReverse {
                 .await
             {
                 Ok(list) => list,
+                Err(AdbError::SessionEnding) => return Err(AdbError::SessionEnding),
                 Err(e) => {
                     crate::log::warn(
                         CATEGORY,
@@ -555,10 +628,17 @@ impl AdbReverse {
 
 /// `ApplyScreenAsync`: puts one phone's screen to sleep (locked), or wakes it, dismisses a keyguard without a PIN
 /// and shows the panel.
-fn apply_screen(runner: Arc<dyn AdbRunner>, cfg: Arc<ConfigStore>) -> crate::screen_sync::Apply {
+fn apply_screen(
+    runner: Arc<dyn AdbRunner>,
+    cfg: Arc<ConfigStore>,
+    ending: Arc<SessionEnding>,
+) -> crate::screen_sync::Apply {
     Arc::new(move |device: String, locked: bool| {
-        let (runner, cfg) = (runner.clone(), cfg.clone());
+        let (runner, cfg, ending) = (runner.clone(), cfg.clone(), ending.clone());
         Box::pin(async move {
+            if ending.active() {
+                return Err(AdbError::SessionEnding.to_string());
+            }
             let Some(adb) = runner.locate(cfg.get().adb_path.as_deref()) else {
                 return Err("ADB is not available".to_string());
             };
@@ -826,6 +906,50 @@ mod tests {
         fake.set(|f| f.fail_all = None); // back: the next round finds the phone again
         tokio::time::sleep(Duration::from_secs(5)).await;
         assert!(adb.connected());
+    }
+
+    #[test]
+    fn adb_waits_a_minute_after_the_session_starts_ending() {
+        let now = Arc::new(std::sync::atomic::AtomicI64::new(1_000_000));
+        let clock = now.clone();
+        let ending = SessionEnding::new(Arc::new(move || {
+            clock.load(std::sync::atomic::Ordering::SeqCst)
+        }));
+        assert!(!ending.active());
+        ending.mark();
+        assert!(ending.active());
+        now.fetch_add(ENDING_WINDOW_MS - 1, std::sync::atomic::Ordering::SeqCst);
+        assert!(ending.active());
+        // still running a minute later: the shutdown was cancelled, adb is allowed again
+        now.fetch_add(2, std::sync::atomic::Ordering::SeqCst);
+        assert!(!ending.active());
+    }
+
+    #[tokio::test]
+    async fn a_refused_adb_call_ends_the_round_not_the_loop() {
+        let fake = FakeAdb::with(|f| f.devices = vec!["FAKE1".into()]);
+        let (_d, cfg) = test_cfg(r#"{"display":{"homeScreen":false,"keepAwake":false}}"#);
+        let adb = AdbReverse::new(cfg, 8765, Arc::new(fake.clone()));
+        adb.ensure().await.unwrap();
+        assert!(adb.connected());
+        fake.clear_calls();
+        adb.mark_session_ending();
+        assert!(adb.session_ending());
+        // nothing is started, and the phone is not taken for gone
+        assert!(matches!(adb.ensure().await, Err(AdbError::SessionEnding)));
+        assert!(matches!(
+            adb.open_panel().await,
+            Err(AdbError::SessionEnding)
+        ));
+        assert!(fake.calls().is_empty(), "{:?}", fake.calls());
+        assert!(adb.connected());
+        assert_eq!(AdbError::SessionEnding.to_string(), "the session is ending");
+        // the loop's verdict on a round: a refused one is not an "adb error"
+        assert_eq!(round_problem(&AdbError::SessionEnding), None);
+        assert_eq!(
+            round_problem(&AdbError::Exit(1)).as_deref(),
+            Some("adb error: ADB exited with code 1")
+        );
     }
 
     #[tokio::test]
