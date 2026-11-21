@@ -138,7 +138,7 @@ mod tests {
             "lan": {"token": "stable-phone", "webhookToken": "stable-webhook"},
         }));
         let before = std::fs::read(&path).unwrap();
-        store.persist_generated();
+        store.persist_generated().unwrap();
         assert_eq!(
             ConfigStore::new(path.clone()).get().pages[0].icon,
             "\u{2328}\u{fe0f}"
@@ -148,7 +148,7 @@ mod tests {
             before
         );
         let after = std::fs::read(&path).unwrap();
-        store.persist_generated();
+        store.persist_generated().unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), after);
     }
 

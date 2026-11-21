@@ -135,8 +135,9 @@ impl ConfigStore {
     }
 
     /// Writes generated keys (and repaired icons) to disk so they stay the same across restarts. A file that cannot be
-    /// read is never replaced.
-    pub fn persist_generated(&self) {
+    /// read is never replaced. A write that fails is an error the agent stops on, as C#'s start-up does (it would
+    /// otherwise run with keys that change at the next start); a refused save (a conflict) is not.
+    pub fn persist_generated(&self) -> Result<(), String> {
         let (c, version) = {
             let mut inner = self.lock();
             let c = self.get_locked(&mut inner);
@@ -167,10 +168,13 @@ impl ConfigStore {
                 && on_disk.lan.webhook_token == c.lan.webhook_token
                 && on_disk.updates.repo == c.updates.repo
             {
-                return;
+                return Ok(());
             }
         }
-        let _ = self.save(&to_dotnet_json(&c), Some(version));
+        match self.save(&to_dotnet_json(&c), Some(version)) {
+            Err(e) if e.starts_with("could not save the settings") => Err(e),
+            _ => Ok(()),
+        }
     }
 }
 
@@ -433,20 +437,35 @@ mod tests {
         assert!(!s.version_conflict(Some(&s.version().to_string())));
     }
 
+    // C#'s PersistGenerated lets a failed write throw out of start-up (Program.cs:33): the agent does not run with
+    // keys that would change at the next start
+    #[test]
+    fn generated_keys_that_cannot_be_saved_stop_startup() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+        std::fs::write(&path, "{}").unwrap();
+        std::fs::create_dir(dir.path().join("config.json.bak")).unwrap();
+        let error = ConfigStore::new(path.clone())
+            .persist_generated()
+            .unwrap_err();
+        assert!(error.starts_with("could not save the settings"), "{error}");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{}");
+    }
+
     #[test]
     fn generated_keys_persist_for_a_new_config_without_replacing_unreadable_files() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("config.json");
         let store = ConfigStore::new(path.clone());
         let generated = store.get().lan.clone();
-        store.persist_generated();
+        store.persist_generated().unwrap();
         assert!(path.exists());
         let restarted = ConfigStore::new(path.clone()).get().lan.clone();
         assert_eq!(generated.token, restarted.token);
         assert_eq!(generated.webhook_token, restarted.webhook_token);
         let invalid = "{ incomplete";
         std::fs::write(&path, invalid).unwrap();
-        ConfigStore::new(path.clone()).persist_generated();
+        ConfigStore::new(path.clone()).persist_generated().unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), invalid);
     }
 
@@ -460,7 +479,7 @@ mod tests {
             format!(r#"{{ {keys}, "updates": {{ "auto": false, "repo": "ersinkoc/phonebox" }} }}"#),
         )
         .unwrap();
-        ConfigStore::new(path.clone()).persist_generated();
+        ConfigStore::new(path.clone()).persist_generated().unwrap();
         let saved = std::fs::read_to_string(&path).unwrap();
         assert!(
             saved.contains(r#""repo": "iddhi-sulakshana/phonebox""#),
@@ -470,7 +489,7 @@ mod tests {
         let mine =
             format!(r#"{{ {keys}, "updates": {{ "auto": false, "repo": "someone/else" }} }}"#);
         std::fs::write(&path, &mine).unwrap();
-        ConfigStore::new(path.clone()).persist_generated();
+        ConfigStore::new(path.clone()).persist_generated().unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), mine);
     }
 
@@ -480,7 +499,7 @@ mod tests {
         let path = dir.path().join("phonebox-config.json");
         let store = ConfigStore::new(path.clone());
         let generated = store.get().lan.clone();
-        store.persist_generated();
+        store.persist_generated().unwrap();
         assert!(path.exists());
         let loaded = ConfigStore::new(path).get().lan.clone();
         assert_eq!(generated.token, loaded.token);

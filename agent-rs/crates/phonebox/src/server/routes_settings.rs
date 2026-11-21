@@ -63,6 +63,11 @@ async fn put_settings(State(s): State<AppState>, headers: HeaderMap, body: Strin
         .get("x-config-version")
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.trim().parse::<i64>().ok());
+    // C# reads the body through a StreamReader, which drops a BOM before these checks; the save strips it as well
+    let body = match body.strip_prefix('\u{feff}') {
+        Some(rest) => rest.to_string(),
+        None => body,
+    };
     let port = s.endpoint.port;
     if lan_port_collides_with_local(&body, port) {
         return json_response(

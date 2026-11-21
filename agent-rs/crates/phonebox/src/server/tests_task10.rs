@@ -36,6 +36,23 @@ async fn put_settings(
         .unwrap()
 }
 
+// review of PR 1: C# reads the body through a StreamReader, which drops a BOM before the Wi-Fi checks; the Rust checks
+// parsed the raw text, failed on the BOM and let a colliding port through to the save (which strips it)
+#[tokio::test]
+async fn a_bom_before_the_settings_does_not_skip_the_wifi_checks() {
+    let (_dir, state) = test_state();
+    let app = build_router(state.clone());
+    let port = state.endpoint.port;
+    let body = format!("\u{feff}{{\"lan\":{{\"enabled\":true,\"port\":{port}}}}}");
+    let r = put_settings(&app, &body, None).await;
+    assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        json(r).await["error"],
+        format!("Wi-Fi port cannot be the same as the local port ({port})")
+    );
+    assert!(!state.cfg.get().lan.enabled);
+}
+
 #[tokio::test]
 async fn stale_save_conflicts_and_headerless_save_succeeds() {
     let (_d, state) = test_state();

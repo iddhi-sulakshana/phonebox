@@ -63,7 +63,11 @@ fn main() -> ExitCode {
     let config_path = std::path::absolute(&config_path).unwrap_or(config_path);
     app_paths::restrict_config(&config_path);
     let cfg = Arc::new(ConfigStore::new(config_path.clone()));
-    cfg.persist_generated(); // keep the Wi-Fi key stable across restarts
+    // keep the Wi-Fi key stable across restarts; a settings file that cannot be written ends the agent, as in C#
+    if let Err(e) = cfg.persist_generated() {
+        eprintln!("{e}");
+        return ExitCode::FAILURE;
+    }
     let _ = log::init(&app_paths::log_path());
     // Wi-Fi / Tailscale: HTTPS with the pinned certificate kept next to the config (made on first use); only when Wi-Fi
     // is on with its own port at startup. A certificate that cannot be written ends the agent, as in C#.
