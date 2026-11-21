@@ -31,8 +31,8 @@ pub fn build_router(state: AppState) -> App {
 
 /// `/agent/api/...` becomes `/api/...` (`Program.cs`): the panel in the layout editor's live preview calls the API by
 /// the phone's own path. It runs before routing, timing and the guard, so all of them see the new path (the guard
-/// must: a cross-site navigation is allowed to pages, never to `/api`). Local port only: the Wi-Fi listener (phase 4)
-/// must not apply it.
+/// must: a cross-site navigation is allowed to pages, never to `/api`). Local port only: the Wi-Fi listener
+/// does not apply it.
 fn rewrite_agent_api(mut req: axum::extract::Request) -> axum::extract::Request {
     const PREFIX: &str = "/agent/api";
     let path = req.uri().path();
@@ -53,8 +53,45 @@ fn rewrite_agent_api(mut req: axum::extract::Request) -> axum::extract::Request 
     req
 }
 
+/// The Wi-Fi port's app: the same routes behind the Wi-Fi guard (the phone key, the webhook key or a pairing claim,
+/// only on the allow-list), without the `/agent/api` rewrite.
+pub fn build_wifi_router(state: AppState) -> axum::Router {
+    guard::apply_wifi(all_routes(), state)
+}
+
+/// Which listener a request came in on, as a request extension the guards set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Via {
+    /// 127.0.0.1: the phone's USB tunnel, the settings page, tools on this computer.
+    Local,
+    /// The Wi-Fi port (HTTPS).
+    Wifi,
+}
+
+impl Via {
+    /// The live stream's log label.
+    pub fn label(self) -> &'static str {
+        match self {
+            Via::Local => "USB/local",
+            Via::Wifi => "Wi-Fi",
+        }
+    }
+
+    /// How the phone registry says the phone was seen.
+    pub fn transport(self) -> &'static str {
+        match self {
+            Via::Local => "USB",
+            Via::Wifi => "Wi-Fi",
+        }
+    }
+}
+
 fn routes(state: AppState) -> axum::Router {
-    let routes = axum::Router::new()
+    guard::apply_local(all_routes(), state)
+}
+
+fn all_routes() -> axum::Router<AppState> {
+    axum::Router::new()
         .merge(static_files::routes())
         .merge(routes_settings::routes())
         .merge(routes_info::routes())
@@ -63,8 +100,7 @@ fn routes(state: AppState) -> axum::Router {
         .merge(routes_desk::routes())
         .merge(routes_pair::routes())
         // Kestrel's default request body limit: a settings page with many pages still fits
-        .layer(axum::extract::DefaultBodyLimit::max(30_000_000));
-    guard::apply(routes, state)
+        .layer(axum::extract::DefaultBodyLimit::max(30_000_000))
 }
 
 /// Serves until [`Stop::stop`]: the live streams end and the server drains its open connections for at most `grace`

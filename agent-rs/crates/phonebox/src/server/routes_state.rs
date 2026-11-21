@@ -40,9 +40,13 @@ async fn get_state(
 
 /// "state" every whole second (and within 100 ms after a `state_signal::poke`), "event" as soon as one happens,
 /// "work" when it changed (checked every second tick). One connection instead of polling.
-async fn stream(State(s): State<AppState>, headers: HeaderMap) -> Response {
+async fn stream(
+    State(s): State<AppState>,
+    via: Option<axum::Extension<super::Via>>,
+    headers: HeaderMap,
+) -> Response {
     let is_phone = headers.contains_key("x-phonebox-app");
-    let via = "USB/local"; // the Wi-Fi listener (phase 4) opens streams "Wi-Fi"
+    let via = via.map_or(super::Via::Local, |v| v.0).label();
     let who = if is_phone { "phone" } else { "other client" };
     crate::log::info("Program", &format!("live stream opened ({who}, {via})"));
     let (tx, rx) = mpsc::channel::<Bytes>(16);
