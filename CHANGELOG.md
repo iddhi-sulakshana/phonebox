@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.0.0-alpha.1 — 2026-11-22
+
+A pre-release of the desktop agent rewritten in Rust, which replaces the C# agent from 1.0.0 on. Not for general use
+yet. The phone app, the panel and the settings page stay as they are; the agent reads the same `config.json` and
+answers the phone the same way.
+
+- One program with nothing else to install: no .NET runtime, and a much smaller download.
+- Install it with `setup.sh --pre` (macOS, Linux) or `setup.ps1 -Pre` (Windows); an alpha updates itself to the next
+  alpha, then to 1.0.0, from this repository's releases.
+- The Android app is signed with this repository's key: a phone with the app from the original project has to
+  uninstall it once before this one installs.
+- macOS asks once more for Accessibility and Automation (a new signing certificate). Windows builds are not
+  code-signed.
+- The changes listed under Unreleased below are included.
+
 ## Unreleased
 
 **Widgets**

@@ -1,48 +1,78 @@
 # Releasing PhoneBox
 
-1. Update `agent/PhoneBox.Agent/PhoneBox.Agent.csproj`, Android `versionName` and its increasing `versionCode`.
-2. Add dated release notes to `CHANGELOG.md`; update README and demo catalog counts when widgets/templates change.
-3. Run `python tools/check-release.py`, `./gradlew lintDebug assembleDebug` in `android`, the agent tests, `npm test` in `tools/ui-tests`, and
-   `pwsh tools/test-install-apk.ps1` on Windows. Build and verify the release-signed APK.
-4. Commit the reviewed scope, push `main`, and wait for the build and Pages workflows to pass.
-5. Run the **release** workflow on that commit. Use a draft for artifact review, or publish after the gates pass.
+The release version is `agent-rs/Cargo.toml`'s (`[workspace.package] version`). Until the Rust agent replaces the C#
+one it is `1.0.0-alpha.N`: each alpha is published as a GitHub **pre-release** that never becomes "latest", so a
+stable install, setup without `--pre` and a stable agent's updater never take it. `1.0.0` and later need the
+release workflow's `final` input; ask the owner before using it. The C# project (`agent/`) stays at `0.9.23` as the
+parity oracle and is not released any more.
 
-The release workflow reuses the build checks, then tests and smoke-runs the agent on native Windows x64,
-Linux x64/ARM64, and macOS ARM64/Intel runners. It builds the signed APK, signs the macOS agent with PhoneBox's own certificate, creates
-provenance attestations and SHA-256 checksums, and publishes the release notes from the changelog.
-The reusable artifact contract also checks the real upload/download boundary with transfer fixtures: exact release
-filenames and hashes, exclusion of debug intermediates, and the actual demo's Pages tar format. It never publishes
-a release or deploys Pages. Changes to Pages deployment still need a successful Pages workflow on `main`.
-Published releases update the Scoop bucket and generate winget manifests in a follow-up commit.
-Winget manifests are prepared for submission; generation alone does not mean the package is accepted into winget-pkgs.
+## Bump the version
 
-The agent zips are self-contained single files: each one carries its own .NET runtime, so .NET security fixes
-reach users only through a PhoneBox release. When .NET ships a fix for Kestrel, TLS or the runtime, publish a patch
-release (`setup-dotnet` with `10.0.x` picks up the newest runtime). Single-file bundles are not compressed on
-purpose: the zip is barely smaller and a compressed bundle costs about 90 MB more memory in a process that runs all day.
+One commit per release:
 
-Required GitHub Actions secrets are `PHONEBOX_KEYSTORE_BASE64`, `PHONEBOX_STORE_PASSWORD`, `PHONEBOX_KEY_ALIAS`
-and `PHONEBOX_KEY_PASSWORD`. Keep the original Android signing key: an incompatible APK must fail the update
-while preserving the installed app and its data. Never commit the key or its passwords.
+1. `agent-rs/Cargo.toml`: `version = "1.0.0-alpha.N"`, then refresh `agent-rs/Cargo.lock` (any `cargo build` in
+   `agent-rs` does it; the release builds with `--locked`, so a stale lock fails).
+2. `android/app/build.gradle.kts`: the same `versionName`, and `versionCode` one higher than the last release (the
+   fork started at 100 for `1.0.0-alpha.1`).
+3. `CHANGELOG.md`: a dated section, `## 1.0.0-alpha.N — YYYY-MM-DD`. Its text becomes the release notes.
+4. After a dependency change, regenerate `agent-rs/THIRD-PARTY-NOTICES.txt` with `agent-rs/scripts/notices.sh`
+   (cargo-about on the test server). The notices ship in every agent zip.
 
-The macOS agent is signed with a self-signed certificate made once with `tools/make-macos-signing-cert.sh`
-(secrets `MACOS_SIGNING_P12_BASE64` and `MACOS_SIGNING_P12_PASSWORD`; the release stops without them). Every release
-then has the same designated requirement, `identifier "net.oxog.phonebox.agent"` plus that certificate, so macOS keeps
-the Accessibility permission across updates. Keep the certificate: a new one, a new identifier or the hardened runtime
-(library validation would refuse the native libraries next to the agent) makes every Mac user grant it again. The
-build workflow runs the same signing step with a throwaway certificate on every change.
+Then check, on the test server (`ssh` after `agent-rs/scripts/_sync.sh`'s `sync_tree`, run from bash):
+`python3 tools/check-release.py`, `python3 tools/check-notices.py`, `python3 tools/test-release-metadata.py`, and
+`agent-rs/scripts/remote-check.sh` for the Rust tests.
 
-`PhoneBoxAgent.exe` in the Windows zip is Authenticode-signed through [SignPath Foundation](https://signpath.org)
-while the repository variable `SIGNPATH_SIGNING_POLICY` is `release-signing` (the API token is the
-`SIGNPATH_API_TOKEN` secret). The release then waits, up to an hour, for the signing request to be approved in
-SignPath; the signature is checked on Windows before the smoke test, and the zip, checksums, attestation and package
-manifests all cover the signed file. Without the variable the agent is released unsigned. The **signing test**
-workflow runs the same step on its own with the test certificate, without releasing anything.
+## Run the release
 
-After publishing, verify the tag points to the intended commit, every asset matches `SHA256SUMS-<version>.txt`,
-and `gh attestation verify <asset> --repo ersinkoc/phonebox` succeeds for the APK and agent archives.
-Extract downloaded archives and run `python tools/smoke-agent.py <executable> --version <version>` on available
-native machines. Separate CI proof, downloaded-binary checks and physical-device tests in the release report.
+Push the branch and wait for the **rust** and **build** workflows to pass, then dispatch **release** on that branch:
 
-`scripts/build.ps1` is a local packaging helper. `scripts/release.ps1` dispatches the gated GitHub release workflow.
-This release process does not submit packages to external registries automatically.
+```
+gh workflow run release.yml --repo iddhi-sulakshana/phonebox --ref <branch> -f draft=true
+```
+
+Review the draft's assets, delete it, and dispatch again with `-f draft=false`: a draft's downloads are not public,
+so setup and the updater cannot fetch them. For a final version add `-f final=true` (only with the owner's go-ahead).
+
+The workflow:
+
+- runs the C# CI (`build.yml`, the parity oracle) and the Rust CI (`rust.yml`: tests on five runners, parity, the
+  notices and version checks, and the same packaging as the release);
+- reads the version, checks it with `tools/check-release.py` (and `--final` when asked), and refuses a tag that
+  exists already;
+- builds and signs the APK;
+- builds `PhoneBoxAgent` with `cargo build --release --locked` on Windows x64, Linux x64 and ARM64 (Ubuntu 22.04, so
+  glibc 2.35 is enough), macOS ARM64 and Intel; signs the macOS agent with PhoneBox's own certificate; checks the
+  Windows exe (no console, no Visual C++ runtime, `ProductVersion` = the version) and the Linux glibc floor;
+  smoke-tests each agent on its own architecture (`tools/smoke-agent.py`); zips the executable and the notices at the
+  zip root (`tools/zip-agent.py`);
+- attests the zips and the APK, writes `SHA256SUMS-<v>.txt`, and creates release `v<v>` with the CHANGELOG section as
+  notes, as a pre-release (`--prerelease --latest=false`) when the version has a `-`.
+
+The asset names are the C# releases', byte for byte, because setup and the updater look for them:
+`PhoneBoxAgent-<v>-<rid>.zip` (`win-x64`, `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64`), `PhoneBox-<v>.apk`,
+`PhoneBox-<v>.intoto.jsonl` and `SHA256SUMS-<v>.txt`.
+
+Only a published final release dispatched from `main` updates the Scoop bucket and the winget manifests (a commit
+pushed to `main`); pre-releases and other branches never do. Moving those manifests to this repository's own
+identifiers comes with 1.0.0.
+
+## Secrets
+
+The release stops before publishing anything without these repository secrets:
+
+- `PHONEBOX_KEYSTORE_BASE64` (base64 of the keystore), `PHONEBOX_STORE_PASSWORD`, `PHONEBOX_KEY_ALIAS` and
+  `PHONEBOX_KEY_PASSWORD`: the APK's signing key. Keep it: Android refuses an update signed with another key, so a
+  phone with an app signed by an older key has to uninstall it once.
+- `MACOS_SIGNING_P12_BASE64` and `MACOS_SIGNING_P12_PASSWORD`: the macOS certificate made once with
+  `tools/make-macos-signing-cert.sh`. Every release then has the same designated requirement,
+  `identifier "net.oxog.phonebox.agent"` plus that certificate, so macOS keeps the Accessibility permission across
+  updates. A new certificate or identifier makes every Mac grant it again. No hardened runtime.
+
+Keep the key, the certificate and their passwords out of the repository. The Windows agent is not code-signed.
+
+## After publishing
+
+Check that the tag points at the intended commit, that every asset matches `SHA256SUMS-<v>.txt`, and that
+`gh attestation verify <asset> --repo iddhi-sulakshana/phonebox` passes for the APK and the agent zips. Extract a
+downloaded zip and run `python3 tools/smoke-agent.py <executable> --version <v>` on the machines at hand. Report CI
+results, downloaded-binary checks and checks on a real phone separately.
