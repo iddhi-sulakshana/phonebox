@@ -27,6 +27,7 @@ pub mod log;
 pub mod media_artwork_cache;
 pub mod media_monitor;
 pub mod net_adapters;
+pub mod pairing;
 pub mod panel_widgets;
 pub mod phone_registry;
 pub mod ping_monitor;

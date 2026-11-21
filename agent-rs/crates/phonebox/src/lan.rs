@@ -59,7 +59,7 @@ pub enum LanAccess {
 }
 
 /// `CryptographicOperations.FixedTimeEquals`: false at once for different lengths, else no early exit.
-fn fixed_time_equals(a: &[u8], b: &[u8]) -> bool {
+pub(crate) fn fixed_time_equals(a: &[u8], b: &[u8]) -> bool {
     a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
