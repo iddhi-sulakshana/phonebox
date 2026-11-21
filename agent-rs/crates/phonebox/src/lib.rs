@@ -36,6 +36,7 @@ pub mod gpus;
 pub mod home_assistant;
 pub mod icon_text;
 pub mod idle;
+pub mod job_object;
 pub mod json_text;
 pub mod key_sender;
 pub mod lan;

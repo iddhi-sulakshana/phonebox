@@ -138,8 +138,8 @@ fn run_inner(timeout_ms: u64, tool: &str, args: &[&str], need_success: bool) -> 
     output.map(|b| String::from_utf8_lossy(&b).into_owned())
 }
 
-/// `Process.Kill(entireProcessTree: true)`: the process group on Unix (the tool runs in its own group), the process on
-/// Windows (job objects come with plan 7).
+/// `Process.Kill(entireProcessTree: true)`: the process group on Unix (the tool runs in its own group); these macOS
+/// and Linux tools never run on Windows, where only the process would end.
 fn kill_tree(child: &mut std::process::Child) {
     #[cfg(unix)]
     if let Ok(pid) = i32::try_from(child.id()) {

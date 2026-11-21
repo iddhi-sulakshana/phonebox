@@ -302,6 +302,8 @@ pub struct AppState {
     pub calendar: Arc<crate::calendar::CalendarMonitor>,
     pub photos: Arc<crate::photo_frame::PhotoFrame>,
     pub cameras: Arc<crate::camera_feeds::CameraFeeds>,
+    /// Windows: the job nvidia-smi and ffmpeg run in, so they end with the agent.
+    pub jobs: Arc<crate::job_object::JobObject>,
     /// `/api/proxy`'s client (a fake in tests).
     pub proxy: crate::widget_feed_proxy::ProxySend,
 }
@@ -359,9 +361,10 @@ impl AppState {
             let photos = photos.clone();
             settings_hooks.add(Arc::new(move || photos.settings_saved()));
         }
+        let jobs = crate::job_object::JobObject::new();
         let cameras = Arc::new(crate::camera_feeds::CameraFeeds::new(
             cfg.clone(),
-            crate::camera_feeds::real_launcher(),
+            crate::camera_feeds::real_launcher(jobs.clone()),
         ));
         {
             // a camera whose address changed starts again, a removed one stops
@@ -395,6 +398,7 @@ impl AppState {
             privacy: crate::privacy_monitor::PrivacyMonitor::new(),
             photos,
             cameras,
+            jobs,
             transcripts: sessions.transcripts(),
             procs: crate::process_monitor::ProcessMonitor::new(sessions.clone()),
             hook,

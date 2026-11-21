@@ -630,17 +630,18 @@ impl SystemMonitor {
         self.found.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// Starts every loop (`ExecuteAsync`, `GpuLoop`, `CpuTempLoop`); each ends on `stop`.
+    /// Starts every loop (`ExecuteAsync`, `GpuLoop`, `CpuTempLoop`); each ends on `stop`. nvidia-smi runs in `jobs`.
     pub fn start(
         self: &std::sync::Arc<Self>,
         stop: crate::server::Stop,
+        jobs: std::sync::Arc<crate::job_object::JobObject>,
     ) -> Vec<tokio::task::JoinHandle<()>> {
         let mut tasks = vec![self.start_sampling(stop.clone())];
         if cfg!(target_os = "macos") {
             tasks.push(tokio::spawn(self.clone().apple_gpu_loop(stop.clone())));
         } else {
             tasks.push(tokio::spawn(self.clone().os_gpu_loop(stop.clone())));
-            tasks.push(tokio::spawn(self.clone().nvidia_loop(stop.clone())));
+            tasks.push(tokio::spawn(self.clone().nvidia_loop(stop.clone(), jobs)));
         }
         tasks.push(tokio::spawn(self.clone().cpu_temp_loop(stop)));
         tasks
@@ -725,9 +726,13 @@ impl SystemMonitor {
     }
 
     /// Keeps nvidia-smi running and reads one line per GPU per second; restarts it 10 s after it ends or fails.
-    async fn nvidia_loop(self: std::sync::Arc<Self>, stop: crate::server::Stop) {
+    async fn nvidia_loop(
+        self: std::sync::Arc<Self>,
+        stop: crate::server::Stop,
+        jobs: std::sync::Arc<crate::job_object::JobObject>,
+    ) {
         loop {
-            let _ = self.nvidia_run(&stop).await;
+            let _ = self.nvidia_run(&stop, &jobs).await;
             self.found().nvidia = None;
             tokio::select! {
                 _ = stop.stopped() => return,
@@ -736,7 +741,11 @@ impl SystemMonitor {
         }
     }
 
-    async fn nvidia_run(&self, stop: &crate::server::Stop) -> std::io::Result<()> {
+    async fn nvidia_run(
+        &self,
+        stop: &crate::server::Stop,
+        jobs: &crate::job_object::JobObject,
+    ) -> std::io::Result<()> {
         use tokio::io::AsyncBufReadExt;
         fn command(args: &[&str]) -> tokio::process::Command {
             let mut c = tokio::process::Command::new("nvidia-smi");
@@ -764,6 +773,8 @@ impl SystemMonitor {
         ])
         .stdout(std::process::Stdio::piped())
         .spawn()?;
+        // Windows: the long-running one ends with the agent, however it ends (the short query above is not tracked)
+        jobs.track(&child);
         let Some(out) = child.stdout.take() else {
             return Ok(());
         };

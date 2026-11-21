@@ -209,7 +209,7 @@ async fn serve(
         log::warn("PhoneBoxAgent", "this build has no TLS: Wi-Fi stays off");
     }
     state.adb.start(); // the USB tunnel to the phone
-    state.system.start(state.stop.clone());
+    state.system.start(state.stop.clone(), state.jobs.clone());
     state.ping.start(state.stop.clone());
     state.procs.start(state.stop.clone());
     state.batteries.start(state.stop.clone());

@@ -697,6 +697,7 @@ printf '\nfour' >&2"#,
         &ffmpeg,
         &source,
         Arc::new(move |f| sink.lock().unwrap().push(f)),
+        &crate::job_object::JobObject::default(),
     )
     .unwrap();
     wait_until("both pipes to end", || run.has_ended());
@@ -724,7 +725,13 @@ fn stopping_a_run_ends_ffmpeg_and_what_it_started() {
         dir.path(),
         &format!("sleep 30 &\necho $! > '{}'\nwait", marker.display()),
     );
-    let run = FfmpegRun::start(&ffmpeg, &CameraSource::default(), Arc::new(|_| {})).unwrap();
+    let run = FfmpegRun::start(
+        &ffmpeg,
+        &CameraSource::default(),
+        Arc::new(|_| {}),
+        &crate::job_object::JobObject::default(),
+    )
+    .unwrap();
     let pid = run.pid.unwrap();
     wait_until("the child to start", || {
         std::fs::read_to_string(&marker).is_ok_and(|t| t.trim().parse::<u32>().is_ok())

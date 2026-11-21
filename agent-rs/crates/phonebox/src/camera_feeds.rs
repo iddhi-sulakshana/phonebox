@@ -630,6 +630,7 @@ impl FfmpegRun {
         ffmpeg: &str,
         source: &CameraSource,
         on_frame: OnFrame,
+        jobs: &crate::job_object::JobObject,
     ) -> std::io::Result<FfmpegRun> {
         use std::process::{Command, Stdio};
         let mut command = Command::new(ffmpeg);
@@ -649,8 +650,9 @@ impl FfmpegRun {
             use std::os::windows::process::CommandExt;
             command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
         }
-        // plan 7 adds the Windows Job Object (JobObject.Track), so ffmpeg also ends when the agent is killed
         let mut child = command.spawn()?;
+        // Windows: ffmpeg also ends when the agent is killed
+        jobs.track_std(&child);
         let pid = child.id();
         let shared: Arc<RunShared> = Default::default();
         let (stdout, stderr) = (child.stdout.take(), child.stderr.take());
@@ -719,10 +721,10 @@ impl Drop for FfmpegRun {
     }
 }
 
-/// The launcher the agent uses: a real ffmpeg.
-pub fn real_launcher() -> Launcher {
-    Arc::new(|ffmpeg, source, on_frame| {
-        FfmpegRun::start(ffmpeg, source, on_frame)
+/// The launcher the agent uses: a real ffmpeg, in the agent's job (`jobs`).
+pub fn real_launcher(jobs: Arc<crate::job_object::JobObject>) -> Launcher {
+    Arc::new(move |ffmpeg, source, on_frame| {
+        FfmpegRun::start(ffmpeg, source, on_frame, &jobs)
             .map(|run| Box::new(run) as Box<dyn CameraRun>)
             .map_err(|e| e.to_string())
     })
