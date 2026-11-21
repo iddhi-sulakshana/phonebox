@@ -55,6 +55,47 @@ pub fn boolean(q: &Pairs, name: &str) -> Result<Option<bool>, NotANumber> {
         .transpose()
 }
 
+/// A JSON body bound like an ASP.NET typed parameter: a JSON content type (else 415) and a JSON object (an empty,
+/// invalid or null body is a 400). Look its members up with [`json_field`]: names match in any case.
+pub fn json_object(
+    headers: &axum::http::HeaderMap,
+    body: &[u8],
+) -> Result<serde_json::Map<String, serde_json::Value>, axum::http::StatusCode> {
+    let json_type = headers
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|t| t.to_ascii_lowercase().starts_with("application/json"));
+    if !json_type {
+        return Err(axum::http::StatusCode::UNSUPPORTED_MEDIA_TYPE);
+    }
+    match serde_json::from_slice(body) {
+        Ok(serde_json::Value::Object(o)) => Ok(o),
+        _ => Err(axum::http::StatusCode::BAD_REQUEST),
+    }
+}
+
+/// A member of a bound JSON body, its name in any case (the first one that matches).
+pub fn json_field<'a>(
+    body: &'a serde_json::Map<String, serde_json::Value>,
+    name: &str,
+) -> Option<&'a serde_json::Value> {
+    body.iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(name))
+        .map(|(_, v)| v)
+}
+
+/// A `string?` member: absent or null is None; any other kind does not bind (a 400).
+pub fn json_string<'a>(
+    body: &'a serde_json::Map<String, serde_json::Value>,
+    name: &str,
+) -> Result<Option<&'a str>, NotANumber> {
+    match json_field(body, name) {
+        None | Some(serde_json::Value::Null) => Ok(None),
+        Some(serde_json::Value::String(s)) => Ok(Some(s)),
+        Some(_) => Err(NotANumber),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

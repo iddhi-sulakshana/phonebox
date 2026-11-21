@@ -27,6 +27,7 @@ pub mod drm_usage;
 pub mod file_logger;
 pub mod github_monitor;
 pub mod gpus;
+pub mod home_assistant;
 pub mod icon_text;
 pub mod idle;
 pub mod json_text;
@@ -76,6 +77,8 @@ pub mod work_buddy;
 
 #[cfg(test)]
 mod core_audit_tests;
+#[cfg(test)]
+pub(crate) mod testutil;
 #[cfg(test)]
 mod tests {
     #[test]

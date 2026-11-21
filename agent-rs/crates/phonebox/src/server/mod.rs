@@ -5,6 +5,7 @@ pub mod query;
 mod routes_desk;
 mod routes_dev;
 pub mod routes_info;
+mod routes_integrations;
 pub mod routes_pair;
 mod routes_phones;
 mod routes_push;
@@ -106,6 +107,7 @@ fn all_routes() -> axum::Router<AppState> {
         .merge(routes_pair::routes())
         .merge(routes_dev::routes())
         .merge(routes_push::routes())
+        .merge(routes_integrations::routes())
         .merge(routes_phones::routes())
         // Kestrel's default request body limit: a settings page with many pages still fits
         .layer(axum::extract::DefaultBodyLimit::max(30_000_000))
@@ -251,6 +253,7 @@ pub struct AppState {
     pub work_names: Arc<crate::work_buddy::WorkBuddyNames>,
     /// Run after every successful settings save, before the page gets its answer.
     pub settings_hooks: Arc<crate::settings_hooks::SettingsHooks>,
+    pub ha: Arc<crate::home_assistant::HomeAssistant>,
 }
 
 /// Serializes the writes that move the config version for shortcut icons (upload, removal) with the settings save.
@@ -302,6 +305,7 @@ impl AppState {
             hook,
             claude_settings: crate::claude_hook::settings_path(&home),
             settings_hooks: Default::default(),
+            ha: Arc::new(crate::home_assistant::HomeAssistant::new(cfg.clone())),
             quotas: Arc::new(crate::quota::QuotaMonitor::new(
                 Some(cfg.clone()),
                 &crate::app_paths::local_dir(),
