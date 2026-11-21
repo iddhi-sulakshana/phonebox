@@ -30,6 +30,7 @@ pub mod system_monitor;
 pub mod unix;
 pub mod usb_doctor;
 pub mod webview_doctor;
+pub mod windows_gpu;
 
 #[cfg(test)]
 mod tests {
