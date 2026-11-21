@@ -6,6 +6,8 @@ mod routes_desk;
 mod routes_dev;
 pub mod routes_info;
 pub mod routes_pair;
+mod routes_phones;
+mod routes_push;
 pub mod routes_settings;
 pub mod routes_state;
 mod routes_system;
@@ -103,6 +105,8 @@ fn all_routes() -> axum::Router<AppState> {
         .merge(routes_desk::routes())
         .merge(routes_pair::routes())
         .merge(routes_dev::routes())
+        .merge(routes_push::routes())
+        .merge(routes_phones::routes())
         // Kestrel's default request body limit: a settings page with many pages still fits
         .layer(axum::extract::DefaultBodyLimit::max(30_000_000))
 }

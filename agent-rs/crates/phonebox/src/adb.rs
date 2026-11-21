@@ -203,6 +203,30 @@ impl AdbReverse {
     }
 
     /// Connected phones that do not have the PhoneBox app yet (installed from Settings).
+    /// `OpenPanelAsync` (Settings › Show on phone): wakes every phone in use and starts the panel; nothing without adb.
+    pub async fn open_panel(&self) -> Result<(), AdbError> {
+        let configured = self.cfg.get().adb_path.clone();
+        let Some(adb) = self.runner.locate(configured.as_deref()) else {
+            return Ok(());
+        };
+        let devices = lock(&self.seen).devices.clone();
+        for d in devices {
+            self.adb(
+                &adb,
+                &format!("-s {d} shell input keyevent KEYCODE_WAKEUP"),
+                false,
+            )
+            .await?;
+            self.adb(
+                &adb,
+                &format!("-s {d} shell am start -n {PANEL_ACTIVITY}"),
+                false,
+            )
+            .await?;
+        }
+        Ok(())
+    }
+
     pub fn missing_app(&self) -> Vec<String> {
         lock(&self.seen).missing_app.clone()
     }
@@ -732,6 +756,28 @@ mod tests {
         assert!(!adb.connected());
         adb.ensure().await.unwrap();
         assert!(adb.missing_app().is_empty());
+    }
+
+    #[tokio::test]
+    async fn show_on_phone_wakes_every_phone_in_use_and_starts_the_panel() {
+        let fake = FakeAdb::with(|f| f.devices = vec!["FAKE1".into(), "FAKE2".into()]);
+        let (_d, cfg) =
+            test_cfg(r#"{"display":{"homeScreen":false,"keepAwake":false,"openOnConnect":false}}"#);
+        let adb = AdbReverse::new(cfg, 8765, Arc::new(fake.clone()));
+        adb.ensure().await.unwrap();
+        fake.clear_calls();
+        adb.open_panel().await.unwrap();
+        assert_eq!(
+            fake.calls(),
+            [
+                "-s FAKE1 shell input keyevent KEYCODE_WAKEUP",
+                "-s FAKE1 shell am start -n net.oxog.phonebox.deskpanel/.MainActivity",
+                "-s FAKE2 shell input keyevent KEYCODE_WAKEUP",
+                "-s FAKE2 shell am start -n net.oxog.phonebox.deskpanel/.MainActivity",
+            ]
+        );
+        fake.fail_all("adb: device offline");
+        assert!(adb.open_panel().await.is_err());
     }
 
     #[tokio::test]

@@ -334,6 +334,19 @@ pub fn parse_value(text: &str) -> Value {
     }
 }
 
+/// `JsonElement.ToString()`, which C# shows in notifications and rule details: a string as itself, `True`/`False`,
+/// `""` for null, a number's text, and an array or object as JSON.
+pub fn json_element_text(value: &Value) -> String {
+    match value {
+        Value::String(s) => s.clone(),
+        Value::Bool(true) => "True".into(),
+        Value::Bool(false) => "False".into(),
+        Value::Null => String::new(),
+        Value::Number(n) => n.to_string(),
+        other => other.to_string(),
+    }
+}
+
 /// Reads a webhook body: JSON as-is (with a JSON content type), anything else as a trimmed string; `?value=` wins.
 pub fn read_body(
     query_value: Option<&str>,
@@ -363,6 +376,22 @@ mod tests {
     use super::*;
     use std::sync::Barrier;
     use std::time::Duration;
+
+    #[test]
+    fn json_element_text_is_what_dotnet_shows() {
+        for (value, shown) in [
+            (serde_json::json!("on"), "on"),
+            (serde_json::json!(true), "True"),
+            (serde_json::json!(false), "False"),
+            (Value::Null, ""),
+            (serde_json::json!(21.5), "21.5"),
+            (serde_json::json!(-3), "-3"),
+            (serde_json::json!([1, "a"]), r#"[1,"a"]"#),
+            (serde_json::json!({"value": 31}), r#"{"value":31}"#),
+        ] {
+            assert_eq!(json_element_text(&value), shown, "{value}");
+        }
+    }
 
     // not-ported: AuditRegressionTests.PushStoreStillComesFromTheAgentsServices: ASP.NET dependency injection; main builds the one store and hands it to AppState
     // not-ported: TestPortsTests.ConcurrentFixturesKeepDistinctBoundListeners: tests the C# fixtures' port helper; Rust test servers bind port 0
