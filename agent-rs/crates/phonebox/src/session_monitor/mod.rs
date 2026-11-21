@@ -446,7 +446,10 @@ fn long_of(e: &Value, key: &str) -> Option<i64> {
 }
 
 /// Every file under `root` (folders followed recursively, symbolic links not) that `accept` takes.
-fn walk_files(root: &Path, accept: &dyn Fn(&Path, &std::fs::Metadata) -> bool) -> Vec<PathBuf> {
+pub(crate) fn walk_files(
+    root: &Path,
+    accept: &dyn Fn(&Path, &std::fs::Metadata) -> bool,
+) -> Vec<PathBuf> {
     let mut found = Vec::new();
     let mut dirs = vec![root.to_path_buf()];
     while let Some(dir) = dirs.pop() {

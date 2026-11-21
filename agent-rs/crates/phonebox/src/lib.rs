@@ -15,6 +15,7 @@ pub mod browser_guard;
 pub mod catalog;
 pub mod claude_hook;
 pub mod claude_transcript;
+pub mod codex_bar;
 pub mod config;
 pub mod der;
 pub mod dictation;

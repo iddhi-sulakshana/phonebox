@@ -27,6 +27,104 @@ pub fn cut(s: &str, n: usize) -> String {
     }
 }
 
+/// A double through one of the custom formats `0`, `0.#`, `0.##` (`max_decimals` 0, 1, 2) or `#,0` (`grouped`), invariant
+/// culture: .NET first takes 15 significant digits, then rounds half away from zero, drops trailing zeros and groups
+/// thousands with `,`.
+pub fn format_custom(x: f64, max_decimals: usize, grouped: bool) -> String {
+    if !x.is_finite() || x == 0.0 {
+        return if x.is_nan() {
+            "NaN".into()
+        } else if x.is_infinite() {
+            if x > 0.0 { "∞" } else { "-∞" }.into()
+        } else {
+            "0".into()
+        };
+    }
+    // 15 significant digits: d.dddddddddddddd × 10^exp
+    let sci = format!("{:.14e}", x.abs());
+    let (mantissa, exp) = sci.split_once('e').expect("exponent");
+    let exp: i32 = exp.parse().expect("exponent");
+    let mut digits: Vec<u8> = mantissa
+        .bytes()
+        .filter(u8::is_ascii_digit)
+        .map(|b| b - b'0')
+        .collect();
+    // the integer part is digits[..point]
+    let mut point = exp + 1;
+    if point < 1 {
+        let pad = usize::try_from(1 - point).unwrap_or(0);
+        digits.splice(0..0, std::iter::repeat_n(0, pad));
+        point = 1;
+    }
+    let mut point = usize::try_from(point).unwrap_or(0);
+    if digits.len() < point {
+        digits.resize(point, 0);
+    }
+    let cut = point + max_decimals;
+    if digits.len() > cut {
+        let up = digits[cut] >= 5;
+        digits.truncate(cut);
+        if up {
+            let mut i = cut;
+            loop {
+                if i == 0 {
+                    digits.insert(0, 1);
+                    point += 1;
+                    break;
+                }
+                i -= 1;
+                if digits[i] == 9 {
+                    digits[i] = 0;
+                } else {
+                    digits[i] += 1;
+                    break;
+                }
+            }
+        }
+    }
+    let (int, frac) = digits.split_at(point);
+    let first = int
+        .iter()
+        .position(|&d| d != 0)
+        .unwrap_or(int.len().saturating_sub(1));
+    let int = &int[first..];
+    let frac_len = frac.iter().rposition(|&d| d != 0).map_or(0, |p| p + 1);
+    let mut out = String::new();
+    if x < 0.0 {
+        out.push('-');
+    }
+    for (i, d) in int.iter().enumerate() {
+        if grouped && i > 0 && (int.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(char::from(b'0' + d));
+    }
+    if frac_len > 0 {
+        out.push('.');
+        out.extend(frac[..frac_len].iter().map(|d| char::from(b'0' + d)));
+    }
+    out
+}
+
+/// `ToUpperInvariant`: one character for one (a character whose upper case is longer, such as `ß`, stays).
+pub fn upper_invariant(s: &str) -> String {
+    s.chars()
+        .map(|c| single(c.to_uppercase()).unwrap_or(c))
+        .collect()
+}
+
+fn single(mut it: impl Iterator<Item = char>) -> Option<char> {
+    let first = it.next()?;
+    it.next().is_none().then_some(first)
+}
+
+/// `ToLowerInvariant`, one character for one.
+pub fn lower_invariant(s: &str) -> String {
+    s.chars()
+        .map(|c| single(c.to_lowercase()).unwrap_or(c))
+        .collect()
+}
+
 /// `Path.GetFileName`: the part after the last `/` (and `\` on Windows).
 pub fn file_name(path: &str) -> &str {
     let separators: &[char] = if cfg!(windows) { &['/', '\\'] } else { &['/'] };
@@ -79,6 +177,43 @@ pub fn parse_date_ms(text: &str, assume_utc: bool) -> Option<i64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn custom_formats_round_half_away_from_zero_on_fifteen_digits() {
+        for (x, decimals, grouped, text) in [
+            (1.5, 1, false, "1.5"),
+            (100.0 / 60.0, 1, false, "1.7"),
+            (2.0, 1, false, "2"),
+            (12.5, 2, false, "12.5"),
+            (12.345, 2, false, "12.35"),
+            (2.675, 2, false, "2.68"),
+            (0.0, 2, false, "0"),
+            (0.004, 2, false, "0"),
+            (1e-20, 2, false, "0"),
+            (12.5, 0, false, "13"),
+            (0.5, 0, false, "1"),
+            (99.96, 1, false, "100"),
+            (1_234_567.5, 0, true, "1,234,568"),
+            (999.5, 0, true, "1,000"),
+            (123.0, 0, true, "123"),
+            (1234.0, 0, true, "1,234"),
+            (-1234.4, 0, true, "-1,234"),
+            (1e17, 0, true, "100,000,000,000,000,000"),
+        ] {
+            assert_eq!(
+                format_custom(x, decimals, grouped),
+                text,
+                "{x} {decimals} {grouped}"
+            );
+        }
+    }
+
+    #[test]
+    fn invariant_case_maps_one_character_for_one() {
+        assert_eq!(upper_invariant("eur"), "EUR");
+        assert_eq!(upper_invariant("straße"), "STRAßE");
+        assert_eq!(lower_invariant("Claude-Sonnet"), "claude-sonnet");
+    }
 
     #[test]
     fn lengths_and_cuts_count_utf16_units() {
