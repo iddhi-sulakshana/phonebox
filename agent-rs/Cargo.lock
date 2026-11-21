@@ -1196,6 +1196,7 @@ dependencies = [
  "roxmltree",
  "rust-embed",
  "rustls",
+ "rustls-native-certs",
  "serde",
  "serde_json",
  "sha1",

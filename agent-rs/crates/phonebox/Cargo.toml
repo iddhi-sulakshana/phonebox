@@ -11,7 +11,7 @@ publish.workspace = true
 # HTTPS (rustls). On in every real build; scripts/remote-cross-check.sh type-checks the Windows and macOS code without it,
 # since its crypto (ring) needs that platform's C toolchain to build.
 default = ["tls"]
-tls = ["reqwest/rustls-tls", "reqwest/rustls-tls-native-roots", "dep:rustls", "dep:tokio-rustls", "dep:hyper-rustls", "dep:webpki-roots"]
+tls = ["reqwest/rustls-tls", "reqwest/rustls-tls-native-roots", "dep:rustls", "dep:rustls-native-certs", "dep:tokio-rustls", "dep:hyper-rustls", "dep:webpki-roots"]
 
 [lints]
 workspace = true
@@ -26,6 +26,8 @@ indexmap = { version = "2", features = ["serde"] }
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 futures-util = { version = "0.3", default-features = false }
+# OBS Studio's obs-websocket client (TLS for wss:// comes from tokio-rustls, under `tls`)
+tokio-tungstenite = { version = "0.29", default-features = false, features = ["handshake"] }
 tower = { version = "0.5", default-features = false, features = ["util"] }
 serde_json = { version = "1", features = ["preserve_order", "raw_value"] }
 regex = "1"
@@ -41,6 +43,8 @@ webpki-roots = { version = "1", optional = true }
 # the Wi-Fi port's TLS server (feature `tls`); ring only, as reqwest's client
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"], optional = true }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"], optional = true }
+# the system's trusted roots (C#'s clients use the OS certificate store), for TLS the agent sets up itself (OBS wss://)
+rustls-native-certs = { version = "0.8", optional = true }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # the process table (ProcessMonitor): names, CPU time, memory and start times on every OS
 sysinfo = { version = "0.40", default-features = false, features = ["system"] }

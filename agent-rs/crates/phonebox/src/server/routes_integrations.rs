@@ -19,6 +19,77 @@ pub fn routes() -> Router<AppState> {
         .route("/api/ha/toggle/{id}", post(ha_toggle))
         .route("/api/ha/entities", get(ha_entities))
         .route("/api/ha/test", post(ha_test))
+        .route("/api/obs", get(obs))
+        .route("/api/obs/{action}", post(obs_act))
+        .route("/api/obs-test", post(obs_test))
+        .route("/api/controls/obs", get(obs_deck))
+        .route("/api/controls/obs/{action}", post(obs_deck_act))
+}
+
+/// The OBS widget: `{"enabled","snapshot","control"}`.
+async fn obs(State(s): State<AppState>) -> Response {
+    let cfg = s.cfg.get();
+    let control = cfg.widgets(true).iter().any(|w| {
+        (w.r#type == "obs" || w.r#type.starts_with("obs-")) && w.bool("control") == Some(true)
+    });
+    json_response(
+        StatusCode::OK,
+        &json!({ "enabled": cfg.obs.enabled, "snapshot": s.obs.snapshot(), "control": control }),
+    )
+}
+
+async fn obs_act(
+    State(s): State<AppState>,
+    Path(action): Path<String>,
+    Query(q): QueryList,
+) -> Response {
+    let scene = query::value(&q, "scene");
+    match s.obs.act(&action, scene.as_deref()).await {
+        None => json_response(StatusCode::OK, &json!({ "ok": true })),
+        Some(error) => json_response(StatusCode::BAD_REQUEST, &json!({ "error": error })),
+    }
+}
+
+/// Settings › General › OBS › Test (local only: not under `/api/obs`, which the phone may reach over Wi-Fi).
+async fn obs_test(headers: HeaderMap, body: Bytes) -> Response {
+    let body = match query::json_object(&headers, &body) {
+        Ok(body) => body,
+        Err(status) => return status.into_response(),
+    };
+    let (Ok(url), Ok(password)) = (
+        query::json_string(&body, "url"),
+        query::json_string(&body, "password"),
+    ) else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    // an absent url is ObsConfig's default
+    let url = match query::json_field(&body, "url") {
+        None => crate::obs_monitor::DEFAULT_URL,
+        Some(_) => url.unwrap_or(""),
+    };
+    let result = crate::obs_monitor::test(url, password.unwrap_or("")).await;
+    json_response(StatusCode::OK, &json!({ "result": result }))
+}
+
+async fn obs_deck(State(s): State<AppState>) -> Response {
+    json_response(StatusCode::OK, &s.obs.deck_snapshot().await)
+}
+
+/// Always a `DeckResult`; a `value` or `enabled` that does not bind is a 400.
+async fn obs_deck_act(
+    State(s): State<AppState>,
+    Path(action): Path<String>,
+    Query(q): QueryList,
+) -> Response {
+    let (Ok(value), Ok(enabled)) = (query::int32(&q, "value"), query::boolean(&q, "enabled"))
+    else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    let id = query::value(&q, "id");
+    json_response(
+        StatusCode::OK,
+        &s.obs.deck_act(&action, id.as_deref(), value, enabled).await,
+    )
 }
 
 /// `?ids=a,b` (empty entries dropped, trimmed).
@@ -226,5 +297,94 @@ mod tests {
             send(&wifi, "POST", "/api/ha/test", &[key]).await.status(),
             403
         );
+        assert_eq!(send(&wifi, "GET", "/api/obs", &[key]).await.status(), 200);
+        assert_eq!(
+            send(&wifi, "GET", "/api/controls/obs", &[key])
+                .await
+                .status(),
+            200
+        );
+        assert_eq!(
+            send(&wifi, "POST", "/api/obs-test", &[key]).await.status(),
+            403
+        );
+    }
+
+    #[tokio::test]
+    async fn the_obs_routes_answer_with_their_shapes() {
+        let (_d, s) = test_state();
+        let app = crate::server::build_router(s.clone());
+        let r = json_of(send(&app, "GET", "/api/obs", &[LOCAL]).await).await;
+        assert_eq!(
+            r,
+            json!({"enabled": false, "snapshot": {"connected": false, "error": null, "streaming": false, "streamMs": 0,
+                "recording": false, "recordPaused": false, "recordMs": 0, "scene": null, "scenes": [], "micMuted": null,
+                "micName": null}, "control": false})
+        );
+        let res = send(&app, "POST", "/api/obs/record", &[LOCAL]).await;
+        assert_eq!(res.status(), 400);
+        assert_eq!(
+            json_of(res).await,
+            json!({"error": "controlling OBS is turned off in the widget's settings"})
+        );
+        let r = json_of(send(&app, "GET", "/api/controls/obs", &[LOCAL]).await).await;
+        assert_eq!(
+            r,
+            json!({"connected": false, "error": "Configure the OBS connection in desktop settings"})
+        );
+        let r = json_of(send(&app, "POST", "/api/controls/obs/record", &[LOCAL]).await).await;
+        assert_eq!(
+            r,
+            json!({"ok": false, "error": "Enable OBS control in the widget's desktop settings", "lease": null})
+        );
+        assert_eq!(
+            send(&app, "POST", "/api/controls/obs/volume?value=x", &[LOCAL])
+                .await
+                .status(),
+            400
+        );
+        assert_eq!(
+            send(&app, "POST", "/api/controls/obs/mute?enabled=1", &[LOCAL])
+                .await
+                .status(),
+            400
+        );
+        assert_eq!(
+            post(&app, "/api/obs-test", "text/plain", "{}")
+                .await
+                .status(),
+            415
+        );
+        assert_eq!(
+            post(&app, "/api/obs-test", "application/json", "[]")
+                .await
+                .status(),
+            400
+        );
+        // nothing listens on port 9
+        let res = post(
+            &app,
+            "/api/obs-test",
+            "application/json",
+            r#"{"url":"ws://127.0.0.1:9"}"#,
+        )
+        .await;
+        assert_eq!(
+            json_of(res).await,
+            json!({"result": "No answer: is OBS running with its WebSocket server on?"})
+        );
+        let res = post(
+            &app,
+            "/api/obs-test",
+            "application/json",
+            r#"{"URL":"http://127.0.0.1:9"}"#,
+        )
+        .await;
+        assert_eq!(
+            json_of(res).await,
+            json!({"result": "Only Uris starting with 'ws://' or 'wss://' are supported."})
+        );
+        // the state frame's obs: null while not connected
+        assert!(crate::state::StateSource::snapshot(s.obs.as_ref()).is_null());
     }
 }

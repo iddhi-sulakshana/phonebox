@@ -41,6 +41,7 @@ pub mod media_monitor;
 pub mod net;
 pub mod net_adapters;
 pub mod note_edit;
+pub mod obs_monitor;
 pub mod pairing;
 pub mod panel_widgets;
 pub mod phone_registry;

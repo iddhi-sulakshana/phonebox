@@ -80,6 +80,7 @@ fn main() -> ExitCode {
     let sessions =
         phonebox::session_monitor::SessionMonitor::new(Some(cfg.clone()), app_paths::home());
     let github = Arc::new(phonebox::github_monitor::GitHubMonitor::new());
+    let obs = Arc::new(phonebox::obs_monitor::ObsMonitor::new(cfg.clone()));
     let sources = phonebox::state::StateSources::phase1()
         .with_pc(Box::new(system.clone()))
         .with_ping(Box::new(ping.clone()))
@@ -93,6 +94,7 @@ fn main() -> ExitCode {
             push: push.clone(),
             audio: audio.clone(),
         }))
+        .with_obs(Box::new(obs.clone()))
         .with_work(Box::new(phonebox::session_monitor::WorkFeed {
             sessions: sessions.clone(),
             github: github.clone(),
@@ -103,6 +105,7 @@ fn main() -> ExitCode {
     state.ping = ping;
     state.audio = audio;
     state.deck = deck;
+    state.obs = obs;
     state.wifi = Arc::new(wifi);
     // started here, on its own thread: the server never stops it before the process ends
     media.start(state.stop.clone());
@@ -162,6 +165,7 @@ async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Res
     state.github.start(state.stop.clone()); // after 3 s, then every 3 min
     state.quotas.start(state.stop.clone()); // usage every 30 s, the overview every 5 s
     state.docker.start(state.stop.clone()); // only while the phone asks
+    state.obs.start(state.stop.clone()); // one connection while OBS is enabled, polled every 2 s
     log::info(
         "PhoneBoxAgent",
         &format!(

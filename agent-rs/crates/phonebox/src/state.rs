@@ -65,6 +65,12 @@ impl StateSources {
         self
     }
 
+    /// `obs` from the OBS monitor.
+    pub fn with_obs(mut self, obs: Box<dyn StateSource>) -> StateSources {
+        self.obs = obs;
+        self
+    }
+
     /// `work` (the live stream's frame) from the session and GitHub monitors.
     pub fn with_work(mut self, work: Box<dyn StateSource>) -> StateSources {
         self.work = work;
