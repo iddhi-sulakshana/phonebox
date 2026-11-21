@@ -65,7 +65,7 @@ async fn conversation(State(s): State<AppState>, Query(q): QueryList) -> Respons
         .await
     {
         Ok(view) => json_response(StatusCode::OK, &view),
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        Err(_) => super::unhandled(),
     }
 }
 

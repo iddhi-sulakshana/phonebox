@@ -93,6 +93,13 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(parity.json.loads(out)["x"], 1)
         self.assertTrue(parity.wifi_enabled(text))
 
+    def test_saved_configs_compare_without_each_agents_wifi_port(self):
+        a = b'{\n  "lan": {\n    "enabled": true,\n    "port": 42011,\n    "token": "t"\n  }\n}\n'
+        b = b'{\n  "lan": {\n    "enabled": true,\n    "port": 54973,\n    "token": "t"\n  }\n}\n'
+        self.assertEqual(parity.saved_config(a, 42011), parity.saved_config(b, 54973))
+        self.assertNotEqual(parity.saved_config(a, 42011), parity.saved_config(b.replace(b'"t"', b'"u"'), 54973))
+        self.assertEqual(parity.saved_config(b'{"port": 420110}', 42011), b'{"port": 420110}')
+
     def test_a_fixture_without_wifi_is_copied_as_it_is(self):
         for text in ('{ "lan": { "enabled": false, "port": 8766 } }', '{"deviceSerial": "x"}'):
             self.assertEqual(parity.prepare_config(text, 19000), text)

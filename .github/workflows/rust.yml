@@ -29,7 +29,7 @@ jobs:
       - run: cargo test --workspace
 
   # The Rust agent against the C# agent it replaces (the baseline in agent/, 0.9.23, built as users run it on each OS),
-  # side by side on the phase-1 to phase-5 corpora (phases 4 and 5 over Wi-Fi, both with the same fixture certificate). Linux runs on the test server (agent-rs/scripts/remote-parity.sh).
+  # side by side on the phase-1 to phase-6 corpora (phases 4 to 6 over Wi-Fi, all with the same fixture certificate). Linux runs on the test server (agent-rs/scripts/remote-parity.sh).
   parity:
     strategy:
       fail-fast: false
@@ -88,6 +88,14 @@ jobs:
           --rust "agent-rs/target/release/PhoneBoxAgent${{ matrix.exe }}"
           --corpus tools/parity/corpus/phase5.json
           --fixture tools/parity/fixtures/lan.json
+      - name: Parity, phase 6 (integrations and the deck; webhooks and the phone key over Wi-Fi)
+        shell: bash
+        run: >-
+          ${{ matrix.python }} -I tools/parity/parity.py
+          --csharp "agent/PhoneBox.Agent/bin/Release/${{ matrix.tfm }}/PhoneBoxAgent${{ matrix.exe }}"
+          --rust "agent-rs/target/release/PhoneBoxAgent${{ matrix.exe }}"
+          --corpus tools/parity/corpus/phase6.json
+          --fixture tools/parity/fixtures/deck.json
       - name: Parity harness and comparison script tests
         shell: bash
         run: |

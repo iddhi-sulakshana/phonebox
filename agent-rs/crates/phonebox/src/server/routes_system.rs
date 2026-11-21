@@ -79,7 +79,7 @@ async fn proc_detail(State(s): State<AppState>, Query(q): QueryList) -> Response
     let procs = s.procs.clone();
     match tokio::task::spawn_blocking(move || procs.detail(&name)).await {
         Ok(detail) => json_response(StatusCode::OK, &detail),
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        Err(_) => super::unhandled(),
     }
 }
 
@@ -114,7 +114,7 @@ async fn proc_kill(State(s): State<AppState>, Query(q): QueryList) -> Response {
     match result {
         Ok(r) if r.killed > 0 => json_response(StatusCode::OK, &r),
         Ok(r) => json_response(StatusCode::CONFLICT, &r),
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        Err(_) => super::unhandled(),
     }
 }
 

@@ -19,7 +19,8 @@ Corpus: a JSON list of requests. Fields:
   wait      seconds to wait before sending this request (lets the agents' monitors take their first samples)
   compare   "json" (default), "bytes" or "status"
   config_version  true: send X-Config-Version with the value GET /api/settings just returned on that agent
-  config_file     true: also compare the agents' config.json files byte for byte after the request
+  config_file     true: also compare the agents' config.json files byte for byte after the request (each agent's own
+                  Wi-Fi port, which the harness wrote, read as "{lanport}")
   wifi      true: send over HTTPS to the agent's Wi-Fi port (without verifying the certificate; its SHA-256 is compared
             as the pseudo-header x-peer-fingerprint); "{lanport}" becomes each agent's Wi-Fi port
 
@@ -34,6 +35,7 @@ import hashlib
 import http.client
 import json
 import os
+import re
 import shlex
 import shutil
 import socket
@@ -64,6 +66,11 @@ def fill(text: str, values: dict) -> str:
     for key, value in values.items():
         text = text.replace("{" + key + "}", str(value))
     return text
+
+
+def saved_config(data: bytes, lan_port: int) -> bytes:
+    """An agent's saved config.json with the Wi-Fi port the harness gave it read back as "{lanport}"."""
+    return re.sub(rb'("port"\s*:\s*)' + str(lan_port).encode() + rb"(?![0-9])", rb"\1{lanport}", data)
 
 
 def wifi_enabled(config_text: str) -> bool:
@@ -300,7 +307,7 @@ def run(csharp_cmd: str, rust_cmd: str, corpus: list[dict], fixture: Path, cert:
                 answers.append(request(a.port, entry, extra, a.lan_port))
             problems += diff(entry, answers[0], answers[1])
             if entry.get("config_file"):
-                ca, cb = agents[0].config.read_bytes(), agents[1].config.read_bytes()
+                ca, cb = (saved_config(a.config.read_bytes(), a.lan_port) for a in agents)
                 if ca != cb:
                     problems.append(f"{entry.get('name')}: config.json differs after the request "
                                     f"({agents[0].config} vs {agents[1].config})")

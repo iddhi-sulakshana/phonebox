@@ -68,7 +68,7 @@ async fn open(State(s): State<AppState>) -> Response {
         Ok(()) => StatusCode::OK.into_response(),
         Err(e) => {
             crate::log::warn("Program", &format!("could not open the panel: {e}"));
-            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            super::unhandled()
         }
     }
 }

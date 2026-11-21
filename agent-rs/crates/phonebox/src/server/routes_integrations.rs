@@ -81,7 +81,7 @@ async fn spotify_disconnect(State(s): State<AppState>) -> Response {
                 "PhoneBox.Agent.SpotifyControl",
                 &format!("Spotify disconnect failed: {error}"),
             );
-            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+            super::unhandled()
         }
     }
 }

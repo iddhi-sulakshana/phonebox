@@ -35,7 +35,7 @@ pub fn routes() -> Router<AppState> {
 async fn state(State(s): State<AppState>) -> Response {
     match s.controls.snapshot().await {
         Some(snapshot) => json_response(StatusCode::OK, &snapshot),
-        None => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        None => super::unhandled(),
     }
 }
 
@@ -63,7 +63,7 @@ async fn command(
     {
         Ok(result) => json_response(StatusCode::OK, &result),
         // only the request's own end cancels, and then nobody reads the answer
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        Err(_) => super::unhandled(),
     }
 }
 
@@ -157,7 +157,7 @@ async fn radio_check(
         .flatten()
         .and_then(|v| bind_check(&v));
     let Some(items) = items else {
-        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        return super::unhandled();
     };
     let results = s.radio.check(items).await;
     json_response(StatusCode::OK, &json!({ "results": results }))
@@ -206,7 +206,7 @@ async fn capture(State(s): State<AppState>) -> Response {
     let controls = s.controls.clone();
     match tokio::task::spawn_blocking(move || controls.capture()).await {
         Ok(Some(profile)) => json_response(StatusCode::OK, &profile),
-        _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        _ => super::unhandled(),
     }
 }
 

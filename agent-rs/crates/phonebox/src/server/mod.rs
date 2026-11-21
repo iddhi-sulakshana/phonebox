@@ -182,6 +182,19 @@ where
     }
 }
 
+/// Marks an answer that stands for an unhandled exception in the C# agent.
+#[derive(Debug, Clone, Copy)]
+pub struct Unhandled;
+
+/// A C# unhandled exception's answer: 500 with no body and none of the middleware's headers (ASP.NET clears the
+/// response before it writes the 500).
+pub fn unhandled() -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let mut response = axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    response.extensions_mut().insert(Unhandled);
+    response
+}
+
 /// A JSON answer as ASP.NET writes one: `application/json; charset=utf-8`, compact, doubles in .NET's shortest form
 /// (1.0 is written as 1).
 pub fn json_response<T: serde::Serialize + ?Sized>(

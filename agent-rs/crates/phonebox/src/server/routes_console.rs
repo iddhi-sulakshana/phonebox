@@ -69,7 +69,7 @@ async fn act(
             &json!({ "error": error }),
         ),
         // only the request's own end cancels, and then nobody reads the answer
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        Err(_) => super::unhandled(),
     }
 }
 

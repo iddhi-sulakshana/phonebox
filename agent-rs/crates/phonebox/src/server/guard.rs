@@ -111,6 +111,9 @@ async fn wifi_guard(State(state): State<AppState>, mut req: Request, next: Next)
         LanAccess::PairingClaim | LanAccess::Webhook => {
             req.extensions_mut().insert(Via::Wifi);
             let mut response = next.run(req).await;
+            if response.extensions().get::<super::Unhandled>().is_some() {
+                return response;
+            }
             response
                 .headers_mut()
                 .entry(header::CACHE_CONTROL)
@@ -187,6 +190,10 @@ async fn tail(state: &AppState, mut req: Request, next: Next, via: Via) -> Respo
     }
     req.extensions_mut().insert(via);
     let mut response = next.run(req).await;
+    // ASP.NET clears the response, these headers included, before it writes an unhandled exception's 500
+    if response.extensions().get::<super::Unhandled>().is_some() {
+        return response;
+    }
     // set before the handler runs in the C# agent, so a handler's own value wins
     let h = response.headers_mut();
     h.entry(header::CACHE_CONTROL)
@@ -337,6 +344,18 @@ pub(crate) mod tests {
         let api = send(&app, "GET", "/api/info", &[("host", "127.0.0.1:8765")]).await;
         assert_eq!(api.headers()["x-frame-options"], "DENY");
         assert_eq!(api.headers()["cache-control"], "no-store");
+    }
+
+    #[tokio::test]
+    async fn an_unhandled_error_keeps_none_of_the_middleware_headers() {
+        let (_d, state) = test_state();
+        let routes = Router::new().route("/api/boom", get(|| async { crate::server::unhandled() }));
+        let app = apply_local(routes, state);
+        let res = send(&app, "GET", "/api/boom", &[("host", "127.0.0.1:8765")]).await;
+        assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert!(!res.headers().contains_key("cache-control"));
+        assert!(!res.headers().contains_key("x-frame-options"));
+        assert_eq!(body_of(res).await, "");
     }
 
     #[tokio::test]

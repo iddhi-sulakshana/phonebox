@@ -178,7 +178,7 @@ async fn apps(State(s): State<AppState>) -> Response {
     .await;
     match list {
         Ok(v) => json_response(StatusCode::OK, &v),
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        Err(_) => super::unhandled(),
     }
 }
 
@@ -208,7 +208,7 @@ async fn open_app(State(s): State<AppState>, Query(q): QueryList) -> Response {
     match tokio::task::spawn_blocking(move || catalog.open(&id)).await {
         Ok(None) => json_response(StatusCode::OK, &json!({ "ok": true })),
         Ok(Some(error)) => json_response(StatusCode::BAD_REQUEST, &json!({ "error": error })),
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        Err(_) => super::unhandled(),
     }
 }
 
@@ -264,7 +264,7 @@ async fn test_shortcut(
     }
     // malformed JSON is an unhandled exception in C#: a bare 500
     let Ok(sc) = serde_json::from_slice::<Option<crate::config::Shortcut>>(&body) else {
-        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        return super::unhandled();
     };
     let Some(sc) = sc.filter(|sc| !sc.cmd.trim().is_empty()) else {
         return json_response(
@@ -451,7 +451,7 @@ pub(crate) async fn upload_shortcut_icon(
         Err(e) => {
             // the C# agent throws here: an unhandled exception, a 500 with no body
             crate::log::warn("Program", &format!("saving the icon failed: {e}"));
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            return super::unhandled();
         }
         Ok(Some(error)) => {
             return json_response(StatusCode::BAD_REQUEST, &json!({ "error": error }));
