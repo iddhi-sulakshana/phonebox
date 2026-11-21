@@ -61,9 +61,10 @@ class InstallerTests(unittest.TestCase):
                 self.assertEqual(result.stderr.strip(), '--serial needs a value')
                 self.assertEqual(result.stdout, '')
 
-    def run_installer(self, serial=None, fail=False, newer_sources=False, target='cargo target'):
+    def run_installer(self, serial=None, fail=False, newer_sources=False, target='cargo target', running_for=0):
         """Runs a copy of install.sh in a fixture repository; `target` is CARGO_TARGET_DIR below the fixture
-        (None leaves it unset, so the build goes to the repository's agent-rs/target)."""
+        (None leaves it unset, so the build goes to the repository's agent-rs/target). A running agent answers
+        `pgrep` for its first `running_for` calls, then is gone."""
         with tempfile.TemporaryDirectory(prefix='phonebox installer ') as directory:
             root = pathlib.Path(directory)
             repo = root / 'repo'
@@ -100,6 +101,10 @@ class InstallerTests(unittest.TestCase):
             # These boundaries must never reach the real machine's agents or services.
             for name in ('pkill', 'nohup', 'codesign', 'systemctl', 'launchctl'):
                 executable(name, 'exit 0\n')
+            executable('pgrep', f'''n=$(cat "$PHONEBOX_TEST_ROOT/pgrep-count" 2>/dev/null || echo 0)
+n=$((n + 1)); echo "$n" > "$PHONEBOX_TEST_ROOT/pgrep-count"
+test "$n" -le {running_for}
+''')
             executable('dotnet', CARGO_ONLY)
             executable('cargo', CARGO_STUB)
             recorder = root / 'record-adb.py'
@@ -137,6 +142,7 @@ print('Success')
                 '-p', 'phonebox-agent',
             ]
             files = sorted(p.name for p in installed.iterdir()) if installed.is_dir() else []
+            self.pgrep_calls = int((root / 'pgrep-count').read_text()) if (root / 'pgrep-count').exists() else 0
             return Run(result, calls, str(apk), cargo, expected_cargo, files)
 
     def test_the_rust_agent_is_built_with_cargo_and_installed_with_its_notices(self):
@@ -147,6 +153,14 @@ print('Success')
                 self.assertEqual(run.result.returncode, 0, output)
                 self.assertEqual(run.cargo, run.expected_cargo, output)
                 self.assertEqual(run.installed, ['PhoneBoxAgent', 'THIRD-PARTY-NOTICES.txt'], output)
+
+    def test_a_running_agent_is_waited_for_before_its_files_are_replaced(self):
+        # an agent still shutting down would make the copy fail ("Text file busy") after it was already stopped
+        run = self.run_installer(running_for=2)
+        output = run.result.stdout + run.result.stderr
+        self.assertEqual(run.result.returncode, 0, output)
+        self.assertEqual(self.pgrep_calls, 3, output)
+        self.assertEqual(run.installed, ['PhoneBoxAgent', 'THIRD-PARTY-NOTICES.txt'], output)
 
     def test_explicit_serial_targets_only_that_phone(self):
         result, calls, apk = self.run_installer(serial='fixture-device')[:3]

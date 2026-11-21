@@ -9,6 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import client  # noqa: E402
+import make_config  # noqa: E402
 import report  # noqa: E402
 import sample  # noqa: E402
 
@@ -294,6 +295,21 @@ class ScheduleTests(unittest.TestCase):
                          [("warmup", 120), ("S0", 600), ("S1", 600), ("S2", 720)])
         with self.assertRaises(ValueError):
             client.parse_phases("S3=10")
+
+
+class MakeConfigTests(unittest.TestCase):
+    def test_the_agents_get_wifi_keys_of_their_own(self):
+        default = '{\n  // comment\n  "lan": {"enabled": false},\n  "updates": {"auto": true},\n}\n'
+        lan = {"enabled": True, "port": 8766, "token": "fixturePhone", "webhookToken": "fixtureHook"}
+        cfg = make_config.resource_config(default, lan, 19001)
+        self.assertEqual((cfg["lan"]["enabled"], cfg["lan"]["port"]), (True, 19001))
+        self.assertEqual((cfg["updates"]["auto"], cfg["charge"]["enabled"]), (False, False))
+        self.assertEqual(cfg["deviceSerial"], "phonebox-resource-no-phone")
+        keys = (cfg["lan"]["token"], cfg["lan"]["webhookToken"])
+        self.assertNotIn("fixturePhone", keys)
+        self.assertNotIn("fixtureHook", keys)
+        self.assertTrue(all(len(k) == 43 and k.isalnum() for k in keys), keys)
+        self.assertNotEqual(keys[0], keys[1])
 
 
 if __name__ == "__main__":

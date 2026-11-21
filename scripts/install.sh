@@ -79,7 +79,9 @@ echo "==> Stopping a running agent"
 if [ "$os" = linux ] && command -v systemctl >/dev/null; then systemctl --user stop phonebox.service 2>/dev/null || true; fi
 if [ "$os" = osx ]; then launchctl unload "$HOME/Library/LaunchAgents/net.oxog.phonebox.agent.plist" 2>/dev/null || true; fi
 pkill -x PhoneBoxAgent 2>/dev/null || true
-sleep 0.5
+# its files can be replaced only once it has exited (Linux refuses to write a running program: "Text file busy")
+i=0
+while pgrep -x PhoneBoxAgent >/dev/null 2>&1 && [ "$i" -lt 40 ]; do sleep 0.25; i=$((i + 1)); done
 
 echo "==> Installing to $app"
 mkdir -p "$app"

@@ -100,6 +100,24 @@ class ConfigTests(unittest.TestCase):
         self.assertNotEqual(parity.saved_config(a, 42011), parity.saved_config(b.replace(b'"t"', b'"u"'), 54973))
         self.assertEqual(parity.saved_config(b'{"port": 420110}', 42011), b'{"port": 420110}')
 
+    def test_each_run_gets_fresh_wifi_keys_in_place_of_the_fixtures(self):
+        # the fixture's keys are in the repository: an agent listening on every interface must not take them
+        text = '{"lan": {"enabled": true, "port": 8766, "token": "fixturePhone", "webhookToken": "fixtureHook"}}'
+        keys = parity.run_keys(text)
+        self.assertEqual(set(keys), {"fixturePhone", "fixtureHook"})
+        self.assertTrue(all(len(k) == 43 and k.isalnum() for k in keys.values()), keys)
+        self.assertNotEqual(keys, parity.run_keys(text))
+        lan = parity.json.loads(parity.prepare_config(text, 19000, keys))["lan"]
+        self.assertEqual((lan["token"], lan["webhookToken"]), (keys["fixturePhone"], keys["fixtureHook"]))
+        entry = {"name": "n", "path": "/api/notify?token=fixtureHook",
+                 "headers": {"Authorization": "Bearer fixturePhone", "X": "y"}, "body": '{"k": "fixturePhone"}'}
+        out = parity.with_keys(entry, keys)
+        self.assertEqual(out["path"], "/api/notify?token=" + keys["fixtureHook"])
+        self.assertEqual(out["headers"], {"Authorization": "Bearer " + keys["fixturePhone"], "X": "y"})
+        self.assertEqual(out["body"], '{"k": "%s"}' % keys["fixturePhone"])
+        self.assertEqual(entry["path"], "/api/notify?token=fixtureHook")
+        self.assertEqual(parity.run_keys('{"lan": {"enabled": false, "token": "t"}}'), {})
+
     def test_a_fixture_without_wifi_is_copied_as_it_is(self):
         for text in ('{ "lan": { "enabled": false, "port": 8766 } }', '{"deviceSerial": "x"}'):
             self.assertEqual(parity.prepare_config(text, 19000), text)

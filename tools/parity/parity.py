@@ -36,10 +36,12 @@ import http.client
 import json
 import os
 import re
+import secrets
 import shlex
 import shutil
 import socket
 import ssl
+import string
 import subprocess
 import sys
 import tempfile
@@ -78,12 +80,46 @@ def wifi_enabled(config_text: str) -> bool:
     return isinstance(lan, dict) and lan.get("enabled") is True
 
 
-def prepare_config(config_text: str, lan_port: int) -> str:
+def fresh_key() -> str:
+    alphabet = string.ascii_letters + string.digits
+    return "".join(secrets.choice(alphabet) for _ in range(43))
+
+
+def run_keys(config_text: str) -> dict:
+    """The fixture's Wi-Fi keys (phone and webhook) mapped to fresh ones for this run: the fixture's are in the
+    repository, and the agents' Wi-Fi ports listen on every interface."""
+    if not wifi_enabled(config_text):
+        return {}
+    lan = json.loads(config_text)["lan"]
+    return {lan[k]: fresh_key() for k in ("token", "webhookToken") if isinstance(lan.get(k), str) and lan[k]}
+
+
+def with_keys(entry: dict, keys: dict) -> dict:
+    """A corpus entry with the fixture's Wi-Fi keys in its path, headers and body replaced by this run's."""
+    def swap(text: str) -> str:
+        for old, new in keys.items():
+            text = text.replace(old, new)
+        return text
+
+    out = dict(entry)
+    if isinstance(out.get("path"), str):
+        out["path"] = swap(out["path"])
+    if out.get("headers"):
+        out["headers"] = {k: swap(v) for k, v in out["headers"].items()}
+    if isinstance(out.get("body"), str):
+        out["body"] = swap(out["body"])
+    return out
+
+
+def prepare_config(config_text: str, lan_port: int, keys: dict | None = None) -> str:
     """The agent's copy of the fixture: with Wi-Fi on it gets the agent's own Wi-Fi port; otherwise it is unchanged."""
     if not wifi_enabled(config_text):
         return config_text
     cfg = json.loads(config_text)
     cfg["lan"]["port"] = lan_port
+    for field in ("token", "webhookToken"):
+        if cfg["lan"].get(field) in (keys or {}):
+            cfg["lan"][field] = keys[cfg["lan"][field]]
     return json.dumps(cfg, indent=2) + "\n"
 
 
@@ -247,7 +283,7 @@ def request(port: int, entry: dict, extra_headers: dict | None = None, lan_port:
 
 
 class Agent:
-    def __init__(self, label: str, cmd: str, fixture: Path, cert: Path):
+    def __init__(self, label: str, cmd: str, fixture: Path, cert: Path, keys: dict):
         self.label = label
         self.dir = Path(tempfile.mkdtemp(prefix=f"parity-{label}-"))
         self.config = self.dir / "config.json"
@@ -255,7 +291,7 @@ class Agent:
         self.lan_port = free_port()
         text = fixture.read_text(encoding="utf-8")
         if wifi_enabled(text):
-            self.config.write_text(prepare_config(text, self.lan_port), encoding="utf-8")
+            self.config.write_text(prepare_config(text, self.lan_port, keys), encoding="utf-8")
             shutil.copyfile(cert, self.dir / "lan-cert.pfx")
         else:
             shutil.copyfile(fixture, self.config)
@@ -292,7 +328,8 @@ class Agent:
 
 
 def run(csharp_cmd: str, rust_cmd: str, corpus: list[dict], fixture: Path, cert: Path, keep: bool) -> list[str]:
-    agents = [Agent("csharp", csharp_cmd, fixture, cert), Agent("rust", rust_cmd, fixture, cert)]
+    keys = run_keys(fixture.read_text(encoding="utf-8"))
+    agents = [Agent("csharp", csharp_cmd, fixture, cert, keys), Agent("rust", rust_cmd, fixture, cert, keys)]
     problems: list[str] = []
     finished = False
     try:
@@ -304,7 +341,7 @@ def run(csharp_cmd: str, rust_cmd: str, corpus: list[dict], fixture: Path, cert:
             answers = []
             for a in agents:
                 extra = {"X-Config-Version": a.config_version()} if entry.get("config_version") else None
-                answers.append(request(a.port, entry, extra, a.lan_port))
+                answers.append(request(a.port, with_keys(entry, keys), extra, a.lan_port))
             problems += diff(entry, answers[0], answers[1])
             if entry.get("config_file"):
                 ca, cb = (saved_config(a.config.read_bytes(), a.lan_port) for a in agents)

@@ -5,10 +5,10 @@ name: setup
 # agent. While the repository has no published release the jobs skip with a notice.
 on:
   pull_request:
-    paths: [setup.ps1, setup.sh, tools/test-unix-setup-phone.py, .github/workflows/setup.yml]
+    paths: [setup.ps1, setup.sh, tools/test-unix-setup-phone.py, tools/test-setup-pre.ps1, .github/workflows/setup.yml]
   push:
     branches: [main]
-    paths: [setup.ps1, setup.sh, tools/test-unix-setup-phone.py, .github/workflows/setup.yml]
+    paths: [setup.ps1, setup.sh, tools/test-unix-setup-phone.py, tools/test-setup-pre.ps1, .github/workflows/setup.yml]
   schedule:
     - cron: '17 6 * * 1'   # weekly: the latest release against current winget, Homebrew and distribution packages
   workflow_dispatch:
@@ -37,6 +37,9 @@ jobs:
           $issues = Invoke-ScriptAnalyzer -Path setup.ps1 -Severity Error, ParseError
           $issues | Format-Table -AutoSize | Out-String -Width 200
           if ($issues) { throw "PSScriptAnalyzer: $($issues.Count) error(s)" }
+      - name: setup.ps1 -Pre without the API
+        shell: pwsh
+        run: ./tools/test-setup-pre.ps1
 
   windows:
     name: setup.ps1 (Windows PowerShell 5.1)

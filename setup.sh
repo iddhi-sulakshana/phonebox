@@ -159,6 +159,11 @@ newest_release() { # the newest published release, pre-releases included (the AP
   local v=""
   v="$(download_text "https://api.github.com/repos/$repo/releases?per_page=1" 2>/dev/null \
     | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed 's/.*"\([^"]*\)"$/\1/')" || v=""
+  # the API allows 60 requests an hour per address; the releases feed lists the newest first too, pre-releases included
+  if [ -z "$v" ]; then
+    v="$(download_text "https://github.com/$repo/releases.atom" 2>/dev/null \
+      | grep -o '/releases/tag/[^"<?#]*' | head -n1 | sed 's#.*/tag/##')" || v=""
+  fi
   printf '%s' "$v"
 }
 

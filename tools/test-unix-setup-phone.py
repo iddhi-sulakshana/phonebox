@@ -13,7 +13,7 @@ SETUP = Path(__file__).resolve().parents[1] / 'setup.sh'
 
 
 class SetupPhoneTests(unittest.TestCase):
-    def install(self, mode, root, expected_code=0, version='0.0.1', args=None, releases=None):
+    def install(self, mode, root, expected_code=0, version='0.0.1', args=None, releases=None, feed=None):
         bin_dir = root / 'bin'
         bin_dir.mkdir()
         agent = root / 'PhoneBox/app'
@@ -26,6 +26,9 @@ class SetupPhoneTests(unittest.TestCase):
         # the GitHub API's release list (newest first), for --pre
         if releases is not None:
             (root / 'releases.json').write_text(releases, encoding='utf-8')
+        # the release page's Atom feed (newest first, pre-releases included; no API limit)
+        if feed is not None:
+            (root / 'releases.atom').write_text(feed, encoding='utf-8')
         (root / f'SHA256SUMS-{version}.txt').write_text(
             ''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n'
                     for p in (archive, apk)),
@@ -51,6 +54,12 @@ if url.startswith('https://api.github.com/'):
     if '/releases?' not in url or not listed.exists():
         sys.exit(22)
     sys.stdout.write(listed.read_text())
+    sys.exit(0)
+if url.endswith('/releases.atom'):
+    feed = root / 'releases.atom'
+    if not feed.exists():
+        sys.exit(22)
+    sys.stdout.write(feed.read_text())
     sys.exit(0)
 if '-o' not in args:
     sys.exit(22)
@@ -130,6 +139,16 @@ esac''')
                   ' {"tag_name": "v1.0.0-alpha.1", "draft": false, "prerelease": true}]')
         with tempfile.TemporaryDirectory() as directory:
             self.install('valid', Path(directory), version='1.0.0-alpha.2', args=['--pre'], releases=listed)
+
+    def test_pre_falls_back_to_the_release_feed_when_the_api_is_rate_limited(self):
+        feed = ('<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom">'
+                '<entry><link rel="alternate" type="text/html" '
+                'href="https://github.com/iddhi-sulakshana/phonebox/releases/tag/v1.0.0-alpha.2"/></entry>'
+                '<entry><link rel="alternate" type="text/html" '
+                'href="https://github.com/iddhi-sulakshana/phonebox/releases/tag/v1.0.0-alpha.1"/></entry></feed>')
+        with tempfile.TemporaryDirectory() as directory:
+            # no releases.json: every API request fails, as when the hourly limit is used up
+            self.install('valid', Path(directory), version='1.0.0-alpha.2', args=['--pre'], feed=feed)
 
     def test_without_a_full_release_setup_names_the_pre_option(self):
         with tempfile.TemporaryDirectory() as directory:

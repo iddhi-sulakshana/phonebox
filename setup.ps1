@@ -126,6 +126,12 @@ function Get-NewestRelease {
         $newest = @($releases) | Select-Object -First 1
         if ($newest -and $newest.tag_name) { return [string]$newest.tag_name }
     } catch { }
+    # The API allows 60 requests an hour per address; the releases feed lists the newest first too, pre-releases included.
+    try {
+        $feed = Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/$Repo/releases.atom" `
+            -Headers @{ 'User-Agent' = 'phonebox-setup' } -TimeoutSec 30
+        if ([string]$feed.Content -match '/releases/tag/([^"<?#/]+)') { return $Matches[1] }
+    } catch { }
     throw 'Could not find a release on GitHub. Check the internet connection, or pass -Version.'
 }
 
