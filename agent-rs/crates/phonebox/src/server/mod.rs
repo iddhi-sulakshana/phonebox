@@ -12,6 +12,7 @@ mod routes_push;
 pub mod routes_settings;
 pub mod routes_state;
 mod routes_system;
+mod routes_widgets;
 pub mod static_files;
 #[cfg(test)]
 mod tests_task10;
@@ -108,6 +109,7 @@ fn all_routes() -> axum::Router<AppState> {
         .merge(routes_dev::routes())
         .merge(routes_push::routes())
         .merge(routes_integrations::routes())
+        .merge(routes_widgets::routes())
         .merge(routes_phones::routes())
         // Kestrel's default request body limit: a settings page with many pages still fits
         .layer(axum::extract::DefaultBodyLimit::max(30_000_000))
@@ -257,6 +259,7 @@ pub struct AppState {
     pub obs: Arc<crate::obs_monitor::ObsMonitor>,
     pub discord: Arc<crate::discord_monitor::DiscordMonitor>,
     pub spotify: Arc<crate::spotify_control::SpotifyControl>,
+    pub feeds: Arc<crate::feeds::FeedMonitor>,
 }
 
 /// Serializes the writes that move the config version for shortcut icons (upload, removal) with the settings save.
@@ -311,6 +314,7 @@ impl AppState {
             ha: Arc::new(crate::home_assistant::HomeAssistant::new(cfg.clone())),
             obs: Arc::new(crate::obs_monitor::ObsMonitor::new(cfg.clone())),
             discord: Arc::new(crate::discord_monitor::DiscordMonitor::new(cfg.clone())),
+            feeds: Arc::new(crate::feeds::FeedMonitor::new(cfg.clone())),
             spotify: Arc::new(crate::spotify_control::SpotifyControl::new(
                 cfg.clone(),
                 endpoint.port,
