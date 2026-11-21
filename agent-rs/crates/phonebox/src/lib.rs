@@ -5,6 +5,7 @@
 
 pub mod adb;
 pub mod agent_endpoint;
+pub mod app_catalog;
 pub mod app_paths;
 pub mod app_restart;
 pub mod audio_control;

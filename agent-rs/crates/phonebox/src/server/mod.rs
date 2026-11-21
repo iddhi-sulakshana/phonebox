@@ -134,6 +134,8 @@ pub struct AppState {
     pub audio: Arc<crate::audio_control::AudioControl>,
     /// Shortcut icons the user uploaded, in `icons/` next to the config file.
     pub icons: Arc<crate::shortcut_icon_uploads::ShortcutIconUploads>,
+    /// Installed applications (the All apps widget, `/api/apps*`).
+    pub apps: Arc<crate::app_catalog::AppCatalog>,
 }
 
 /// Serializes the writes that move the config version for shortcut icons (upload, removal) with the settings save.
@@ -172,6 +174,7 @@ impl AppState {
             .join("icons");
         AppState {
             adb,
+            apps: crate::app_catalog::AppCatalog::new(cfg.clone()),
             icons: Arc::new(crate::shortcut_icon_uploads::ShortcutIconUploads::new(
                 icons_dir,
             )),

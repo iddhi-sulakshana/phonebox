@@ -23,6 +23,58 @@ pub fn routes() -> Router<AppState> {
             "/api/settings/shortcut-icon",
             post(upload_icon).delete(remove_icon),
         )
+        .route("/api/apps", get(apps))
+        .route("/api/apps/icon", get(app_icon))
+        .route("/api/apps/open", post(open_app))
+}
+
+/// The installed apps for the All apps widget, and whether the phone may open them.
+async fn apps(State(s): State<AppState>) -> Response {
+    let catalog = s.apps.clone();
+    let list = tokio::task::spawn_blocking(move || {
+        let apps = catalog.list();
+        let supported = catalog.supported();
+        json!({
+            "supported": supported,
+            "canOpen": supported && catalog.open_allowed(),
+            "apps": apps.iter().map(|a| json!({ "id": a.id, "name": a.name })).collect::<Vec<_>>(),
+        })
+    })
+    .await;
+    match list {
+        Ok(v) => json_response(StatusCode::OK, &v),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// An app's icon (96 px PNG); icons do not change, so the phone may keep them a day.
+async fn app_icon(State(s): State<AppState>, Query(q): QueryList) -> Response {
+    let Some(id) = value(&q, "id") else {
+        return bad_request();
+    };
+    match s.apps.icon(&id).await {
+        Some(png) => (
+            [
+                (header::CONTENT_TYPE, "image/png"),
+                (header::CACHE_CONTROL, "private, max-age=86400"),
+            ],
+            png,
+        )
+            .into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+async fn open_app(State(s): State<AppState>, Query(q): QueryList) -> Response {
+    let Some(id) = value(&q, "id") else {
+        return bad_request();
+    };
+    let catalog = s.apps.clone();
+    match tokio::task::spawn_blocking(move || catalog.open(&id)).await {
+        Ok(None) => json_response(StatusCode::OK, &json!({ "ok": true })),
+        Ok(Some(error)) => json_response(StatusCode::BAD_REQUEST, &json!({ "error": error })),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
 }
 
 type QueryList = Query<Vec<(String, String)>>;
@@ -978,5 +1030,96 @@ mod tests {
         assert_eq!(result.status(), StatusCode::CONFLICT);
         assert!(!icons.exists("temp-sc"));
         assert_eq!(saved_v2, cfg.version());
+    }
+
+    // ---- apps ----
+
+    fn apps_state(widget: &str) -> (tempfile::TempDir, crate::server::AppState, String) {
+        let (dir, mut state) = test_state();
+        let page = serde_json::json!({"pages": [{"id": "p", "title": "P",
+            "widgets": [{"id": "w", "type": widget, "x": 0, "y": 0, "w": 6, "h": 4}]}]});
+        state.cfg.save(&page.to_string(), None).unwrap();
+        let root = dir.path().join("Applications");
+        std::fs::create_dir_all(root.join("Notes.app").join("Contents")).unwrap();
+        let notes = root.join("Notes.app").to_string_lossy().into_owned();
+        state.apps = crate::app_catalog::test_catalog(
+            state.cfg.clone(),
+            vec![root.to_string_lossy().into_owned()],
+            Arc::new(|_| Some(vec![0x89, b'P', b'N', b'G'])),
+        );
+        (dir, state, notes)
+    }
+
+    #[tokio::test]
+    async fn the_app_list_carries_support_the_open_permission_and_ids_with_names() {
+        let (_dir, state, notes) = apps_state("apps");
+        let app = build_router(state);
+        let r = request(&app, "GET", "/api/apps", &[], vec![]).await;
+        assert_eq!(r.status, StatusCode::OK);
+        assert_eq!(
+            r.json(),
+            serde_json::json!({"supported": true, "canOpen": true,
+                "apps": [{"id": crate::app_catalog::id_of(&notes), "name": "Notes"}]})
+        );
+        let (_dir, state, _) = apps_state("clock");
+        let app = build_router(state);
+        let r = request(&app, "GET", "/api/apps", &[], vec![]).await;
+        assert_eq!(r.json()["canOpen"], false);
+    }
+
+    #[tokio::test]
+    async fn app_icons_are_cached_by_the_phone_and_unknown_ones_are_404() {
+        let (_dir, state, notes) = apps_state("apps");
+        let app = build_router(state);
+        let id = crate::app_catalog::id_of(&notes);
+        let r = request(&app, "GET", &format!("/api/apps/icon?id={id}"), &[], vec![]).await;
+        assert_eq!(r.status, StatusCode::OK);
+        assert_eq!(r.body, [0x89, b'P', b'N', b'G']);
+        assert_eq!(r.header("content-type"), "image/png");
+        assert_eq!(r.header("cache-control"), "private, max-age=86400");
+        let r = request(
+            &app,
+            "GET",
+            "/api/apps/icon?id=0123456789abcdef",
+            &[],
+            vec![],
+        )
+        .await;
+        assert_eq!((r.status, r.body.len()), (StatusCode::NOT_FOUND, 0));
+        for (method, path) in [("GET", "/api/apps/icon"), ("POST", "/api/apps/open")] {
+            let r = request(&app, method, path, &[], vec![]).await;
+            assert_eq!(r.status, StatusCode::BAD_REQUEST, "{path}");
+        }
+    }
+
+    #[tokio::test]
+    async fn opening_an_app_is_refused_with_the_reason() {
+        let (_dir, state, notes) = apps_state("clock");
+        let app = build_router(state);
+        let id = crate::app_catalog::id_of(&notes);
+        let r = request(
+            &app,
+            "POST",
+            &format!("/api/apps/open?id={id}"),
+            &[],
+            vec![],
+        )
+        .await;
+        assert_eq!(r.status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            r.json(),
+            serde_json::json!({"error": "Add an All apps widget to a page to open apps from the phone"})
+        );
+        let (_dir, state, _) = apps_state("apps");
+        let app = build_router(state);
+        let r = request(
+            &app,
+            "POST",
+            "/api/apps/open?id=0123456789abcdef",
+            &[],
+            vec![],
+        )
+        .await;
+        assert_eq!(r.json(), serde_json::json!({"error": "Unknown app"}));
     }
 }
