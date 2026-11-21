@@ -355,6 +355,101 @@ pub fn uptime_sec() -> i64 {
     }
 }
 
+const CPU_TEMP_NAMES: [&str; 6] = [
+    "Core (Tctl/Tdie)",
+    "Tctl/Tdie",
+    "CPU Package",
+    "Tdie",
+    "Tctl",
+    "Core (Tdie)",
+];
+
+static CORE_SENSOR: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(r"(?i)^(?:CPU )?Core #\d+$").expect("CoreSensor")
+});
+
+/// The CPU temperature from LibreHardwareMonitor's data.json (`FindCpuTemp`): the package (Intel) or Tctl/Tdie (AMD)
+/// reading when there is one; otherwise the hottest "CPU Core #n" / "Core #n" temperature under a CPU's own node.
+pub fn find_cpu_temp(root: &serde_json::Value) -> Option<f64> {
+    if let Some(package) = find_temp(root, &CPU_TEMP_NAMES) {
+        return Some(package);
+    }
+    fn visit(node: &serde_json::Value, in_cpu: bool, hottest: &mut Option<f64>) {
+        // a null or non-object entry is skipped, not allowed to throw away the readings after it
+        if !node.is_object() {
+            return;
+        }
+        let in_cpu = in_cpu || is_cpu_node(node);
+        if in_cpu
+            && let Some(name) = str_prop(node, "Text")
+            && CORE_SENSOR.is_match(name)
+            && let Some(t) = read_celsius(node)
+            && hottest.is_none_or(|h| t > h)
+        {
+            *hottest = Some(t);
+        }
+        if let Some(kids) = node.get("Children").and_then(|k| k.as_array()) {
+            for k in kids {
+                visit(k, in_cpu, hottest);
+            }
+        }
+    }
+    let mut hottest = None;
+    visit(root, false, &mut hottest);
+    hottest
+}
+
+/// A string property of an object node; None when it is missing or not a string.
+fn str_prop<'a>(node: &'a serde_json::Value, name: &str) -> Option<&'a str> {
+    node.get(name).and_then(|v| v.as_str())
+}
+
+fn is_cpu_node(node: &serde_json::Value) -> bool {
+    let starts = |s: &str, p: &str| s.len() >= p.len() && s[..p.len()].eq_ignore_ascii_case(p);
+    str_prop(node, "HardwareId")
+        .is_some_and(|hw| starts(hw, "/intelcpu/") || starts(hw, "/amdcpu/"))
+        || str_prop(node, "ImageURL").is_some_and(|url| {
+            url.len() >= 8
+                && url.is_char_boundary(url.len() - 8)
+                && url[url.len() - 8..].eq_ignore_ascii_case("/cpu.png")
+        })
+}
+
+/// A temperature value such as "54,0 °C" or "140.0 °F"; load and clock sensors share the core names but have no °.
+fn read_celsius(node: &serde_json::Value) -> Option<f64> {
+    let s = node.get("Value")?.as_str()?;
+    if !s.contains('°') {
+        return None;
+    }
+    // an older reply has no type; one that names a type must name a temperature
+    if let Some(kind) = node.get("Type")
+        && !kind.is_null()
+        && kind.as_str() != Some("Temperature")
+    {
+        return None;
+    }
+    match crate::gpus::parse_lhm_value(s, Some("Temperature")) {
+        Some(("temp", v)) => Some(v),
+        _ => None,
+    }
+}
+
+fn find_temp(node: &serde_json::Value, names: &[&str]) -> Option<f64> {
+    if !node.is_object() {
+        return None;
+    }
+    if let Some(text) = str_prop(node, "Text")
+        && names.contains(&text)
+        && let Some(temp) = read_celsius(node)
+    {
+        return Some(temp);
+    }
+    node.get("Children")?
+        .as_array()?
+        .iter()
+        .find_map(|k| find_temp(k, names))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -408,5 +503,176 @@ mod tests {
         let name = read_cpu_name();
         assert!(!name.is_empty() && name == name.trim(), "{name:?}");
         assert!(uptime_sec() > 0);
+    }
+
+    // CpuTempTests: the package or Tctl/Tdie reading first; on older Intel CPUs the hottest core of the CPU.
+    fn temp(json: &str) -> Option<f64> {
+        find_cpu_temp(&serde_json::from_str(json).unwrap())
+    }
+
+    fn sensor(text: &str, value: &str, kind: &str) -> String {
+        format!(r#"{{"Text":"{text}","Value":"{value}","Type":"{kind}","Children":[]}}"#)
+    }
+
+    fn t_sensor(text: &str, value: &str) -> String {
+        sensor(text, value, "Temperature")
+    }
+
+    fn hardware(text: &str, id: &str, image: &str, groups: &[String]) -> String {
+        format!(
+            r#"{{"Text":"{text}","HardwareId":"{id}","ImageURL":"{image}","Children":[{}]}}"#,
+            groups.join(",")
+        )
+    }
+
+    fn group(text: &str, sensors: &[String]) -> String {
+        format!(r#"{{"Text":"{text}","Children":[{}]}}"#, sensors.join(","))
+    }
+
+    fn root(hardware: &[String]) -> String {
+        format!(
+            r#"{{"Text":"Sensor","Children":[{{"Text":"PC","Children":[{}]}}]}}"#,
+            hardware.join(",")
+        )
+    }
+
+    #[test]
+    fn the_package_reading_wins_when_there_is_one() {
+        let json = root(&[hardware(
+            "Intel Core i7-12700K",
+            "/intelcpu/0",
+            "images_icon/cpu.png",
+            &[group(
+                "Temperatures",
+                &[
+                    t_sensor("CPU Core #1", "71,0 °C"),
+                    t_sensor("CPU Package", "64,0 °C"),
+                ],
+            )],
+        )]);
+        assert_eq!(temp(&json), Some(64.0));
+    }
+
+    #[test]
+    fn older_intel_cpus_use_the_hottest_core() {
+        let json = root(&[hardware(
+            "Intel Core i5-3570K",
+            "/intelcpu/0",
+            "images_icon/cpu.png",
+            &[
+                group("Clocks", &[sensor("CPU Core #1", "3400,0 MHz", "Clock")]),
+                group(
+                    "Temperatures",
+                    &[
+                        t_sensor("CPU Core #1", "48,0 °C"),
+                        t_sensor("CPU Core #2", "53,5 °C"),
+                        t_sensor("Core #3", "50,0 °C"),
+                    ],
+                ),
+                group("Load", &[sensor("CPU Core #2", "97,0 %", "Load")]),
+            ],
+        )]);
+        assert_eq!(temp(&json), Some(53.5));
+    }
+
+    #[test]
+    fn core_sensors_outside_the_cpu_never_count() {
+        let json = root(&[
+            hardware(
+                "NVIDIA GeForce RTX 4070",
+                "/gpu-nvidia/0",
+                "images_icon/nvidia.png",
+                &[group("Temperatures", &[t_sensor("Core #1", "88,0 °C")])],
+            ),
+            hardware(
+                "Samsung SSD 980",
+                "/nvme/0",
+                "images_icon/hdd.png",
+                &[group("Temperatures", &[t_sensor("Core #2", "79,0 °C")])],
+            ),
+        ]);
+        assert_eq!(temp(&json), None);
+    }
+
+    #[test]
+    fn a_cpu_is_recognised_by_its_icon_when_it_has_no_hardware_id() {
+        let json = root(&[hardware(
+            "Intel Core 2 Quad Q9550",
+            "",
+            "images_icon/cpu.png",
+            &[group(
+                "Temperatures",
+                &[
+                    t_sensor("CPU Core #1", "45,0 °C"),
+                    t_sensor("CPU Core #4", "47,0 °C"),
+                ],
+            )],
+        )]);
+        assert_eq!(temp(&json), Some(47.0));
+    }
+
+    #[test]
+    fn amd_tctl_still_works() {
+        let json = root(&[hardware(
+            "AMD Ryzen 7 7800X3D",
+            "/amdcpu/0",
+            "images_icon/cpu.png",
+            &[group(
+                "Temperatures",
+                &[
+                    t_sensor("Core (Tctl/Tdie)", "61,3 °C"),
+                    t_sensor("CCD1 (Tdie)", "58,0 °C"),
+                ],
+            )],
+        )]);
+        assert_eq!(temp(&json), Some(61.3));
+    }
+
+    #[test]
+    fn no_cpu_sensors_means_no_temperature() {
+        assert_eq!(temp(&root(&[])), None);
+    }
+
+    #[test]
+    fn fahrenheit_sensors_convert_to_celsius_and_null_children_are_tolerated() {
+        let json = r#"{"Text":"Sensor","Children":[
+            {"Text":"Motherboard","Children":null},
+            {"Text":"Intel Core i7","HardwareId":"/intelcpu/0","Children":[
+              {"Text":"Temperatures","Children":[{"Text":"CPU Package","Value":"140,0 °F","Type":"Temperature","Children":null}]}]}]}"#;
+        assert_eq!(temp(json), Some(60.0));
+    }
+
+    // CpuTempMalformedTests: a malformed reply skips that entry instead of losing the whole reading.
+    #[test]
+    fn non_object_nodes_and_non_string_names_are_skipped() {
+        for (json, expected) in [
+            (
+                r#"{"Children":[null,42,"x",{"Text":"CPU Package","Value":"64,0 °C","Type":"Temperature","Children":[]}]}"#,
+                64.0,
+            ),
+            (
+                r#"{"Children":[{"Text":7,"HardwareId":5,"ImageURL":true,"Children":[null]},{"Text":"CPU","HardwareId":"/intelcpu/0","Children":[null,{"Text":"CPU Core #1","Value":"55,0 °C","Type":"Temperature"}]}]}"#,
+                55.0,
+            ),
+        ] {
+            assert_eq!(temp(json), Some(expected), "{json}");
+        }
+    }
+
+    #[test]
+    fn an_explicit_non_temperature_type_is_not_read_as_a_temperature() {
+        let json = r#"{"Children":[
+              {"Text":"CPU Package","Value":"95 °C","Type":42},
+              {"Text":"CPU Package","Value":"61,0 °C","Type":"Temperature"}]}"#;
+        assert_eq!(temp(json), Some(61.0));
+        // an older reply without a type still counts
+        assert_eq!(
+            temp(r#"{"Children":[{"Text":"CPU Package","Value":"58,0 °C"}]}"#),
+            Some(58.0)
+        );
+        assert_eq!(
+            temp(r#"{"Children":[{"Text":"CPU Package","Value":"57,0 °C","Type":null}]}"#),
+            Some(57.0)
+        );
     }
 }

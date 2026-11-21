@@ -11,6 +11,7 @@ pub mod browser_guard;
 pub mod catalog;
 pub mod config;
 pub mod file_logger;
+pub mod gpus;
 pub mod icon_text;
 pub mod log;
 pub mod phone_registry;

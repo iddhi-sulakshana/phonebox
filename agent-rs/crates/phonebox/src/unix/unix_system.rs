@@ -141,6 +141,51 @@ pub fn cpuinfo_name(info: &str) -> String {
     "CPU".into()
 }
 
+/// CPU package temperature in °C from Linux hwmon (k10temp, zenpower, coretemp…); None on macOS and Windows.
+pub fn cpu_temp() -> Option<f64> {
+    if !cfg!(target_os = "linux") {
+        return None;
+    }
+    cpu_temp_in(std::path::Path::new("/sys/class/hwmon"))
+}
+
+/// `CpuTemp` over a hwmon folder: the first readable `temp1_input` of the preferred sensors, in that order.
+pub fn cpu_temp_in(hwmon: &std::path::Path) -> Option<f64> {
+    const PREFERRED: [&str; 6] = [
+        "k10temp",
+        "zenpower",
+        "coretemp",
+        "cpu_thermal",
+        "soc_thermal",
+        "acpitz",
+    ];
+    let mut dirs: Vec<std::path::PathBuf> = std::fs::read_dir(hwmon)
+        .ok()?
+        .flatten()
+        .map(|e| e.path())
+        .collect();
+    dirs.sort();
+    let mut sensors: Vec<(usize, std::path::PathBuf)> = dirs
+        .into_iter()
+        .filter_map(|d| {
+            let name = std::fs::read_to_string(d.join("name")).unwrap_or_default();
+            PREFERRED
+                .iter()
+                .position(|p| *p == name.trim())
+                .map(|i| (i, d))
+        })
+        .collect();
+    sensors.sort_by_key(|(i, _)| *i); // stable: same-name sensors keep folder order
+    sensors.into_iter().find_map(|(_, d)| {
+        let milli: f64 = std::fs::read_to_string(d.join("temp1_input"))
+            .ok()?
+            .trim()
+            .parse()
+            .ok()?;
+        Some(crate::system_monitor::round_dotnet(milli / 1000.0, 1))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,5 +209,26 @@ mod tests {
         );
         assert_eq!(cpuinfo_name("Hardware\t: BCM2835\n"), "BCM2835");
         assert_eq!(cpuinfo_name(""), "CPU");
+    }
+
+    #[test]
+    fn hwmon_temperature_follows_the_preferred_sensor_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let sensor = |n: &str, name: &str, milli: Option<&str>| {
+            let d = dir.path().join(n);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join("name"), format!("{name}\n")).unwrap();
+            if let Some(m) = milli {
+                std::fs::write(d.join("temp1_input"), m).unwrap();
+            }
+        };
+        assert_eq!(cpu_temp_in(dir.path()), None);
+        sensor("hwmon0", "acpitz", Some("40000\n"));
+        sensor("hwmon1", "nvme", Some("90000\n"));
+        assert_eq!(cpu_temp_in(dir.path()), Some(40.0));
+        sensor("hwmon2", "coretemp", None); // preferred, but nothing to read: the next one counts
+        sensor("hwmon3", "k10temp", Some("61250\n"));
+        assert_eq!(cpu_temp_in(dir.path()), Some(61.2)); // 61.25: Math.Round rounds half to even
+        assert_eq!(cpu_temp_in(&dir.path().join("missing")), None);
     }
 }

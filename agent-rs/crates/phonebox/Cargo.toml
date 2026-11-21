@@ -21,6 +21,7 @@ tokio = { version = "1", features = ["full"] }
 futures-util = { version = "0.3", default-features = false }
 tower = { version = "0.5", default-features = false, features = ["util"] }
 serde_json = { version = "1", features = ["preserve_order", "raw_value"] }
+regex = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [target.'cfg(windows)'.dependencies]
