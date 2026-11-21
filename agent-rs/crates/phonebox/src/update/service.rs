@@ -176,6 +176,21 @@ impl UpdateService {
         }
     }
 
+    /// `RunningInstalled`: this copy runs from the install folder (only that one replaces itself).
+    pub fn installed(&self) -> bool {
+        super::migration::running_from(&self.deps.exe, &self.deps.install_dir)
+    }
+
+    /// `/api/state`'s `update`: `{latest, app, agent}` while an update is out, else null.
+    pub fn state(&self) -> Value {
+        let s = self.status();
+        if s.app_update || s.agent_update {
+            serde_json::json!({ "latest": s.latest, "app": s.app_update, "agent": s.agent_update })
+        } else {
+            Value::Null
+        }
+    }
+
     /// `CheckAsync`: waits for the gate.
     pub async fn check(&self) -> Result<(), Stopped> {
         let _gate = self.gate.lock().await;
@@ -375,9 +390,7 @@ impl UpdateSlot {
 
 impl crate::state::StateSource for UpdateSlot {
     fn snapshot(&self) -> Value {
-        self.0.get().map_or(Value::Null, |s| {
-            serde_json::to_value(s.status()).unwrap_or(Value::Null)
-        })
+        self.0.get().map_or(Value::Null, |s| s.state())
     }
 }
 

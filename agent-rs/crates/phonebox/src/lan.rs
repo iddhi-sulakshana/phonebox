@@ -297,6 +297,10 @@ mod tests {
             ("/api/ha/test", false),
             ("/api/phones", false),
             ("/api/rules/test", false),
+            ("/api/update", false),
+            ("/api/update/check", false),
+            ("/api/update/apply", false),
+            ("/api/phone/install", false),
             ("/panel/main.js", false),
             ("/", false),
             // PathString compares without case

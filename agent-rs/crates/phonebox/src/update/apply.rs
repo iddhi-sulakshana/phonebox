@@ -314,9 +314,7 @@ impl UpdateService {
                     inner.error = Some(message);
                 }
             }
-            if status.agent_update
-                && super::migration::running_from(&self.deps.exe, &self.deps.install_dir)
-            {
+            if status.agent_update && self.installed() {
                 attempted = true;
                 self.update_agent(&release).await?;
             }

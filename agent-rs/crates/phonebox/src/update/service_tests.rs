@@ -604,3 +604,21 @@ async fn installs_go_to_the_phones_missing_the_app_with_the_apk_path_as_one_argu
     *f.adb.mode.lock().unwrap() = "ok".into();
     assert_eq!(service.install_missing().await, None);
 }
+
+#[tokio::test]
+async fn the_state_shows_only_an_available_update() {
+    use crate::state::StateSource;
+    let (f, service) = fixture("1.0.0-alpha.1", None);
+    let slot = UpdateSlot::default();
+    slot.set(service.clone());
+    assert_eq!(slot.snapshot(), Value::Null);
+    f.http.answer(
+        &format!("{API}/repos/{REPO}/releases?per_page=30"),
+        Ok(serde_json::json!([release("v1.0.0-alpha.2", false, "linux-x64")]).to_string()),
+    );
+    service.check().await.unwrap();
+    assert_eq!(
+        slot.snapshot(),
+        serde_json::json!({ "latest": "1.0.0-alpha.2", "app": false, "agent": true })
+    );
+}
