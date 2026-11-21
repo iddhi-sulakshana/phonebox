@@ -15,6 +15,8 @@ use std::time::Duration;
 use indexmap::IndexMap;
 use serde_json::{Value, json};
 
+use actions::describe_shortcut;
+
 use super::leases::{MicrophoneLeases, PowerConfirmations, nonce};
 use super::models::*;
 use super::monotonic_ms;
@@ -29,6 +31,10 @@ pub const AUDIO_CACHE_MS: i64 = 400;
 /// How often monitors, power plans and MIDI ports are looked for again.
 pub const HARDWARE_MS: i64 = 30_000;
 
+#[path = "actions.rs"]
+mod actions;
+#[path = "integrations.rs"]
+mod integrations;
 #[path = "radio.rs"]
 mod radio;
 #[path = "sleep.rs"]
@@ -63,6 +69,12 @@ pub struct DeckOptions {
     pub now: Option<Arc<dyn Fn() -> i64 + Send + Sync>>,
     /// How long pausing the other media may take once a station plays (default 5 s).
     pub media_pause: Option<Duration>,
+    /// Pushed values (a toggle shortcut's state).
+    pub push: Option<Arc<crate::push_store::PushStore>>,
+    /// The output volume (`builtin:mute` shortcuts).
+    pub master: Option<Arc<crate::audio_control::AudioControl>>,
+    /// Playlist controls.
+    pub spotify: Option<Arc<crate::spotify_control::SpotifyControl>>,
 }
 
 /// Everything C#'s reentrant `_state` lock covered.
@@ -134,6 +146,11 @@ pub struct ControlDeck {
     hardware_job: Mutex<HardwareJob>,
     tasks: Arc<ControlTasks>,
     disposed: AtomicBool,
+    push: Option<Arc<crate::push_store::PushStore>>,
+    master: Option<Arc<crate::audio_control::AudioControl>>,
+    spotify: Option<Arc<crate::spotify_control::SpotifyControl>>,
+    /// What a workflow or routing control last did, shown on its card (`_actionResults`).
+    action_results: Mutex<std::collections::HashMap<String, String>>,
 }
 
 impl ControlDeck {
@@ -190,6 +207,10 @@ impl ControlDeck {
                 hardware: Default::default(),
                 hardware_job: Default::default(),
                 disposed: AtomicBool::new(false),
+                push: options.push,
+                master: options.master,
+                spotify: options.spotify,
+                action_results: Mutex::default(),
             }
         })
     }
@@ -368,91 +389,6 @@ impl ControlDeck {
                 *lock(&hardware) = found;
             })
             .ok();
-    }
-
-    /// What the phone shows for a configured control. Blocks (native states, a tool lookup).
-    fn describe(&self, c: &AgentConfig, a: &DeckAction, midi: &[DeckItem]) -> DeckItem {
-        let mut state =
-            matches!(a.kind.as_str(), "task" | "server").then(|| self.tasks.state(&a.id));
-        let mut available = true;
-        let mut set = |ok: bool, text: &str| {
-            available = ok;
-            Some(text.to_string())
-        };
-        match a.kind.as_str() {
-            "service" => {
-                let s = self
-                    .native
-                    .action_state(a)
-                    .unwrap_or_else(|| "Service unavailable".into());
-                available = s != "Service unavailable";
-                state = Some(s);
-            }
-            "sound" | "radio" => {
-                state = if a.kind == "radio" {
-                    self.radio_state(a)
-                } else {
-                    self.native.action_state(a)
-                };
-                // None: no player here (Linux or macOS without ffplay, mpv or vlc)
-                available = cfg!(windows) || state.is_some();
-                if state.is_none() {
-                    state = Some(
-                        if cfg!(windows) {
-                            "Playback unavailable"
-                        } else {
-                            "Install ffplay, mpv, or vlc"
-                        }
-                        .into(),
-                    );
-                }
-            }
-            "workflow" if crate::tool_process::find("gh").is_none() => {
-                state = set(false, "Install GitHub CLI")
-            }
-            "playlist"
-                if blank(c.controls.spotify_client_id.as_deref())
-                    && blank(c.controls.spotify_token.as_deref()) =>
-            {
-                state = set(false, "Connect Spotify in desktop settings")
-            }
-            "midi" => {
-                let port = a.device.as_deref().and_then(parse_int);
-                if port.is_none_or(|p| !midi.iter().any(|m| m.id == p.to_string())) {
-                    state = set(false, "MIDI port unavailable");
-                }
-            }
-            "app" | "project" | "shortcut" | "focus" => {
-                state = match c.shortcuts.iter().find(|s| s.id == a.target) {
-                    None => set(false, "Shortcut is missing"),
-                    Some(s) => set(
-                        true,
-                        if shortcut_running(s) {
-                            "Running"
-                        } else {
-                            "Ready"
-                        },
-                    ),
-                };
-            }
-            "mixer" | "mixer-mute" => state = set(false, "Mixer is not connected"),
-            "audio-route"
-                if c.controls.mixer_executable.as_deref().is_none_or(|exe| {
-                    exe.trim().is_empty() || !std::path::Path::new(exe).is_file()
-                }) =>
-            {
-                state = set(false, "Configure SoundVolumeView")
-            }
-            _ => {}
-        }
-        DeckItem {
-            id: a.id.clone(),
-            name: a.label.clone(),
-            kind: a.kind.clone(),
-            state,
-            available,
-            rev: None,
-        }
     }
 
     /// `POST /api/controls/capture`: a draft for the desktop editor (saving still checks the config version). Err when
@@ -930,43 +866,6 @@ impl ControlDeck {
         Ok(())
     }
 
-    /// A configured control the phone names (or a profile runs).
-    async fn action(
-        &self,
-        id: &str,
-        op: &str,
-        value: Option<i32>,
-        stop: &Stop,
-    ) -> Result<DeckResult, Cancelled> {
-        let c = self.cfg.get();
-        let Some(action) = c.controls.actions.iter().find(|a| a.id == id) else {
-            return Ok(DeckResult::fail(UNKNOWN_CONTROL));
-        };
-        if !action.enabled
-            && !(op == "stop"
-                && matches!(action.kind.as_str(), "task" | "server" | "sound" | "radio"))
-        {
-            return Ok(DeckResult::fail("Control is disabled"));
-        }
-        if action.kind == "radio" {
-            return self.radio_action(&action.id, op, stop).await;
-        }
-        let ok = self
-            .platform(
-                &action.kind,
-                &action.target,
-                action.argument.as_deref(),
-                value.unwrap_or(action.value),
-                stop,
-            )
-            .await?;
-        Ok(if ok {
-            DeckResult::ok()
-        } else {
-            DeckResult::fail("Integration is unavailable or requires setup on the computer")
-        })
-    }
-
     /// The agent is stopping: every hold ends (microphones restored), ducked and fading sessions get their volume back,
     /// task programs end (at most 8 s), and the native side lets go. Once; blocks.
     pub fn dispose(&self) {
@@ -1012,29 +911,6 @@ fn level(kind: &str, id: &str, volume: i32, muted: bool) -> DeckLevel {
         volume: Some(volume),
         muted: Some(muted),
     }
-}
-
-/// A shortcut as the phone lists it (it prefixes the id with `shortcut:`).
-fn describe_shortcut(s: &Shortcut) -> DeckItem {
-    let kind = match s.cmd.as_str() {
-        "builtin:keys" => "keys",
-        "builtin:text" => "text",
-        "builtin:macro" => "macro",
-        cmd if cmd.starts_with("builtin:") => "shortcut",
-        _ => "app",
-    };
-    item(
-        &s.id,
-        &s.label,
-        kind,
-        shortcut_running(s).then(|| "Running".into()),
-    )
-}
-
-/// Whether the shortcut's program shows a window. Only Windows can say (.NET's `MainWindowHandle` is always 0
-/// elsewhere); the Windows check comes with the actions.
-fn shortcut_running(_: &Shortcut) -> bool {
-    false
 }
 
 /// The sessions the phone shows: active ones (and the system's, pid 0), one per application. A group shows its

@@ -464,7 +464,12 @@ impl AppState {
         let controls = crate::control_deck::core::ControlDeck::new(
             self.cfg.clone(),
             native,
-            Default::default(),
+            crate::control_deck::core::DeckOptions {
+                push: Some(self.push.clone()),
+                master: Some(self.audio.clone()),
+                spotify: Some(self.spotify.clone()),
+                ..Default::default()
+            },
         );
         {
             let deck = controls.clone();

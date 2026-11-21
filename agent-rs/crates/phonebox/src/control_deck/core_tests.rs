@@ -9,6 +9,8 @@ use futures_util::future::BoxFuture;
 use indexmap::IndexMap;
 use serde_json::Value;
 
+use super::actions::shortcut_process;
+use super::integrations::mixer_parameter;
 use super::sleep::player_session_matches;
 use super::*;
 use crate::control_deck::testing::{Event, lock, store};
@@ -619,6 +621,260 @@ async fn ducking_lowers_other_sessions_while_a_microphone_hears_and_restores_the
     assert_eq!(f.native.volumes(), [40, 70]);
     f.deck.dispose();
     assert_eq!(f.native.volumes(), [81, 70]);
+}
+
+#[tokio::test]
+async fn zero_sound_volume_is_preserved() {
+    let f = Fixture::new(
+        r#"{"actions":[{"id":"sound","kind":"sound","target":"configured.wav","value":0}]}"#,
+    );
+    assert!(f.act("action", "sound", None, None).await.ok);
+    assert_eq!(f.native.writes(), ["sound:0"]);
+}
+
+#[tokio::test]
+async fn disabled_playlist_profile_and_default_enablement_behave_safely() {
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = store(
+        &dir,
+        r#"{"controls":{
+          "actions":[
+            {"id":"pl1","label":"Chill","kind":"playlist","target":"spotify:playlist:37i9dQZF1DX4WYpdgoIcn6","enabled":false},
+            {"id":"r1","label":"Disabled Radio","kind":"radio","target":"https://example.com/1","value":70,"enabled":false},
+            {"id":"r2","label":"Enabled Radio","kind":"radio","target":"https://example.com/2","value":75},
+            {"id":"t1","label":"Disabled Task","kind":"task","target":"missing-shortcut","enabled":false}
+          ],
+          "profiles":[{"id":"p1","label":"Mix","levels":[],"actions":["r1","r2"]}]
+        }}"#,
+    );
+    assert!(
+        cfg.get()
+            .controls
+            .actions
+            .iter()
+            .find(|a| a.id == "r2")
+            .unwrap()
+            .enabled
+    );
+
+    let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let http: crate::spotify_control::SpotifyHttp = {
+        let calls = calls.clone();
+        Arc::new(move |_| {
+            calls.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { Err("no network in this test".to_string()) })
+        })
+    };
+    let spotify = crate::spotify_control::SpotifyControl::new(cfg.clone(), 19885, http);
+    let played = spotify.act("playlist", Some("pl1")).await;
+    assert!(!played.ok);
+    assert_eq!(played.error.as_deref(), Some("Control is disabled"));
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+
+    let native = Arc::new(Native::new());
+    let deck = ControlDeck::new(cfg, native.clone(), DeckOptions::default());
+    let task_stop = act(&deck, "action", Some("t1"), Some("stop"), None, None, None).await;
+    assert!(!task_stop.ok);
+    assert_eq!(task_stop.error.as_deref(), Some("This task is not running"));
+
+    assert!(
+        act(&deck, "profile", Some("p1"), None, None, None, None)
+            .await
+            .ok
+    );
+    let writes = native.writes();
+    assert!(writes.contains(&"sound:75".to_string()));
+    assert!(!writes.contains(&"sound:70".to_string()));
+}
+
+#[tokio::test]
+async fn a_folder_shortcut_is_not_treated_as_a_running_application() {
+    let dir = tempfile::tempdir().unwrap();
+    // nothing is opened: the folder does not exist
+    let folder = format!(
+        "{}{}",
+        dir.path().join("missing-project").display(),
+        std::path::MAIN_SEPARATOR
+    );
+    let config = serde_json::json!({"shortcuts":[{"id":"project","label":"Project","cmd":folder}]});
+    let cfg = store(&dir, &config.to_string());
+    let native = Arc::new(Native::new());
+    let deck = ControlDeck::new(cfg, native.clone(), DeckOptions::default());
+    let state = deck.snapshot().await.unwrap();
+    // what the App Dock sends
+    let _ = act(
+        &deck,
+        "action",
+        Some("shortcut:project"),
+        Some("focus"),
+        None,
+        None,
+        None,
+    )
+    .await;
+    assert!(!native.writes().contains(&"platform:focus".to_string()));
+    assert_ne!(state["shortcuts"][0]["state"], "Running");
+}
+
+/// C# ran this on Windows only (it read the attempted command from a launch failure); here the two commands are
+/// shell commands that leave a file behind, on Linux and macOS.
+#[tokio::test]
+async fn deck_runs_the_off_command_of_a_toggle_whose_pushed_state_is_on() {
+    if cfg!(windows) {
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let cwd = dir.path().to_string_lossy().into_owned();
+    let config = serde_json::json!({"shortcuts":[{"id":"lamp","label":"Lamp","toggle":true,"stateKey":"lamp",
+        "cmd":"/bin/sh","args":"-c \"echo on > lamp-on\"","offCmd":"/bin/sh","offArgs":"-c \"echo off > lamp-off\"","cwd":cwd}]});
+    let cfg = store(&dir, &config.to_string());
+    let push = crate::push_store::PushStore::new(&dir.path().join("data.json"));
+    push.set("lamp", serde_json::json!(true), None).unwrap();
+    let deck = ControlDeck::new(
+        cfg,
+        Arc::new(Native::new()),
+        DeckOptions {
+            push: Some(push),
+            ..DeckOptions::default()
+        },
+    );
+    assert!(
+        act(
+            &deck,
+            "action",
+            Some("shortcut:lamp"),
+            None,
+            None,
+            None,
+            None
+        )
+        .await
+        .ok
+    );
+    let off = dir.path().join("lamp-off");
+    for _ in 0..100 {
+        if off.exists() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(off.exists());
+    assert!(!dir.path().join("lamp-on").exists());
+}
+
+// Rust-only: what each kind of control answers when it cannot run.
+
+#[tokio::test]
+async fn each_kind_of_control_says_what_it_needs() {
+    let f = Fixture::with_config(
+        r#"{"shortcuts":[{"id":"s1","label":"Notes","cmd":"builtin:macro","steps":["bogus:x"]}],"controls":{"actions":[
+            {"id":"midi","kind":"midi","device":"x","target":"90 40"},
+            {"id":"midi2","kind":"midi","device":" 2 ","target":"90 40","value":7},
+            {"id":"osc-bad","kind":"osc","device":"nohost","target":"/x"},
+            {"id":"flow","kind":"workflow","target":"owner/repo/extra","argument":"ci.yml"},
+            {"id":"flow2","kind":"workflow","target":"owner/repo","argument":"c i.yml"},
+            {"id":"route","kind":"audio-route","target":"chrome.exe","device":"speaker"},
+            {"id":"mix","kind":"mixer","target":"Strip[64].Gain"},
+            {"id":"mix2","kind":"mixer-mute","target":"Bus[0].Mute"},
+            {"id":"app","kind":"app","target":"gone"},
+            {"id":"vol","kind":"volume-up","target":"x"},
+            {"id":"pl","kind":"playlist","target":"spotify:playlist:x"}
+        ]}}"#,
+    );
+    let error = |r: DeckResult| r.error.unwrap_or_default();
+    assert_eq!(
+        error(f.act("action", "midi", None, None).await),
+        "Choose a MIDI output port"
+    );
+    assert!(f.act("action", "midi2", None, None).await.ok);
+    assert_eq!(
+        error(f.act("action", "osc-bad", None, None).await),
+        "Control failed; check the computer's integration settings"
+    );
+    for id in ["flow", "flow2"] {
+        assert_eq!(
+            error(f.act("action", id, None, None).await),
+            "Configure a repository and workflow filename"
+        );
+    }
+    if !cfg!(windows) {
+        assert_eq!(
+            error(f.act("action", "route", None, None).await),
+            "Configure SoundVolumeView on the computer to use application routing"
+        );
+    }
+    for id in ["mix", "mix2"] {
+        assert_eq!(
+            error(f.act("action", id, Some(1), None).await),
+            "Configure the installed Voicemeeter Remote DLL and start its audio engine"
+        );
+    }
+    assert_eq!(
+        error(f.act("action", "app", None, None).await),
+        "Configured shortcut is missing"
+    );
+    assert_eq!(
+        error(f.act("action", "shortcut:s1", None, None).await),
+        "Configured shortcut failed"
+    );
+    assert_eq!(
+        error(f.act("action", "shortcut:none", None, None).await),
+        "Configured shortcut is missing"
+    );
+    // no Spotify in this deck
+    assert_eq!(
+        error(f.act("action", "pl", None, None).await),
+        "Spotify is unavailable"
+    );
+    assert!(f.act("action", "vol", None, None).await.ok);
+    assert_eq!(f.native.writes(), ["platform:volume-up"]);
+}
+
+#[tokio::test]
+async fn osc_sends_one_packet_to_the_configured_host() {
+    let socket = tokio::net::UdpSocket::bind("127.0.0.1:0").await.unwrap();
+    let port = socket.local_addr().unwrap().port();
+    let f = Fixture::new(&format!(
+        r#"{{"actions":[{{"id":"osc","kind":"osc","device":"127.0.0.1:{port}","target":"/fader","value":3}}]}}"#
+    ));
+    assert!(f.act("action", "osc", Some(5), None).await.ok);
+    let mut buf = [0u8; 64];
+    let (n, _) = tokio::time::timeout(Duration::from_secs(2), socket.recv_from(&mut buf))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        &buf[..n],
+        crate::control_deck::osc_packet("/fader", 5.0).unwrap()
+    );
+}
+
+#[test]
+fn mixer_parameters_and_shortcut_process_names() {
+    for (name, ok) in [
+        ("Strip[0].Gain", true),
+        ("Strip[63].Mute", true),
+        ("Bus[7].A5", true),
+        ("Bus[1].B3", true),
+        ("Strip[64].Gain", false),
+        ("Bus[1].B4", false),
+        ("Strip[1].Gain\n", false),
+        ("strip[1].Gain", false),
+    ] {
+        assert_eq!(mixer_parameter(name), ok, "{name:?}");
+    }
+    for (cmd, name) in [
+        ("builtin:keys", None),
+        ("https://example.com", None),
+        ("steam://run/1", None),
+        ("C:\\Windows\\notepad.exe", Some("notepad")),
+        ("file:///C:/Tools/app.exe", Some("app")),
+        ("code", Some("code")),
+        ("C:\\Projects\\site\\", None),
+        ("/opt/app.v2.bin", Some("app.v2")),
+    ] {
+        assert_eq!(shortcut_process(cmd).as_deref(), name, "{cmd}");
+    }
 }
 
 // Rust-only: the phone's request limits, the generic outcome texts and what the snapshot says about each control.

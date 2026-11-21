@@ -744,6 +744,51 @@ async fn concurrent_radio_start_and_media_play_pause_serialize_without_both_play
     assert!(native.playing().is_empty());
 }
 
+#[tokio::test]
+async fn playlist_action_stops_active_radio_only_when_spotify_succeeds() {
+    let config = r#"{"controls":{"spotifyToken":"test-access-token","actions":[
+        {"id":"r-1","label":"Radyo Fenomen","kind":"radio","target":"https://example.com/fenomen.mp3","value":80},
+        {"id":"pl-1","label":"Focus Mix","kind":"playlist","target":"spotify:playlist:37i9dQZF1DXcBWIGoYBM5M"}]}}"#;
+    let native = FakeRadio::new();
+    let dir = tempfile::tempdir().unwrap();
+    let store = store(&dir, config);
+    let status = Arc::new(std::sync::atomic::AtomicU16::new(403));
+    let http: crate::spotify_control::SpotifyHttp = {
+        let status = status.clone();
+        Arc::new(move |_| {
+            let status = status.load(Ordering::SeqCst);
+            Box::pin(async move {
+                Ok(crate::spotify_control::SpotifyReply {
+                    status,
+                    retry_after: None,
+                    body: String::new(),
+                })
+            })
+        })
+    };
+    let spotify = Arc::new(crate::spotify_control::SpotifyControl::new(
+        store.clone(),
+        19885,
+        http,
+    ));
+    let deck = ControlDeck::new(
+        store,
+        native.clone(),
+        DeckOptions {
+            spotify: Some(spotify),
+            ..DeckOptions::default()
+        },
+    );
+
+    assert!(act(&deck, "action", "r-1", "", None).await.ok);
+    assert!(native.playing().contains(&"r-1".to_string()));
+    assert!(!act(&deck, "action", "pl-1", "", None).await.ok);
+    assert!(native.playing().contains(&"r-1".to_string()));
+    status.store(204, Ordering::SeqCst);
+    assert!(act(&deck, "action", "pl-1", "", None).await.ok);
+    assert!(native.playing().is_empty());
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn disabling_or_removing_a_radio_across_focus_and_play_gates_never_leaves_it_playing() {
     // 1. stopping disabled controls alone clears the playback and Now Playing
