@@ -214,6 +214,8 @@ pub struct AppState {
     pub privacy: Arc<crate::privacy_monitor::PrivacyMonitor>,
     /// The programs of the deck's task and server actions (the deck's own).
     pub tasks: Arc<crate::control_deck::tasks::ControlTasks>,
+    /// The radio-browser.info directory the settings page imports stations from.
+    pub radio: Arc<crate::control_deck::radio_directory::RadioDirectory>,
     /// The Control Deck: the phone's controls page (audio, media, push to talk, profiles, power and platform actions).
     pub controls: Arc<crate::control_deck::core::ControlDeck>,
     /// The app console widget: sends a profile's keys to the app in front (Windows).
@@ -376,6 +378,7 @@ impl AppState {
             console: Arc::new(crate::app_console::AppConsole::new(cfg.clone())),
             tasks: controls.tasks(),
             controls: controls.clone(),
+            radio: Arc::new(crate::control_deck::radio_directory::RadioDirectory::new()),
             charge: Arc::new(crate::charge_guard::ChargeGuard::new(
                 cfg.clone(),
                 ha.clone(),

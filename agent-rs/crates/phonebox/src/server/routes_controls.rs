@@ -8,6 +8,9 @@ use axum::routing::{get, post};
 
 use super::{AppState, json_response, query};
 use crate::control_deck::core::DeckCommand;
+use crate::control_deck::radio_directory::CheckItem;
+use axum::http::HeaderMap;
+use serde_json::json;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -15,6 +18,15 @@ pub fn routes() -> Router<AppState> {
         .route("/api/controls/command/{kind}", post(command))
         .route("/api/controls/capture", post(capture))
         .route("/api/controls/listen", get(listen))
+        .route(
+            "/api/controls/radio-directory/countries",
+            get(radio_countries),
+        )
+        .route(
+            "/api/controls/radio-directory/stations",
+            get(radio_stations),
+        )
+        .route("/api/controls/radio-directory/check", post(radio_check))
         .route("/api/controls/task-output/{id}", get(task_output))
 }
 
@@ -66,6 +78,98 @@ async fn listen(State(s): State<AppState>) -> Response {
             axum::body::Body::from_stream(lines.map(Ok::<_, std::convert::Infallible>)),
         )
             .into_response(),
+    }
+}
+
+/// The directory's countries (local only); 502 `{"ok":false,"error":…}` when no mirror answered.
+async fn radio_countries(State(s): State<AppState>) -> Response {
+    directory_answer(s.radio.countries().await.map(|c| json!({ "countries": c })))
+}
+
+/// A country's popular stations (`country`, `limit`; local only).
+async fn radio_stations(
+    State(s): State<AppState>,
+    Query(q): Query<Vec<(String, String)>>,
+) -> Response {
+    let Ok(limit) = query::int32(&q, "limit") else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    let country = query::value(&q, "country").unwrap_or_default();
+    let stations = s.radio.stations(&country, limit.unwrap_or(40)).await;
+    directory_answer(stations.map(|st| json!({ "stations": st })))
+}
+
+fn directory_answer(result: Result<serde_json::Value, String>) -> Response {
+    match result {
+        Ok(body) => json_response(StatusCode::OK, &body),
+        Err(error) => json_response(
+            StatusCode::BAD_GATEWAY,
+            &json!({ "ok": false, "error": error }),
+        ),
+    }
+}
+
+/// Checks the settings page's stream addresses: `{"stations":[{"id","streamUrl"}]}` (member names in any case) →
+/// `{"results":[{"id","ok","status"}]}`. A body that is not JSON, or not of that shape, is a 500 as in C#.
+async fn radio_check(
+    State(s): State<AppState>,
+    headers: HeaderMap,
+    body: axum::body::Bytes,
+) -> Response {
+    let json_type = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|t| t.split(';').next())
+        .map(|t| t.trim().to_ascii_lowercase())
+        .is_some_and(|t| {
+            t == "application/json" || (t.starts_with("application/") && t.ends_with("+json"))
+        });
+    let items = json_type
+        .then(|| serde_json::from_slice::<serde_json::Value>(&body).ok())
+        .flatten()
+        .and_then(|v| bind_check(&v));
+    let Some(items) = items else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+    let results = s.radio.check(items).await;
+    json_response(StatusCode::OK, &json!({ "results": results }))
+}
+
+/// `ReadFromJsonAsync<RadioCheckRequest>` with the web defaults: None where System.Text.Json would throw.
+fn bind_check(body: &serde_json::Value) -> Option<Vec<Option<CheckItem>>> {
+    use serde_json::Value;
+    let member = |object: &serde_json::Map<String, Value>, name: &str| {
+        object
+            .iter()
+            .filter(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v)
+            .next_back()
+            .cloned()
+    };
+    let text = |value: Option<Value>| match value {
+        None | Some(Value::Null) => Some(None),
+        Some(Value::String(s)) => Some(Some(s)),
+        Some(_) => None,
+    };
+    let object = match body {
+        Value::Null => return Some(vec![]),
+        Value::Object(object) => object,
+        _ => return None,
+    };
+    match member(object, "stations") {
+        None | Some(Value::Null) => Some(vec![]),
+        Some(Value::Array(items)) => items
+            .iter()
+            .map(|item| match item {
+                Value::Null => Some(None),
+                Value::Object(o) => Some(Some(CheckItem {
+                    id: text(member(o, "id"))?,
+                    stream_url: text(member(o, "streamUrl"))?,
+                })),
+                _ => None,
+            })
+            .collect(),
+        Some(_) => None,
     }
 }
 
@@ -156,6 +260,64 @@ mod tests {
         let res = send(&app, "POST", "/api/controls/capture", &[LOCAL]).await;
         assert_eq!(res.status(), 500);
         assert_eq!(text(res).await, "");
+    }
+
+    #[tokio::test]
+    async fn the_radio_directory_routes_check_without_the_network_and_refuse_bad_bodies() {
+        let (_d, s) = test_state();
+        let app = crate::server::build_router(s);
+        let check = |body: &'static str, kind: &'static str| {
+            let app = app.clone();
+            async move {
+                let req = axum::http::Request::builder()
+                    .method("POST")
+                    .uri("/api/controls/radio-directory/check")
+                    .header("host", "127.0.0.1:8765")
+                    .header("content-type", kind)
+                    .body(axum::body::Body::from(body))
+                    .unwrap();
+                tower::ServiceExt::oneshot(app, req).await.unwrap()
+            }
+        };
+        let res = check(
+            r#"{"Stations":[{"ID":"a","streamurl":"ftp://x"},{"id":"b","streamUrl":"http://127.0.0.1/"},null]}"#,
+            "application/json; charset=utf-8",
+        )
+        .await;
+        assert_eq!(res.status(), 200);
+        assert_eq!(
+            text(res).await,
+            r#"{"results":[{"id":"a","ok":false,"status":"Invalid URL"},{"id":"b","ok":false,"status":"local address, not checked"},{"id":"","ok":false,"status":"Invalid URL"}]}"#
+        );
+        for (body, kind) in [("null", "application/json"), ("{}", "application/json")] {
+            assert_eq!(text(check(body, kind).await).await, r#"{"results":[]}"#);
+        }
+        for (body, kind) in [
+            ("{}", "text/plain"),
+            ("{", "application/json"),
+            (r#"{"stations":"x"}"#, "application/json"),
+            (r#"{"stations":[{"id":1}]}"#, "application/json"),
+        ] {
+            let res = check(body, kind).await;
+            assert_eq!(res.status(), 500, "{body} {kind}");
+            assert_eq!(text(res).await, "");
+        }
+        let res = send(
+            &app,
+            "GET",
+            "/api/controls/radio-directory/stations?country=1",
+            &[LOCAL],
+        )
+        .await;
+        assert_eq!(text(res).await, r#"{"stations":[]}"#);
+        let res = send(
+            &app,
+            "GET",
+            "/api/controls/radio-directory/stations?limit=x",
+            &[LOCAL],
+        )
+        .await;
+        assert_eq!(res.status(), 400);
     }
 
     #[tokio::test]

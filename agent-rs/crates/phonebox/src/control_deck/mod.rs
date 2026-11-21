@@ -2,10 +2,12 @@
 //! talk, power and platform actions, tasks, MIDI and OSC — for the phone's controls page.
 
 pub mod core;
+pub mod fetch;
 pub mod leases;
 pub mod midi;
 pub mod models;
 pub mod portable;
+pub mod radio_directory;
 pub mod tasks;
 #[cfg(test)]
 pub(crate) mod testing;
