@@ -2,7 +2,7 @@
 //! proxy) (`Program.cs:494-528`, `:809`).
 
 use axum::Router;
-use axum::extract::{Query, State};
+use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -19,6 +19,28 @@ pub fn routes() -> Router<AppState> {
         .route("/api/feeds/open", post(feeds_open))
         .route("/api/proxy", get(proxy))
         .route("/api/calendar", get(calendar))
+        .route("/api/photos", get(photos))
+        .route("/api/photos/{id}", get(photo))
+}
+
+/// The photo ids of the chosen folder (scanned in the background), or why there are none.
+async fn photos(State(s): State<AppState>) -> Response {
+    json_response(StatusCode::OK, &s.photos.list())
+}
+
+/// One (scaled-down) photo by id; the phone may keep it for a day.
+async fn photo(State(s): State<AppState>, Path(id): Path<String>) -> Response {
+    match s.photos.photo(Some(&id)).await {
+        Ok((bytes, mime)) => (
+            [
+                (axum::http::header::CONTENT_TYPE, mime),
+                (axum::http::header::CACHE_CONTROL, "private, max-age=86400"),
+            ],
+            bytes,
+        )
+            .into_response(),
+        Err(error) => json_response(StatusCode::NOT_FOUND, &json!({ "error": error })),
+    }
 }
 
 /// The next two weeks of events (the feed addresses stay here).
@@ -190,6 +212,60 @@ mod tests {
             send(&wifi, "GET", "/api/calendar", &[key]).await.status(),
             200
         );
+    }
+
+    #[tokio::test]
+    async fn the_photo_routes_answer_ids_and_one_photo_at_a_time() {
+        let (dir, s) = test_state();
+        let photos = dir.path().join("photos");
+        std::fs::create_dir_all(&photos).unwrap();
+        let jpeg = [
+            0xFFu8, 0xD8, 0xFF, 0xC0, 0, 0x11, 8, 0, 0x10, 0, 0x10, 3, 1, 0x22, 0, 2, 0x11, 1, 3,
+            0x11, 1, 0xFF, 0xD9,
+        ];
+        std::fs::write(photos.join("a.jpg"), jpeg).unwrap();
+        let app = crate::server::build_router(s.clone());
+        let r = json_of(send(&app, "GET", "/api/photos", &[LOCAL]).await).await;
+        assert_eq!(r, json!({"ids": [], "error": null, "scanning": false}));
+        let res = send(&app, "GET", "/api/photos/abc", &[LOCAL]).await;
+        assert_eq!(res.status(), 404);
+        assert_eq!(res.headers()["cache-control"], "no-store");
+        assert_eq!(
+            json_of(res).await,
+            json!({"error": "Add a Photo frame widget to a page to show photos"})
+        );
+
+        s.cfg
+            .save(
+                &format!(
+                    r#"{{"photos":{{"folder":{}}},"pages":[{{"id":"p","title":"P","widgets":[{{"id":"w","type":"photos","x":0,"y":0,"w":6,"h":4}}]}}]}}"#,
+                    serde_json::to_string(&photos.to_string_lossy()).unwrap()
+                ),
+                None,
+            )
+            .unwrap();
+        let first = json_of(send(&app, "GET", "/api/photos", &[LOCAL]).await).await;
+        assert_eq!(first, json!({"ids": [], "error": null, "scanning": true}));
+        let mut ids = Value::Null;
+        for _ in 0..200 {
+            let r = json_of(send(&app, "GET", "/api/photos", &[LOCAL]).await).await;
+            if r["scanning"] == false {
+                ids = r["ids"].clone();
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        let id = ids[0].as_str().unwrap().to_string();
+        let res = send(&app, "GET", &format!("/api/photos/{id}"), &[LOCAL]).await;
+        assert_eq!(res.status(), 200);
+        assert_eq!(res.headers()["content-type"], "image/jpeg");
+        assert_eq!(res.headers()["cache-control"], "private, max-age=86400");
+        assert_eq!(
+            to_bytes(res.into_body(), usize::MAX).await.unwrap(),
+            &jpeg[..]
+        );
+        let res = send(&app, "GET", "/api/photos/0123456789abcdef", &[LOCAL]).await;
+        assert_eq!(json_of(res).await, json!({"error": "Unknown photo"}));
     }
 
     #[tokio::test]

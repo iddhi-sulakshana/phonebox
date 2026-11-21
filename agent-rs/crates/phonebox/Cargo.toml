@@ -64,6 +64,8 @@ cbc = { version = "0.1", features = ["alloc"] }
 pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
 
 [target.'cfg(windows)'.dependencies]
+# the photo frame's scaled copies on Windows (C# used GDI+): JPEG and PNG in, JPEG out
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 windows = { version = "0.62", features = [
     "Foundation",
     "Media_Control",

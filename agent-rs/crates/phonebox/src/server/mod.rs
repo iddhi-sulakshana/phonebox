@@ -261,6 +261,7 @@ pub struct AppState {
     pub spotify: Arc<crate::spotify_control::SpotifyControl>,
     pub feeds: Arc<crate::feeds::FeedMonitor>,
     pub calendar: Arc<crate::calendar::CalendarMonitor>,
+    pub photos: Arc<crate::photo_frame::PhotoFrame>,
     /// `/api/proxy`'s client (a fake in tests).
     pub proxy: crate::widget_feed_proxy::ProxySend,
 }
@@ -308,12 +309,23 @@ impl AppState {
         let approvals = crate::approval_store::ApprovalStore::new(push.clone(), phone.clone());
         let work_names = Arc::new(crate::work_buddy::WorkBuddyNames::new());
         let hook = claude_hook(&cfg, &approvals, &sessions, &work_names, &home);
+        let photos = Arc::new(crate::photo_frame::PhotoFrame::new(
+            cfg.clone(),
+            &crate::app_paths::local_dir(),
+        ));
+        let settings_hooks: Arc<crate::settings_hooks::SettingsHooks> = Default::default();
+        {
+            // a cleared or changed photo folder takes its scaled copies and any scan in flight with it
+            let photos = photos.clone();
+            settings_hooks.add(Arc::new(move || photos.settings_saved()));
+        }
         AppState {
+            photos,
             transcripts: sessions.transcripts(),
             procs: crate::process_monitor::ProcessMonitor::new(sessions.clone()),
             hook,
             claude_settings: crate::claude_hook::settings_path(&home),
-            settings_hooks: Default::default(),
+            settings_hooks,
             ha: Arc::new(crate::home_assistant::HomeAssistant::new(cfg.clone())),
             obs: Arc::new(crate::obs_monitor::ObsMonitor::new(cfg.clone())),
             discord: Arc::new(crate::discord_monitor::DiscordMonitor::new(cfg.clone())),
