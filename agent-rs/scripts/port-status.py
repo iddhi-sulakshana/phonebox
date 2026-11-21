@@ -38,6 +38,7 @@ PHASE_BY_FILE = {
     "TrackpadTests": 3, "DictationTests": 3, "KeySenderTests": 3, "AppCatalogTests": 3, "ShortcutIconTests": 3,
     "MediaArtworkTests": 3, "MediaArtworkBackoffTests": 3, "IconEncodingTests": 3, "AudioCacheTests": 3,
     "TerminalStandInTests": 3,
+    "PairingTests": 4,
 }
 # Files that mix phases: the phase of single methods ("Class.Method"); the rest of such a file stays unassigned.
 PHASE_BY_METHOD: dict[str, int] = {
@@ -48,6 +49,8 @@ PHASE_BY_METHOD: dict[str, int] = {
     "LanTests.VirtualAdaptersAreSkippedUnlessTheyCarryTheDefaultRoute": 2,
     # needs Lan.AllowedOverLan, which comes with the Wi-Fi listener
     "SpectrumAnalyzerTests.ThePhoneMayAskForBandsOverWifi": 4,
+    "CameraFeedsTests.ThePhoneMayAskForCameraPicturesOverWifi": 4,
+    "WidgetFeedProxyTests.ProxyEndpointStaysLocalAndOffLanAllowlist": 4,
     # AppRestartTests.cs also holds SessionEndingTests (Windows session end, with the tray in a later plan)
     "AppRestartTests.TheSetupLoginItemAndSystemdAreServiceManagers": 1,
     "AppRestartTests.ATerminalOrTheTrayIsNot": 1,
