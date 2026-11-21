@@ -18,6 +18,12 @@ pub fn routes() -> Router<AppState> {
         .route("/api/feeds", get(feeds))
         .route("/api/feeds/open", post(feeds_open))
         .route("/api/proxy", get(proxy))
+        .route("/api/calendar", get(calendar))
+}
+
+/// The next two weeks of events (the feed addresses stay here).
+async fn calendar(State(s): State<AppState>) -> Response {
+    json_response(StatusCode::OK, &*s.calendar.snapshot())
 }
 
 /// The built-in public widget feeds for a docked phone without internet (local and USB only).
@@ -163,6 +169,26 @@ mod tests {
                 .await
                 .unwrap()
                 .is_empty()
+        );
+    }
+
+    #[tokio::test]
+    async fn the_calendar_route_answers_the_snapshot_on_both_ports() {
+        let (_d, s) = test_state();
+        s.cfg
+            .save(
+                r#"{"lan":{"enabled":true,"port":8766,"token":"phone-key"}}"#,
+                None,
+            )
+            .unwrap();
+        let app = crate::server::build_router(s.clone());
+        let r = json_of(send(&app, "GET", "/api/calendar", &[LOCAL]).await).await;
+        assert_eq!(r, json!({"events": [], "updated": 0, "errors": []}));
+        let wifi = crate::server::build_wifi_router(s);
+        let key = ("authorization", "Bearer phone-key");
+        assert_eq!(
+            send(&wifi, "GET", "/api/calendar", &[key]).await.status(),
+            200
         );
     }
 

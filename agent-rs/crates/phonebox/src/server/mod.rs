@@ -260,6 +260,7 @@ pub struct AppState {
     pub discord: Arc<crate::discord_monitor::DiscordMonitor>,
     pub spotify: Arc<crate::spotify_control::SpotifyControl>,
     pub feeds: Arc<crate::feeds::FeedMonitor>,
+    pub calendar: Arc<crate::calendar::CalendarMonitor>,
     /// `/api/proxy`'s client (a fake in tests).
     pub proxy: crate::widget_feed_proxy::ProxySend,
 }
@@ -317,6 +318,7 @@ impl AppState {
             obs: Arc::new(crate::obs_monitor::ObsMonitor::new(cfg.clone())),
             discord: Arc::new(crate::discord_monitor::DiscordMonitor::new(cfg.clone())),
             feeds: Arc::new(crate::feeds::FeedMonitor::new(cfg.clone())),
+            calendar: Arc::new(crate::calendar::CalendarMonitor::new(cfg.clone())),
             proxy: crate::widget_feed_proxy::real_send(),
             spotify: Arc::new(crate::spotify_control::SpotifyControl::new(
                 cfg.clone(),

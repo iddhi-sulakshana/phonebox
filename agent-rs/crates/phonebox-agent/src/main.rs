@@ -168,6 +168,7 @@ async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Res
     state.obs.start(state.stop.clone()); // one connection while OBS is enabled, polled every 2 s
     state.discord.start(state.stop.clone()); // Discord's local RPC pipe while Discord is enabled, polled every 2 s
     state.feeds.start(state.stop.clone()); // every 5 s; each feed at most every 15 min, only while a Feeds widget shows
+    state.calendar.start(state.stop.clone()); // at once, then every 10 min, on calendar changes and on /api/refresh
     log::info(
         "PhoneBoxAgent",
         &format!(
