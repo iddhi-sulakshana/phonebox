@@ -3,6 +3,7 @@
 pub mod guard;
 pub mod query;
 mod routes_charge;
+mod routes_console;
 mod routes_desk;
 mod routes_dev;
 pub mod routes_info;
@@ -115,6 +116,7 @@ fn all_routes() -> axum::Router<AppState> {
         .merge(routes_phones::routes())
         .merge(routes_rules::routes())
         .merge(routes_charge::routes())
+        .merge(routes_console::routes())
         // Kestrel's default request body limit: a settings page with many pages still fits
         .layer(axum::extract::DefaultBodyLimit::max(30_000_000))
 }
@@ -208,6 +210,8 @@ pub struct AppState {
     pub adb: Arc<crate::adb::AdbReverse>,
     /// Microphone and camera use (the "On air" widget and rules); main shares it with the state sources.
     pub privacy: Arc<crate::privacy_monitor::PrivacyMonitor>,
+    /// The app console widget: sends a profile's keys to the app in front (Windows).
+    pub console: Arc<crate::app_console::AppConsole>,
     /// Battery care: switches the phone's power supply by its battery level.
     pub charge: Arc<crate::charge_guard::ChargeGuard>,
     /// Automation rules; [`AppState::rewire`] builds it over the monitors in place.
@@ -358,6 +362,7 @@ impl AppState {
             hook,
             claude_settings: crate::claude_hook::settings_path(&home),
             settings_hooks,
+            console: Arc::new(crate::app_console::AppConsole::new(cfg.clone())),
             charge: Arc::new(crate::charge_guard::ChargeGuard::new(
                 cfg.clone(),
                 ha.clone(),

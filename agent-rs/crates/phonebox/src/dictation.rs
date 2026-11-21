@@ -67,7 +67,7 @@ pub fn clean(text: Option<&str>) -> String {
 }
 
 /// `Environment.IsPrivilegedProcess`: an elevated process on Windows, root elsewhere.
-fn is_privileged_process() -> bool {
+pub(crate) fn is_privileged_process() -> bool {
     #[cfg(windows)]
     {
         use windows::Win32::Foundation::{CloseHandle, HANDLE};
@@ -112,8 +112,7 @@ impl Dictation {
             typing: Arc::new(tokio::sync::Semaphore::new(1)),
             type_text: Arc::new(crate::key_sender::try_type_text),
             send_combo: Arc::new(crate::key_sender::send_combo),
-            // the app in front comes with plan 6's AppConsole; until then the elevation check has nothing to look at
-            focused: Arc::new(|| None),
+            focused: Arc::new(crate::app_console::focused_now),
             check_elevation: cfg!(windows),
             agent_elevated: is_privileged_process(),
         }

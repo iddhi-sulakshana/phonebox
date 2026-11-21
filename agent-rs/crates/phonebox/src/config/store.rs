@@ -215,8 +215,11 @@ fn validate(cfg: &AgentConfig) -> Result<(), String> {
 const MAX_CONSOLE_APPS: usize = 300;
 const MAX_CONSOLE_SPEC: usize = 200;
 const MAX_CONSOLE_PROFILES: usize = 30;
+/// `AppConsole.MaxCombos`: 20 presses x 5 dial clicks x 40 ms plus the 2 s queue wait stay well inside the phone's
+/// 20 s deadline.
+pub const MAX_CONSOLE_COMBOS: usize = 20;
 
-/// `AppConsole.Validate`, except the key syntax check (`KeySender.Parse`), which comes with the key sender (phase 3).
+/// `AppConsole.Validate`: an app, the lengths, and each binding's keys.
 fn validate_console_profile(p: &ConsoleProfile) -> Result<(), String> {
     let label = &p.label;
     if p.app_names().is_empty() {
@@ -244,12 +247,22 @@ fn validate_console_profile(p: &ConsoleProfile) -> Result<(), String> {
             (p.dial_press.as_deref(), "dial press".to_string()),
         ]);
     for (spec, what) in specs {
-        if let Some(spec) = spec
-            && spec.encode_utf16().count() > MAX_CONSOLE_SPEC
-        {
+        let Some(spec) = spec else {
+            continue;
+        };
+        if spec.encode_utf16().count() > MAX_CONSOLE_SPEC {
             return Err(format!(
                 "App console profile '{label}', {what}: longer than {MAX_CONSOLE_SPEC} characters"
             ));
+        }
+        match crate::key_sender::parse(spec) {
+            Ok(combos) if combos.len() > MAX_CONSOLE_COMBOS => {
+                return Err(format!(
+                    "App console profile '{label}', {what}: more than {MAX_CONSOLE_COMBOS} key presses"
+                ));
+            }
+            Ok(_) => {}
+            Err(e) => return Err(format!("App console profile '{label}', {what}: {e}")),
         }
     }
     Ok(())

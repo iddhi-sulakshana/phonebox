@@ -1075,6 +1075,32 @@ impl ConsoleProfile {
             .map(str::to_string)
             .collect()
     }
+
+    /// Whether the profile is for this process (a name, any case).
+    pub fn matches(&self, process: &str) -> bool {
+        let process = process.to_uppercase();
+        self.app_names().iter().any(|a| a.to_uppercase() == process)
+    }
+
+    /// The keys of a slot: "dial-left", "dial-right", "dial-press", or "k<n>" (plain digits, no leading zero).
+    pub fn spec(&self, slot: &str) -> Option<&str> {
+        match slot {
+            "dial-left" => self.dial_left.as_deref(),
+            "dial-right" => self.dial_right.as_deref(),
+            "dial-press" => self.dial_press.as_deref(),
+            _ => {
+                let digits = slot.strip_prefix('k')?;
+                if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+                    return None;
+                }
+                let n: usize = digits.parse().ok()?;
+                (n.to_string() == digits)
+                    .then(|| self.keys.get(n))
+                    .flatten()
+                    .map(|k| k.keys.as_str())
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
