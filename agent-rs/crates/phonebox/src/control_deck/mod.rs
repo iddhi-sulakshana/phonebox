@@ -1,10 +1,20 @@
 //! The Control Deck (`ControlDeck*.cs`): audio devices and sessions, media players, internet radio and sounds, push to
 //! talk, power and platform actions, tasks, MIDI and OSC — for the phone's controls page.
 
+pub mod core;
 pub mod leases;
 pub mod midi;
 pub mod models;
 pub mod tasks;
+
+/// Monotonic milliseconds (`Environment.TickCount64` in the C# agent): leases, confirmations and caches.
+pub(crate) fn monotonic_ms() -> i64 {
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    START
+        .get_or_init(std::time::Instant::now)
+        .elapsed()
+        .as_millis() as i64
+}
 
 /// `OscPacket`: an OSC message with one float argument (address and type tag padded with NULs to 4 bytes, the float
 /// big-endian).

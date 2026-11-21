@@ -166,7 +166,8 @@ pub trait DeckNative: Send + Sync {
     fn action_state(&self, _action: &crate::config::DeckAction) -> Option<String> {
         None
     }
-    fn media(&self) -> BoxFuture<'_, Vec<DeckMedia>>;
+    /// The media sessions; an error when they cannot be read (the phone shows "Media sessions are unavailable").
+    fn media(&self) -> BoxFuture<'_, Result<Vec<DeckMedia>, String>>;
     fn media_action<'a>(&'a self, id: &'a str, action: &'a str, value: i64) -> BoxFuture<'a, bool>;
     /// `MediaActionWithState`: for `playpause`, whether that session was playing before (read first; a failed read
     /// counts as not playing), then the action.
@@ -180,6 +181,7 @@ pub trait DeckNative: Send + Sync {
             let was_playing = if action == "playpause" {
                 self.media()
                     .await
+                    .unwrap_or_default()
                     .iter()
                     .find(|m| m.id == id)
                     .is_some_and(|m| m.playing)
@@ -202,6 +204,8 @@ pub trait DeckNative: Send + Sync {
     fn listen(&self) -> Option<BoxStream<'static, DeckAudioPacket>> {
         None
     }
+    /// The deck is going away: stop every player and release what the platform holds.
+    fn dispose(&self) {}
 }
 
 #[cfg(test)]

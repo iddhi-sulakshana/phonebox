@@ -212,8 +212,10 @@ pub struct AppState {
     pub adb: Arc<crate::adb::AdbReverse>,
     /// Microphone and camera use (the "On air" widget and rules); main shares it with the state sources.
     pub privacy: Arc<crate::privacy_monitor::PrivacyMonitor>,
-    /// The programs of the deck's task and server actions.
+    /// The programs of the deck's task and server actions (the deck's own).
     pub tasks: Arc<crate::control_deck::tasks::ControlTasks>,
+    /// The Control Deck: the phone's controls page (audio, media, push to talk, profiles, power and platform actions).
+    pub controls: Arc<crate::control_deck::core::ControlDeck>,
     /// The app console widget: sends a profile's keys to the app in front (Windows).
     pub console: Arc<crate::app_console::AppConsole>,
     /// Battery care: switches the phone's power supply by its battery level.
@@ -349,6 +351,11 @@ impl AppState {
         }
         let ha = Arc::new(crate::home_assistant::HomeAssistant::new(cfg.clone()));
         let audio = crate::audio_control::AudioControl::new();
+        let controls = crate::control_deck::core::ControlDeck::new(
+            cfg.clone(),
+            Arc::new(crate::control_deck::core::NoNative),
+            Default::default(),
+        );
         let state = AppState {
             // replaced below, once the monitors it reads are in place
             rules: crate::rule_engine::RuleEngine::new(
@@ -367,7 +374,8 @@ impl AppState {
             claude_settings: crate::claude_hook::settings_path(&home),
             settings_hooks,
             console: Arc::new(crate::app_console::AppConsole::new(cfg.clone())),
-            tasks: Arc::new(crate::control_deck::tasks::ControlTasks::new(cfg.clone())),
+            tasks: controls.tasks(),
+            controls,
             charge: Arc::new(crate::charge_guard::ChargeGuard::new(
                 cfg.clone(),
                 ha.clone(),
