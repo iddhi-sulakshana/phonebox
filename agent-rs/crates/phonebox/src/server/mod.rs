@@ -121,6 +121,8 @@ pub struct AppState {
     pub frames: Arc<crate::state_frame_cache::StateFrameCache>,
     /// The PC monitor (`pc` in the state); main starts it and puts the same one in `sources`.
     pub system: Arc<crate::system_monitor::SystemMonitor>,
+    /// The ping monitor (`ping` in the state); main starts it and puts the same one in `sources`.
+    pub ping: Arc<crate::ping_monitor::PingMonitor>,
 }
 
 impl AppState {
@@ -148,6 +150,7 @@ impl AppState {
         AppState {
             adb,
             system: crate::system_monitor::SystemMonitor::new(cfg.clone()),
+            ping: crate::ping_monitor::PingMonitor::new(cfg.clone()),
             cfg,
             endpoint,
             push,

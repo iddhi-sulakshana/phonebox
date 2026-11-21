@@ -141,6 +141,10 @@ fn canonicalize(value: Value, strict: bool, path: &str) -> Result<Value, String>
     })
 }
 
+/// Known properties whose null C# reads differently from a missing property: `ping.host` defaults to 1.1.1.1, but a
+/// null host is normalized to "" (pinging off).
+const NULL_KEPT: [&str; 1] = ["host"];
+
 fn canonical_object(
     map: Map<String, Value>,
     strict: bool,
@@ -151,7 +155,7 @@ fn canonical_object(
         match KNOWN.get(&key.to_ascii_lowercase()) {
             Some(&name) => {
                 let here = format!("{path}.{key}");
-                if value.is_null() {
+                if value.is_null() && !NULL_KEPT.contains(&name) {
                     match VALUE.get(name) {
                         // C# has no null for a bool, int or double: System.Text.Json refuses it (without the line
                         // and byte position .NET adds)

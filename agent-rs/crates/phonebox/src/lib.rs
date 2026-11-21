@@ -18,6 +18,7 @@ pub mod lan;
 pub mod log;
 pub mod net_adapters;
 pub mod phone_registry;
+pub mod ping_monitor;
 pub mod push_store;
 pub mod request_timings;
 pub mod server;

@@ -47,6 +47,12 @@ impl StateSources {
         self
     }
 
+    /// `ping` from the ping monitor.
+    pub fn with_ping(mut self, ping: Box<dyn StateSource>) -> StateSources {
+        self.ping = ping;
+        self
+    }
+
     /// Before the monitors are ported: each part answers what the C# agent answers on a headless Linux machine before
     /// its monitors have data (`state_empty.json`, recorded from the C# agent with the parity fixture).
     pub fn phase1() -> StateSources {
