@@ -52,6 +52,8 @@ jiff = "0.2"
 sysinfo = { version = "0.40", default-features = false, features = ["system"] }
 # shortcut icon uploads: the revision (SHA-256) and the SVG check (an XML parser that never fetches a DTD)
 sha2 = "0.10"
+# the agent update's zip (Deflate only, the pure-Rust backend)
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
 roxmltree = "0.20"
 # the Wi-Fi certificate (plan 4): PKCS#12 and the self-signed P-256 certificate, all pure Rust so every target builds them
 p256 = { version = "0.13", features = ["ecdsa", "pkcs8"] }

@@ -57,8 +57,13 @@ pub fn same_folder(a: &Path, b: &Path) -> bool {
 
 /// `RunningInstalled`: the agent at `exe` is the copy in the install folder (only that one updates itself).
 pub fn running_installed(exe: &Path) -> bool {
+    running_from(exe, &crate::app_paths::install_dir())
+}
+
+/// The agent at `exe` runs from `install_dir`.
+pub fn running_from(exe: &Path, install_dir: &Path) -> bool {
     exe.parent()
-        .is_some_and(|folder| same_folder(folder, &crate::app_paths::install_dir()))
+        .is_some_and(|folder| same_folder(folder, install_dir))
 }
 
 #[cfg(test)]

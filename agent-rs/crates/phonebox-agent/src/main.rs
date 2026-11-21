@@ -12,6 +12,9 @@ use phonebox::{app_paths, app_restart, log, push_store::PushStore, single_instan
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // read now: an update renames this program to `.old` before the restart, and on Linux the running file's own path
+    // follows the rename
+    let exe = std::env::current_exe().ok();
     let endpoint = match AgentEndpoint::from_args(&args) {
         Ok(e) => e,
         Err(e) => {
@@ -39,8 +42,8 @@ fn main() -> ExitCode {
     };
 
     // an install updated from a framework-dependent C# release still carries its files; nothing loads them now
-    if let Ok(exe) = std::env::current_exe()
-        && phonebox::update::migration::running_installed(&exe)
+    if let Some(exe) = &exe
+        && phonebox::update::migration::running_installed(exe)
     {
         phonebox::update::migration::remove_framework_dependent_leftovers(
             &app_paths::install_dir(),
@@ -142,6 +145,8 @@ fn main() -> ExitCode {
     let controls = state.controls.clone();
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
     let result = runtime.block_on(serve(state, config_path));
+    // blocking work still running (a probe, a download) gets 5 s, then the agent goes on without it
+    runtime.shutdown_timeout(Duration::from_secs(5));
     // push-to-talk holds end (microphones restored) and the deck's task and server programs end with the agent (at
     // most 8 s)
     controls.dispose();
@@ -161,9 +166,11 @@ fn main() -> ExitCode {
         ) {
             return ExitCode::from(app_restart::SERVICE_RESTART_CODE);
         }
-        if let Ok(exe) = std::env::current_exe() {
-            let _ = std::process::Command::new(&exe)
+        if let Some(exe) = &exe {
+            let (program, folder) = app_restart::restart_target(exe);
+            let _ = std::process::Command::new(program)
                 .args(app_restart::restart_args(&args))
+                .current_dir(folder)
                 .spawn();
         }
     }

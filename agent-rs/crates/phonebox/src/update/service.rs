@@ -30,6 +30,10 @@ pub struct UpdateDeps {
     pub agent_version: String,
     pub rid: &'static str,
     pub now: Arc<dyn Fn() -> i64 + Send + Sync>,
+    /// This program, as it was at startup (the swap renames it later).
+    pub exe: PathBuf,
+    /// Where install scripts put the agent; only that copy updates itself.
+    pub install_dir: PathBuf,
 }
 
 impl UpdateDeps {
@@ -42,6 +46,8 @@ impl UpdateDeps {
             agent_version: crate::app_paths::version().to_string(),
             rid: crate::app_paths::rid(),
             now: Arc::new(crate::server::now_ms),
+            exe: std::env::current_exe().unwrap_or_default(),
+            install_dir: crate::app_paths::install_dir(),
         }
     }
 }
@@ -298,11 +304,13 @@ impl UpdateService {
         });
     }
 
-    /// `CleanupOldFiles`: what earlier updates left (filled in with the swap).
-    fn cleanup_old_files(&self) {}
-
-    /// `ApplyAsync` (filled in with the swap and the phone installs).
-    pub async fn apply(&self) {}
+    fn cleanup_old_files(&self) {
+        super::swap::cleanup(
+            &self.deps.install_dir,
+            &self.deps.downloads,
+            std::time::SystemTime::now(),
+        );
+    }
 }
 
 /// The newest release that is not a draft (a token lists drafts too); None when there is none.

@@ -11,6 +11,16 @@ pub fn request() {
     REQUESTED.store(true, Ordering::SeqCst);
 }
 
+/// What a relaunch starts, and where: the program path read at startup (on Linux the running file's own path follows
+/// an update's rename to `.old`), in its folder (C# set `AppContext.BaseDirectory`).
+pub fn restart_target(captured: &std::path::Path) -> (std::path::PathBuf, std::path::PathBuf) {
+    let folder = captured
+        .parent()
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_default();
+    (captured.to_path_buf(), folder)
+}
+
 pub fn requested() -> bool {
     REQUESTED.load(Ordering::SeqCst)
 }
@@ -62,6 +72,18 @@ pub fn restart_args(args: &[String]) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_restart_target_is_the_path_captured_at_startup() {
+        let captured = std::path::Path::new("/opt/phonebox/app/PhoneBoxAgent");
+        assert_eq!(
+            super::restart_target(captured),
+            (
+                captured.to_path_buf(),
+                std::path::PathBuf::from("/opt/phonebox/app")
+            )
+        );
+    }
+
     use super::*;
 
     #[test]
