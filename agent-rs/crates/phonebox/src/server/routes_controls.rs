@@ -18,6 +18,7 @@ pub fn routes() -> Router<AppState> {
         .route("/api/controls/command/{kind}", post(command))
         .route("/api/controls/capture", post(capture))
         .route("/api/controls/listen", get(listen))
+        .route("/api/controls/radio-logo", get(radio_logo))
         .route(
             "/api/controls/radio-directory/countries",
             get(radio_countries),
@@ -79,6 +80,33 @@ async fn listen(State(s): State<AppState>) -> Response {
         )
             .into_response(),
     }
+}
+
+/// A radio control's logo (also over Wi-Fi): a raster cached for an hour, or the monogram SVG never cached; 404 for
+/// an id that is not a radio.
+async fn radio_logo(State(s): State<AppState>, Query(q): Query<Vec<(String, String)>>) -> Response {
+    let id = query::value(&q, "id").unwrap_or_default();
+    let Some(logo) = s.controls.radio_logo(&id).await else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let cache = if logo.is_fallback {
+        "no-store"
+    } else {
+        "public, max-age=3600"
+    };
+    (
+        [
+            (header::CACHE_CONTROL, cache.to_string()),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_string()),
+            (
+                header::CONTENT_SECURITY_POLICY,
+                "default-src 'none'; style-src 'unsafe-inline'".to_string(),
+            ),
+            (header::CONTENT_TYPE, logo.mime.clone()),
+        ],
+        logo.bytes.to_vec(),
+    )
+        .into_response()
 }
 
 /// The directory's countries (local only); 502 `{"ok":false,"error":…}` when no mirror answered.
@@ -248,6 +276,16 @@ mod tests {
             )
             .await;
             assert_eq!(res.status(), 400, "{bad}");
+            assert_eq!(text(res).await, "");
+        }
+
+        // radio logos: 404 without a radio control of that id
+        for path in [
+            "/api/controls/radio-logo",
+            "/api/controls/radio-logo?id=nope",
+        ] {
+            let res = send(&app, "GET", path, &[LOCAL]).await;
+            assert_eq!(res.status(), 404, "{path}");
             assert_eq!(text(res).await, "");
         }
 

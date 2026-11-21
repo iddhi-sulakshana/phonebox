@@ -110,13 +110,18 @@ impl ControlDeck {
             }
             _ => {}
         }
+        // a new logo (another icon, name, stream or lookup setting) is a new revision: the phone fetches it again
+        let rev = (a.kind == "radio").then(|| {
+            super::super::radio_logos::cache_key(a, c.controls.allow_online_radio_logos)[..12]
+                .to_string()
+        });
         DeckItem {
             id: a.id.clone(),
             name: a.label.clone(),
             kind: a.kind.clone(),
             state,
             available,
-            rev: None,
+            rev,
         }
     }
 

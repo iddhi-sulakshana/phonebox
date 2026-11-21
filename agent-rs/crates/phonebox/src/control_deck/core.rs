@@ -75,6 +75,8 @@ pub struct DeckOptions {
     pub master: Option<Arc<crate::audio_control::AudioControl>>,
     /// Playlist controls.
     pub spotify: Option<Arc<crate::spotify_control::SpotifyControl>>,
+    /// Station logos (default: `<local>/radio-logos` over the real client).
+    pub logos: Option<Arc<super::radio_logos::RadioLogoCache>>,
 }
 
 /// Everything C#'s reentrant `_state` lock covered.
@@ -153,6 +155,7 @@ pub struct ControlDeck {
     action_results: Mutex<std::collections::HashMap<String, String>>,
     /// At most two `/api/controls/listen` streams.
     listeners: Arc<tokio::sync::Semaphore>,
+    logos: Arc<super::radio_logos::RadioLogoCache>,
 }
 
 impl ControlDeck {
@@ -214,6 +217,11 @@ impl ControlDeck {
                 spotify: options.spotify,
                 action_results: Mutex::default(),
                 listeners: Arc::new(tokio::sync::Semaphore::new(2)),
+                logos: options.logos.unwrap_or_else(|| {
+                    super::radio_logos::RadioLogoCache::new(
+                        crate::app_paths::local_dir().join("radio-logos"),
+                    )
+                }),
             }
         })
     }
@@ -867,6 +875,25 @@ impl ControlDeck {
             return fail("Profile microphone is unavailable");
         }
         Ok(())
+    }
+
+    /// `GET /api/controls/radio-logo?id=`: the logo of a radio control (enabled or not); None for a blank id, one
+    /// longer than 128, or one that is not a radio.
+    pub async fn radio_logo(&self, id: &str) -> Option<super::radio_logos::RadioLogo> {
+        if id.trim().is_empty() || utf16_len(id) > 128 {
+            return None;
+        }
+        let c = self.cfg.get();
+        let action = c
+            .controls
+            .actions
+            .iter()
+            .find(|a| a.id == id && a.kind == "radio")?;
+        Some(
+            self.logos
+                .get(action, c.controls.allow_online_radio_logos)
+                .await,
+        )
     }
 
     /// `GET /api/controls/listen`: the computer's sound as NDJSON lines (one packet each) until listening is turned

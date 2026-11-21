@@ -422,7 +422,11 @@ fn station_names_and_slugs() {
 
 #[tokio::test]
 async fn the_real_transport_refuses_local_names_and_reports_refused_connections() {
-    let fetch = crate::control_deck::fetch::public_fetch(std::time::Duration::from_secs(5));
+    let fetch = crate::control_deck::fetch::public_fetch(
+        std::time::Duration::from_secs(5),
+        std::time::Duration::from_secs(5),
+        None,
+    );
     let refused = {
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();

@@ -128,18 +128,20 @@ fn classify(e: &reqwest::Error) -> FetchError {
     FetchError::Other(e.to_string())
 }
 
-/// The real client: 5 s to connect, `timeout` per exchange, no redirects, no proxy, public addresses only,
-/// `User-Agent: PhoneBox/<version>` and `Accept: application/json`.
-pub fn public_fetch(timeout: Duration) -> Fetch {
+/// The real client: `connect` to connect, `timeout` per exchange, no redirects, no proxy, public addresses only,
+/// `User-Agent: PhoneBox/<version>` and the given `Accept` header.
+pub fn public_fetch(connect: Duration, timeout: Duration, accept: Option<&'static str>) -> Fetch {
     let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert(
-        reqwest::header::ACCEPT,
-        reqwest::header::HeaderValue::from_static("application/json"),
-    );
+    if let Some(accept) = accept {
+        headers.insert(
+            reqwest::header::ACCEPT,
+            reqwest::header::HeaderValue::from_static(accept),
+        );
+    }
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .no_proxy()
-        .connect_timeout(Duration::from_secs(5))
+        .connect_timeout(connect)
         .timeout(timeout)
         .user_agent(format!("PhoneBox/{}", crate::app_paths::version()))
         .default_headers(headers)

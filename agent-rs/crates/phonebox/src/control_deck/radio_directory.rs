@@ -95,7 +95,11 @@ impl RadioDirectory {
     /// The real client (10 s per exchange) with mirror discovery.
     pub fn new() -> RadioDirectory {
         RadioDirectory {
-            fetch: super::fetch::public_fetch(Duration::from_secs(10)),
+            fetch: super::fetch::public_fetch(
+                Duration::from_secs(5),
+                Duration::from_secs(10),
+                Some("application/json"),
+            ),
             discover: true,
             preferred: Mutex::new(None),
         }
