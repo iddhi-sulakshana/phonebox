@@ -317,6 +317,8 @@ impl Drop for MouseRecorder {
     }
 }
 
+#[cfg(windows)]
+pub use os::tap;
 pub use os::{send_combo, try_type_text};
 
 // ---------------------------------------------------------------- Windows
@@ -459,6 +461,16 @@ mod os {
     pub fn mouse_up() -> Result<(), String> {
         send(&[mouse(0, 0, 0, MOUSEEVENTF_LEFTUP)]);
         Ok(())
+    }
+
+    /// `Keys.Tap`: one key down and up through keybd_event (the mute and play/pause keys).
+    pub fn tap(vk: u8) {
+        use windows::Win32::UI::Input::KeyboardAndMouse::{KEYBD_EVENT_FLAGS, keybd_event};
+        // SAFETY: plain calls
+        unsafe {
+            keybd_event(vk, 0, KEYBD_EVENT_FLAGS(0), 0);
+            keybd_event(vk, 0, KEYEVENTF_KEYUP, 0);
+        }
     }
 
     /// A zero-pixel mouse move: this process becomes the one that received the last input, which Windows requires

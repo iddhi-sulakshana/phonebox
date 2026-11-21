@@ -53,6 +53,12 @@ impl StateSources {
         self
     }
 
+    /// `toggles` from the shortcuts.
+    pub fn with_toggles(mut self, toggles: Box<dyn StateSource>) -> StateSources {
+        self.toggles = toggles;
+        self
+    }
+
     /// `ping` from the ping monitor.
     pub fn with_ping(mut self, ping: Box<dyn StateSource>) -> StateSources {
         self.ping = ping;

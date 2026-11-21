@@ -60,7 +60,12 @@ fn main() -> ExitCode {
     let sources = phonebox::state::StateSources::phase1()
         .with_pc(Box::new(system.clone()))
         .with_ping(Box::new(ping.clone()))
-        .with_audio(Box::new(audio.clone()));
+        .with_audio(Box::new(audio.clone()))
+        .with_toggles(Box::new(phonebox::shortcuts::Toggles {
+            cfg: cfg.clone(),
+            push: push.clone(),
+            audio: audio.clone(),
+        }));
     let mut state = AppState::new(cfg, endpoint, push.clone(), Arc::new(sources));
     state.system = system;
     state.ping = ping;
