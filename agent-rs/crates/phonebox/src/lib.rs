@@ -79,6 +79,7 @@ pub mod state_signal;
 pub mod system_monitor;
 pub mod tool_process;
 pub mod trackpad_handler;
+pub mod tray;
 pub mod unix;
 pub mod update;
 pub mod usb_doctor;

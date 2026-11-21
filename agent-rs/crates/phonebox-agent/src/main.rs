@@ -143,8 +143,16 @@ fn main() -> ExitCode {
     deck.set(state.controls.clone());
     update.set(state.updates.clone());
     let controls = state.controls.clone();
+    let stop = state.stop.clone();
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
-    let result = runtime.block_on(serve(state, config_path));
+    let mut tray = None;
+    let result = runtime.block_on(serve(state, config_path, &mut tray));
+    // the tray went first: its thread removes the icon once the stop fires (also when the server failed); an icon left
+    // behind stays in the notification area until the mouse passes over it
+    stop.stop();
+    if let Some(tray) = tray {
+        tray.wait(Duration::from_secs(1));
+    }
     // blocking work still running (a probe, a download) gets 5 s, then the agent goes on without it
     runtime.shutdown_timeout(Duration::from_secs(5));
     // push-to-talk holds end (microphones restored) and the deck's task and server programs end with the agent (at
@@ -177,7 +185,11 @@ fn main() -> ExitCode {
     ExitCode::SUCCESS
 }
 
-async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Result<()> {
+async fn serve(
+    state: AppState,
+    config_path: std::path::PathBuf,
+    tray: &mut Option<phonebox::tray::Tray>,
+) -> std::io::Result<()> {
     let port = state.endpoint.port;
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
     // Wi-Fi / Tailscale: HTTPS on every IPv4 address with the pinned certificate; a port that cannot be bound ends the
@@ -217,6 +229,12 @@ async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Res
     state.updates.start(); // after 20 s, then every minute: a check every 6 h (15 min after a failure); auto apply
     // every second: the phones' screens follow the Mac's lock while display.followComputerLock is on
     phonebox::session_lock_monitor::start(state.cfg.clone(), state.adb.clone(), state.stop.clone());
+    // last, as C# registers it: Windows' notification-area icon; elsewhere a log line names the settings page
+    *tray = Some(phonebox::tray::start(
+        state.endpoint,
+        state.adb.clone(),
+        state.stop.clone(),
+    ));
     log::info(
         "PhoneBoxAgent",
         &format!(
