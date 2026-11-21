@@ -51,6 +51,22 @@ fn main() -> ExitCode {
     let cfg = Arc::new(ConfigStore::new(config_path.clone()));
     cfg.persist_generated(); // keep the Wi-Fi key stable across restarts
     let _ = log::init(&app_paths::log_path());
+    // Wi-Fi / Tailscale: HTTPS with the pinned certificate kept next to the config (made on first use); only when Wi-Fi
+    // is on with its own port at startup. A certificate that cannot be written ends the agent, as in C#.
+    let config_dir = config_path
+        .parent()
+        .filter(|d| !d.as_os_str().is_empty())
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_else(app_paths::config_dir);
+    let wifi = match phonebox::lan::Wifi::start(&cfg.get().lan, endpoint.port, &config_dir) {
+        Ok(wifi) => wifi,
+        Err(e) => {
+            let message = format!("the Wi-Fi certificate could not be written: {e}");
+            log::warn("PhoneBoxAgent", &message);
+            log::dispose();
+            return ExitCode::FAILURE;
+        }
+    };
 
     let push = PushStore::new(&app_paths::config_dir().join("data.json"));
     // the monitors the state reads; serve starts them
@@ -78,6 +94,7 @@ fn main() -> ExitCode {
     state.ping = ping;
     state.audio = audio;
     state.deck = deck;
+    state.wifi = Arc::new(wifi);
     // started here, on its own thread: the server never stops it before the process ends
     media.start(state.stop.clone());
     state.media = media;

@@ -4,6 +4,7 @@ pub mod guard;
 pub mod query;
 mod routes_desk;
 pub mod routes_info;
+pub mod routes_pair;
 pub mod routes_settings;
 pub mod routes_state;
 mod routes_system;
@@ -60,6 +61,7 @@ fn routes(state: AppState) -> axum::Router {
         .merge(routes_state::routes())
         .merge(routes_system::routes())
         .merge(routes_desk::routes())
+        .merge(routes_pair::routes())
         // Kestrel's default request body limit: a settings page with many pages still fits
         .layer(axum::extract::DefaultBodyLimit::max(30_000_000));
     guard::apply(routes, state)
@@ -145,6 +147,9 @@ pub struct AppState {
     pub deck: Arc<dyn crate::media_monitor::MediaDeck>,
     /// The Spectrum bars widget's band levels (`/api/spectrum`, the stream's "spectrum" events).
     pub spectrum: Arc<crate::spectrum_analyzer::SpectrumAnalyzer>,
+    /// Wi-Fi as the agent started it: the startup port, the certificate when the Wi-Fi listener runs, the pairing
+    /// codes (`/api/pair*`, `/api/lan`); main sets it up.
+    pub wifi: Arc<crate::lan::Wifi>,
 }
 
 /// Serializes the writes that move the config version for shortcut icons (upload, removal) with the settings save.
@@ -181,8 +186,12 @@ impl AppState {
             .map(std::path::Path::to_path_buf)
             .unwrap_or_else(crate::app_paths::config_dir)
             .join("icons");
+        let wifi = Arc::new(crate::lan::Wifi::off(
+            cfg.get().lan.port.clamp(1, 65535) as u16
+        ));
         AppState {
             adb,
+            wifi,
             apps: crate::app_catalog::AppCatalog::new(cfg.clone()),
             dictation: crate::dictation::Dictation::new(cfg.clone()),
             media: crate::media_monitor::MediaMonitor::new(),

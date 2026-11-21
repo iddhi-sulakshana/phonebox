@@ -49,6 +49,46 @@ pub fn should_skip_adapter(desc: &str, has_ipv4_gateway: bool) -> bool {
         .any(|w| d.contains(w))
 }
 
+/// The Wi-Fi side as the agent started it (`lanCfg` and `lanCert` in `Program.cs`): `lan.port` at startup, the
+/// certificate when the Wi-Fi listener runs, and the pairing codes.
+pub struct Wifi {
+    pub port: u16,
+    /// Some when Wi-Fi was on, with its own port, at startup: the Wi-Fi listener serves this certificate.
+    pub cert: Option<crate::lan_cert::LanCert>,
+    pub codes: crate::pairing::PairingCodes,
+}
+
+impl Wifi {
+    /// Wi-Fi as `startup` sets it: the certificate is loaded (or made) only when Wi-Fi is on with a port other than the
+    /// local one. An error (a certificate that cannot be written) ends the agent, as in C#.
+    pub fn start(
+        startup: &crate::config::LanConfig,
+        local_port: u16,
+        config_dir: &std::path::Path,
+    ) -> std::io::Result<Wifi> {
+        let port = startup.port.clamp(1, 65535) as u16;
+        let cert = if startup.enabled && port != local_port {
+            Some(crate::lan_cert::certificate(config_dir)?)
+        } else {
+            None
+        };
+        Ok(Wifi {
+            port,
+            cert,
+            codes: crate::pairing::PairingCodes::new(),
+        })
+    }
+
+    /// No Wi-Fi listener (tests, and the state before `main` sets Wi-Fi up).
+    pub fn off(port: u16) -> Wifi {
+        Wifi {
+            port,
+            cert: None,
+            codes: crate::pairing::PairingCodes::new(),
+        }
+    }
+}
+
 /// What a request on the Wi-Fi port may do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LanAccess {
