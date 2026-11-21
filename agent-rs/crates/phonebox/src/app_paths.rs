@@ -112,6 +112,11 @@ pub fn log_path() -> PathBuf {
     local_dir().join("agent.log")
 }
 
+/// The working directory for tools the agent runs (`NeutralCwd`): the temp folder, never the agent's own directory.
+pub fn neutral_cwd() -> PathBuf {
+    std::env::temp_dir()
+}
+
 /// Where install scripts put the agent; self-update only works for this copy.
 pub fn install_dir() -> PathBuf {
     local_dir().join("app")
