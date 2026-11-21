@@ -33,6 +33,9 @@ roxmltree = "0.20"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = [
+    "Foundation",
+    "Media_Control",
+    "Storage_Streams",
     "Win32_Devices_DeviceAndDriverInstallation",
     "Win32_Devices_HumanInterfaceDevice",
     "Win32_Devices_Properties",

@@ -22,6 +22,8 @@ pub mod key_sender;
 pub mod lan;
 pub mod listening_ports;
 pub mod log;
+pub mod media_artwork_cache;
+pub mod media_monitor;
 pub mod net_adapters;
 pub mod panel_widgets;
 pub mod phone_registry;
