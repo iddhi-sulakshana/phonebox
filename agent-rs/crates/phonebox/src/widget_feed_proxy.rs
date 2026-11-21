@@ -112,4 +112,56 @@ mod tests {
             "a mapped public IPv4"
         );
     }
+
+    #[test]
+    fn is_public_address_rejects_loopback_private_and_link_local() {
+        for (address, expected) in [
+            ("127.0.0.1", false),
+            ("10.0.0.1", false),
+            ("172.16.0.5", false),
+            ("192.168.1.10", false),
+            ("169.254.169.254", false),
+            ("100.64.0.1", false),
+            ("::1", false),
+            ("fe80::1", false),
+            ("fd00::1", false),
+            ("::ffff:127.0.0.1", false),
+            ("::127.0.0.1", false),
+            ("::ffff:0:127.0.0.1", false),
+            ("64:ff9b::127.0.0.1", false),
+            ("64:ff9b:1::192.168.1.1", false),
+            ("2002:7f00:1::1", false),
+            ("2002:0101:0101::1", true),
+            ("2001::1", false),
+            ("2001:db8::1", false),
+            ("2001:2::1", false),
+            ("100::1", false),
+            ("1.1.1.1", true),
+            ("2606:4700:4700::1111", true),
+        ] {
+            assert_eq!(
+                is_public_address(address.parse().unwrap()),
+                expected,
+                "{address}"
+            );
+        }
+    }
+
+    // StoreFollowUpTests (feed proxy addresses)
+    #[test]
+    fn documentation_addresses_are_not_public() {
+        for (address, expected) in [
+            ("3fff::1", false), // 3fff::/20 documentation
+            ("3fff:0fff:ffff::1", false),
+            ("3fff:1000::1", true), // just past the documentation block
+            ("2001:db8::1", false),
+            ("2606:4700::1111", true),
+        ] {
+            assert_eq!(
+                is_public_address(address.parse().unwrap()),
+                expected,
+                "{address}"
+            );
+        }
+    }
 }

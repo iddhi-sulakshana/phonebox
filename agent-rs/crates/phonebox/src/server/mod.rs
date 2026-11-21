@@ -245,6 +245,8 @@ pub struct AppState {
     pub commands: Arc<crate::command_runner::CommandRunner>,
     /// WorkBuddy's workspace names (the permission card's project).
     pub work_names: Arc<crate::work_buddy::WorkBuddyNames>,
+    /// Run after every successful settings save, before the page gets its answer.
+    pub settings_hooks: Arc<crate::settings_hooks::SettingsHooks>,
 }
 
 /// Serializes the writes that move the config version for shortcut icons (upload, removal) with the settings save.
@@ -295,6 +297,7 @@ impl AppState {
             procs: crate::process_monitor::ProcessMonitor::new(sessions.clone()),
             hook,
             claude_settings: crate::claude_hook::settings_path(&home),
+            settings_hooks: Default::default(),
             quotas: Arc::new(crate::quota::QuotaMonitor::new(
                 Some(cfg.clone()),
                 &crate::app_paths::local_dir(),

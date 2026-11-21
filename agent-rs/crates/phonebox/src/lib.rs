@@ -36,6 +36,7 @@ pub mod listening_ports;
 pub mod log;
 pub mod media_artwork_cache;
 pub mod media_monitor;
+pub mod net;
 pub mod net_adapters;
 pub mod pairing;
 pub mod panel_widgets;
@@ -49,6 +50,7 @@ pub mod quota;
 pub mod request_timings;
 pub mod server;
 pub mod session_monitor;
+pub mod settings_hooks;
 pub mod shortcut_icon_uploads;
 pub mod shortcut_icons;
 pub mod shortcuts;
@@ -70,6 +72,8 @@ pub mod win_icon;
 pub mod windows_gpu;
 pub mod work_buddy;
 
+#[cfg(test)]
+mod core_audit_tests;
 #[cfg(test)]
 mod tests {
     #[test]

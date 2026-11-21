@@ -45,6 +45,22 @@ PHASE_BY_FILE = {
     "ClaudeQuotaScheduleTests": 5, "CodexQuotaTests": 5, "QuotaConnectTests": 5, "AntigravityTests": 5,
     "CodexBarTests": 5, "ClaudeTranscriptTests": 5, "DockerTests": 5, "DockerActionTests": 5, "ToolProcessTests": 5,
     "CommandVisibilityTests": 5,
+    # phase 6 (integrations): rules, charge guard, privacy, session lock, app console, notes, webhooks
+    "RuleTests": 6, "ChargeRecoveryTests": 6, "ChargeGuardSwitchTests": 6, "PrivacyMonitorTests": 6,
+    "AppConsoleTests": 6, "AppConsoleFocusRaceTests": 6, "NoteEditTests": 6, "ShortcutRuleFollowUpTests": 6,
+    "ScreenSyncTests": 6, "ScreenCancellationTests": 6, "AuditRegressionTests": 6, "TestPortsTests": 6,
+    # plan-1 code whose tests were never assigned; ported with plan 6
+    "CoreAuditTests": 6, "AppearanceTests": 6, "StoreFollowUpTests": 6,
+    # phase 6: Home Assistant, OBS, Discord, Spotify; feeds, calendar, photos, cameras; the control deck
+    "IntegrationVisibilityTests": 6, "HomeAssistantTests": 6, "HomeAssistantStateTests": 6, "ObsTests": 6,
+    "ObsPermissionTests": 6, "DiscordTests": 6, "SpotifyControlTests": 6, "SpotifyCredentialTests": 6,
+    "FeedTests": 6, "WidgetFeedProxyTests": 6, "WidgetFeedProxyTransportTests": 6, "IcsTests": 6,
+    "CalendarOverlapTests": 6, "PhotoFrameTests": 6, "CameraFeedsTests": 6, "ControlDeckTests": 6,
+    "ControlDeckCommandTests": 6, "ControlDeckPanicTests": 6, "ControlTasksTests": 6, "DeckAuditTests": 6,
+    "HlsRadioTests": 6, "PortableAudioPlaybackTests": 6, "RadioCardViewsTests": 6, "RadioDirectoryTests": 6,
+    "RadioDirectoryBodyTests": 6,
+    # phase 7 (lifecycle)
+    "UpdateChecksumTests": 7, "SingleFileMigrationTests": 7,
 }
 # Files that mix phases: the phase of single methods ("Class.Method"); the rest of such a file stays unassigned.
 PHASE_BY_METHOD: dict[str, int] = {
@@ -91,6 +107,15 @@ PHASE_BY_METHOD: dict[str, int] = {
     "StoreFollowUpTests.ReplacingClaudeSettingsKeepsThemOwnerOnly": 5,
     "StoreFollowUpTests.AMalformedHooksValueIsLeftAsItIs": 5,
     "CodexBarTests.QuotaAboveRuleKeepsFiringForCachedLimitsWithErrorAndSkipsOmittedProviders": 6,
+    # RuleTests.cs also holds the update service checks (plan 7) and the browser guard (plan 1, ported)
+    "UpdateServiceTests.TokenOnlyGoesToTheGitHubApi": 7,
+    "UpdateServiceTests.TimeoutsAndHttpErrorsAreTransientButOurCancellationIsNot": 7,
+    "BrowserGuardTests.ForeignBrowserRequestsAreRefused": 1,
+    # AppRestartTests.cs: the Windows session end (adb), with the tray
+    "SessionEndingTests.AdbWaitsAMinuteAfterTheSessionStartsEnding": 7,
+    # MonitorAuditTests.cs: the calendar and charge guard checks
+    "MonitorAuditTests.CalendarsWithTheSameNameDoNotMultiplyEventsWhileAFeedFails": 6,
+    "MonitorAuditTests.ChargeGuardKeepsTryingToRestoreThePowerAfterAFailedSwitchOn": 6,
 }
 
 # xUnit test classes are public; private helpers (Fixture, Handler, FakeRun…) and text such as "<class AGX…>" inside a

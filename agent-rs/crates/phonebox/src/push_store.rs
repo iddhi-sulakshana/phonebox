@@ -364,6 +364,118 @@ mod tests {
     use std::sync::Barrier;
     use std::time::Duration;
 
+    // not-ported: AuditRegressionTests.PushStoreStillComesFromTheAgentsServices: ASP.NET dependency injection; main builds the one store and hands it to AppState
+    // not-ported: TestPortsTests.ConcurrentFixturesKeepDistinctBoundListeners: tests the C# fixtures' port helper; Rust test servers bind port 0
+
+    // StoreFollowUpTests: a Set that has to wait for a save in progress must not hold up every other Set behind it.
+    #[test]
+    fn a_set_waiting_for_a_save_does_not_block_the_others() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = PushStore::new(&dir.path().join("data.json"));
+        let (held_tx, held_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        // a save in progress: the timer holds the persist lock
+        let saver = {
+            let store = store.clone();
+            std::thread::spawn(move || {
+                let _state = store.persist.lock().unwrap();
+                held_tx.send(()).unwrap();
+                let _ = release_rx.recv_timeout(Duration::from_secs(30));
+            })
+        };
+        held_rx.recv_timeout(Duration::from_secs(10)).unwrap();
+        // waits for the save to arm its timer
+        let first = {
+            let store = store.clone();
+            std::thread::spawn(move || store.set("first", parse_value("1"), None))
+        };
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while !store.save_pending.load(Ordering::SeqCst) && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(store.save_pending.load(Ordering::SeqCst));
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        {
+            let store = store.clone();
+            std::thread::spawn(move || {
+                done_tx
+                    .send(store.set("second", parse_value("2"), None))
+                    .unwrap()
+            });
+        }
+        let second = done_rx.recv_timeout(Duration::from_secs(5));
+        release_tx.send(()).unwrap();
+        saver.join().unwrap();
+        first.join().unwrap().unwrap();
+        assert_eq!(
+            second.expect("the second Set waited behind the first one's save"),
+            Ok(())
+        );
+        assert_eq!(
+            store.get("second").map(|i| i.data.to_string()).as_deref(),
+            Some("2")
+        );
+    }
+
+    // StoreFollowUpTests: a save that fails is retried (Rust writes the warning with eprintln, which cannot fail the
+    // way the C# logger could)
+    #[test]
+    fn a_failed_save_is_retried_even_when_its_warning_cannot_be_written() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data.json");
+        std::fs::create_dir(&path).unwrap(); // the save cannot replace a folder
+        let store = PushStore::new(&path);
+        store.save_pending.store(true, Ordering::SeqCst); // a change waiting to be saved, no timer armed by the test
+        {
+            let mut state = store.persist.lock().unwrap();
+            store.save_pending_locked(&mut state); // the timer callback, run here
+        }
+        assert!(store.save_pending.load(Ordering::SeqCst));
+        std::fs::remove_dir(&path).unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while !path.is_file() && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(path.is_file(), "the save was not retried");
+    }
+
+    // AuditRegressionTests (F3): an expired value changes the version once, so the phone drops it
+    #[test]
+    fn an_expired_value_changes_the_version_once_so_the_phone_drops_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = PushStore::new(&dir.path().join("data.json"));
+        let open = serde_json::json!("open");
+        s.set("door", open.clone(), Some(1)).unwrap();
+        s.set("keep", open.clone(), None).unwrap();
+        s.set("renewed", open.clone(), Some(1)).unwrap();
+        std::thread::sleep(Duration::from_millis(300));
+        s.set("renewed", serde_json::json!("still here"), None)
+            .unwrap();
+        let before = s.version();
+        std::thread::sleep(Duration::from_millis(1100));
+        let after = s.version();
+        assert_ne!(before, after);
+        assert_eq!(after, s.version());
+        let snap = s.snapshot();
+        assert!(!snap.contains_key("door"));
+        assert!(snap.contains_key("keep"));
+        assert_eq!(snap["renewed"].data, serde_json::json!("still here"));
+    }
+
+    // AuditRegressionTests (F4)
+    #[test]
+    fn expired_values_do_not_count_against_the_key_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = PushStore::new(&dir.path().join("data.json"));
+        let open = serde_json::json!("open");
+        for i in 0..200 {
+            s.set(&format!("tmp-{i}"), open.clone(), Some(1)).unwrap();
+        }
+        assert!(s.set("new", open.clone(), None).is_err());
+        std::thread::sleep(Duration::from_millis(1100));
+        assert!(s.set("new", open, None).is_ok());
+    }
+
     #[test]
     fn keys() {
         for (key, valid) in [

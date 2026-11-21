@@ -336,3 +336,29 @@ async fn a_null_number_or_switch_is_refused_like_csharp() {
         200
     );
 }
+
+#[tokio::test]
+async fn the_settings_hooks_run_once_in_order_after_a_successful_save() {
+    use std::sync::{Arc, Mutex};
+    let (_d, state) = test_state();
+    let ran = Arc::new(Mutex::new(Vec::new()));
+    for name in ["deck", "photos", "cameras", "radios"] {
+        let ran = ran.clone();
+        state
+            .settings_hooks
+            .add(Arc::new(move || ran.lock().unwrap().push(name)));
+    }
+    let app = build_router(state.clone());
+    assert_eq!(put_settings(&app, "{ not json", None).await.status(), 400);
+    let stale = put_settings(&app, "{}", Some("1")).await;
+    assert_eq!(stale.status(), StatusCode::CONFLICT);
+    assert!(
+        ran.lock().unwrap().is_empty(),
+        "a failed save ran the hooks"
+    );
+    assert_eq!(put_settings(&app, "{}", None).await.status(), 200);
+    assert_eq!(
+        *ran.lock().unwrap(),
+        ["deck", "photos", "cameras", "radios"]
+    );
+}

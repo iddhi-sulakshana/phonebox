@@ -1159,6 +1159,56 @@ mod tests {
         assert_eq!(find(""), Some(winget));
     }
 
+    /// CoreAuditTests C3: Android's "pm path" exits 1 for a package that is not installed, and adb shell passes that
+    /// on (a real script on Unix, as in C#; the in-memory fake answering exit 1 on Windows).
+    #[tokio::test]
+    async fn c3_a_phone_without_the_app_is_offered_the_install() {
+        let dir = tempfile::tempdir().unwrap();
+        #[cfg(unix)]
+        let runner: Arc<dyn AdbRunner> = {
+            use std::os::unix::fs::PermissionsExt;
+            let script = dir.path().join("adb-real");
+            std::fs::write(
+                &script,
+                "#!/bin/sh\nif [ \"$1\" = devices ]; then printf 'List of devices attached\\nFAKE123\\tdevice\\n'; exit 0; fi\n\
+                 if [ \"$4\" = pm ]; then exit 1; fi\nexit 0\n",
+            )
+            .unwrap();
+            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+            Arc::new(ScriptAdb(script, ProcessRunner::default()))
+        };
+        #[cfg(not(unix))]
+        let runner: Arc<dyn AdbRunner> = Arc::new(FakeAdb::with(|f| {
+            f.devices = vec!["FAKE123".into()];
+            f.not_installed = true;
+        }));
+        let (_d, cfg) = test_cfg(r#"{"display":{"homeScreen":false,"keepAwake":false}}"#);
+        let adb = AdbReverse::new(cfg, 8765, runner);
+        for _ in 0..300 {
+            let _ = adb.ensure().await;
+            if !adb.missing_app().is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        drop(dir);
+        assert_eq!(adb.missing_app(), ["FAKE123"]);
+    }
+
+    /// The real process runner on a script standing in for adb.
+    #[cfg(unix)]
+    struct ScriptAdb(PathBuf, ProcessRunner);
+
+    #[cfg(unix)]
+    impl AdbRunner for ScriptAdb {
+        fn locate(&self, _configured: Option<&str>) -> Option<PathBuf> {
+            Some(self.0.clone())
+        }
+        fn run<'a>(&'a self, adb: &'a Path, args: &'a str) -> AdbFuture<'a> {
+            self.1.run(adb, args)
+        }
+    }
+
     #[cfg(unix)]
     #[tokio::test]
     async fn the_process_runner_reports_the_exit_code_and_output_and_times_out() {

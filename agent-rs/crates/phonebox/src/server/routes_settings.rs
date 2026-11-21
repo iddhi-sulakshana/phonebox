@@ -84,6 +84,9 @@ async fn put_settings(State(s): State<AppState>, headers: HeaderMap, body: Strin
     };
     match saved {
         Ok(version) => {
+            // the deck, the photo frame and the cameras catch up before the page hears back
+            let hooks = s.settings_hooks.clone();
+            let _ = tokio::task::spawn_blocking(move || hooks.run()).await;
             // drop uploads for shortcuts that got deleted; commands may have changed, so resolve the program icons again
             s.icons.cleanup(|| {
                 s.cfg
