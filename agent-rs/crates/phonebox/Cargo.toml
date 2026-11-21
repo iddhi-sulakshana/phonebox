@@ -12,7 +12,7 @@ workspace = true
 
 [dependencies]
 rust-embed = { version = "8", features = ["debug-embed"] }
-axum = "0.8"
+axum = { version = "0.8", features = ["ws"] }
 base64 = "0.22"
 getrandom = "0.3"
 indexmap = { version = "2", features = ["serde"] }
@@ -66,3 +66,6 @@ tokio = { version = "1", features = ["full", "test-util"] }
 http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }
 tempfile = "3"
+# a real WebSocket client for the trackpad socket tests
+tokio-tungstenite = "0.29"
+futures-util = { version = "0.3", features = ["sink"] }

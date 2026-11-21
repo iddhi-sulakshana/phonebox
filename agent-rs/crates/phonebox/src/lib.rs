@@ -39,6 +39,7 @@ pub mod state;
 pub mod state_frame_cache;
 pub mod state_signal;
 pub mod system_monitor;
+pub mod trackpad_handler;
 pub mod unix;
 pub mod usb_doctor;
 pub mod webview_doctor;
