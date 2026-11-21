@@ -3,6 +3,7 @@
 
 pub mod core;
 pub mod fetch;
+pub mod hls;
 pub mod leases;
 pub mod midi;
 pub mod models;
