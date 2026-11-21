@@ -60,6 +60,7 @@ pub mod webview_doctor;
 pub mod widget_feed_proxy;
 pub mod win_icon;
 pub mod windows_gpu;
+pub mod work_buddy;
 
 #[cfg(test)]
 mod tests {
