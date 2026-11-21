@@ -4,11 +4,12 @@
 //!
 //! C# guarded its state with reentrant locks; here everything `_state` covered is one [`DeckState`] behind one mutex
 //! with `_locked` helpers, and `_pttGate` is the mutex around the pending panic mutes. Native calls block, and some
-//! locks are held across them as C# did, so they run on blocking threads, never on the async workers.
+//! locks are held across them as C# did, so they run on blocking threads, never on the async workers. The radio
+//! stations are in `radio.rs`, the sleep timers and ducking in `sleep.rs`.
 
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::time::Duration;
 
 use indexmap::IndexMap;
@@ -27,6 +28,14 @@ use crate::server::Stop;
 pub const AUDIO_CACHE_MS: i64 = 400;
 /// How often monitors, power plans and MIDI ports are looked for again.
 pub const HARDWARE_MS: i64 = 30_000;
+
+#[path = "radio.rs"]
+mod radio;
+#[path = "sleep.rs"]
+mod sleep;
+
+/// How long the loop waits between ticks.
+pub const TICK_MS: u64 = 250;
 
 const CONTROL_FAILED: &str = "Control failed; check the computer's integration settings";
 const UNAVAILABLE: &str = "This control is unavailable on the selected device";
@@ -52,6 +61,8 @@ pub struct DeckCommand {
 pub struct DeckOptions {
     /// Unix milliseconds for the radio's elapsed time and the sleep deadlines (default: the system clock).
     pub now: Option<Arc<dyn Fn() -> i64 + Send + Sync>>,
+    /// How long pausing the other media may take once a station plays (default 5 s).
+    pub media_pause: Option<Duration>,
 }
 
 /// Everything C#'s reentrant `_state` lock covered.
@@ -63,6 +74,11 @@ pub(crate) struct DeckState {
     pub(crate) duck_percent: Option<i32>,
     /// Sleep timers: player id → when it pauses (Unix ms).
     pub(crate) sleep: IndexMap<String, i64>,
+    /// Ducked sessions: id → (the volume before, the volume set).
+    duck: IndexMap<String, (i32, i32)>,
+    /// Sleep fades: player → session id → (the volume before, the volume set); a volume before of -1 means the user
+    /// took the session back.
+    fades: IndexMap<String, IndexMap<String, (i32, i32)>>,
 }
 
 /// Monitors, power plans and MIDI ports: slow to find, looked for in the background.
@@ -95,9 +111,19 @@ fn invalidate(state: &Mutex<DeckState>) {
 }
 
 pub struct ControlDeck {
+    /// The deck itself, for work handed to blocking threads and the loop.
+    me: Weak<ControlDeck>,
     pub(crate) cfg: Arc<ConfigStore>,
     native: Arc<dyn DeckNative>,
+    now: Arc<dyn Fn() -> i64 + Send + Sync>,
+    media_pause: Duration,
     state: Arc<Mutex<DeckState>>,
+    /// `_focusGate`: one media change at a time, held across its awaits.
+    focus: Arc<tokio::sync::Mutex<()>>,
+    /// `_radioGate`, held across a station's (blocking) open; always taken before `radio`.
+    radio_gate: Mutex<()>,
+    /// `_radioState`: never held across a native call, so the state's media never waits.
+    radio: Mutex<radio::RadioState>,
     /// `_pttGate`, around the microphones panic could not mute yet (`_panicPending`).
     ptt_gate: Mutex<HashSet<String>>,
     ptt: MicrophoneLeases,
@@ -114,7 +140,7 @@ impl ControlDeck {
     pub fn new(
         cfg: Arc<ConfigStore>,
         native: Arc<dyn DeckNative>,
-        _options: DeckOptions,
+        options: DeckOptions,
     ) -> Arc<ControlDeck> {
         let state: Arc<Mutex<DeckState>> = Default::default();
         // a hold reads the microphone as it is now, never the cached reading
@@ -137,18 +163,34 @@ impl ControlDeck {
                 ok
             }
         };
-        Arc::new(ControlDeck {
-            tasks: Arc::new(ControlTasks::new(cfg.clone())),
-            cfg,
-            native,
-            ptt: MicrophoneLeases::new(read, write, monotonic_ms),
-            state,
-            ptt_gate: Mutex::default(),
-            power: PowerConfirmations::new(monotonic_ms),
-            profiles: tokio::sync::Mutex::new(()),
-            hardware: Default::default(),
-            hardware_job: Default::default(),
-            disposed: AtomicBool::new(false),
+        let now = options.now.unwrap_or_else(|| Arc::new(unix_ms));
+        Arc::new_cyclic(|me: &Weak<ControlDeck>| {
+            // a station that stopped by itself (ended, failed, its player exited)
+            let stopped = me.clone();
+            native.on_sound_stopped(Arc::new(move |id: &str| {
+                if let Some(deck) = stopped.upgrade() {
+                    deck.on_native_sound_stopped(id);
+                }
+            }));
+            ControlDeck {
+                me: me.clone(),
+                tasks: Arc::new(ControlTasks::new(cfg.clone())),
+                cfg,
+                native,
+                now,
+                media_pause: options.media_pause.unwrap_or(Duration::from_secs(5)),
+                focus: Default::default(),
+                radio_gate: Mutex::new(()),
+                radio: Default::default(),
+                ptt: MicrophoneLeases::new(read, write, monotonic_ms),
+                state,
+                ptt_gate: Mutex::default(),
+                power: PowerConfirmations::new(monotonic_ms),
+                profiles: tokio::sync::Mutex::new(()),
+                hardware: Default::default(),
+                hardware_job: Default::default(),
+                disposed: AtomicBool::new(false),
+            }
         })
     }
 
@@ -159,11 +201,52 @@ impl ControlDeck {
 
     /// Runs blocking deck work on a blocking thread; None when it panicked.
     async fn blocking<T: Send + 'static>(
-        self: &Arc<Self>,
+        &self,
         work: impl FnOnce(&ControlDeck) -> T + Send + 'static,
     ) -> Option<T> {
-        let deck = self.clone();
+        let deck = self.me.upgrade()?;
         tokio::task::spawn_blocking(move || work(&deck)).await.ok()
+    }
+
+    /// Runs `work` holding the media focus; Err when `stop` ended the wait.
+    pub(crate) async fn run_with_media_focus<T>(
+        &self,
+        work: impl std::future::Future<Output = T>,
+        stop: &Stop,
+    ) -> Result<T, Cancelled> {
+        let _focus = tokio::select! {
+            biased;
+            _ = stop.stopped() => return Err(Cancelled),
+            focus = self.focus.lock() => focus,
+        };
+        Ok(work.await)
+    }
+
+    /// The 250 ms loop: retries pending panic mutes, ends expired holds, reconciles stations, runs sleep timers and
+    /// ducks; idle, it makes no native calls. Ends with `stop` (main then calls [`ControlDeck::dispose`]).
+    pub fn start(&self, stop: Stop) {
+        let Some(deck) = self.me.upgrade() else {
+            return;
+        };
+        tokio::spawn(async move {
+            while !stop.is_stopped() && !deck.disposed.load(Ordering::SeqCst) {
+                deck.blocking(|d| {
+                    {
+                        let mut pending = lock(&d.ptt_gate);
+                        d.retry_panic_mutes_locked(&mut pending);
+                    }
+                    d.ptt.sweep(false);
+                    d.reconcile_radios(false);
+                })
+                .await;
+                deck.tick_sleep(&stop).await;
+                deck.blocking(|d| d.tick_ducking()).await;
+                tokio::select! {
+                    _ = tokio::time::sleep(Duration::from_millis(TICK_MS)) => {}
+                    _ = stop.stopped() => break,
+                }
+            }
+        });
     }
 
     /// The audio reading, reused for [`AUDIO_CACHE_MS`]. Blocks.
@@ -202,13 +285,12 @@ impl ControlDeck {
     }
 
     /// `GET /api/controls/state`. None when building it panicked (the route answers 500).
-    pub async fn snapshot(self: &Arc<Self>) -> Option<Value> {
+    pub async fn snapshot(&self) -> Option<Value> {
         self.refresh_hardware();
         let (media, media_error) = match self.native.media().await {
             Ok(media) => (media, None),
             Err(_) => (Vec::new(), Some("Media sessions are unavailable")),
         };
-        let deck = self.clone();
         let parts = self
             .blocking(move |d| {
                 let c = d.cfg.get();
@@ -235,7 +317,7 @@ impl ControlDeck {
             })
             .await?;
         let (c, audio, hardware, actions, shortcuts, ducking, sleep) = parts;
-        let loading = lock(&deck.hardware_job)
+        let loading = lock(&self.hardware_job)
             .job
             .as_ref()
             .is_some_and(|job| !job.is_finished());
@@ -307,7 +389,11 @@ impl ControlDeck {
                 state = Some(s);
             }
             "sound" | "radio" => {
-                state = self.native.action_state(a);
+                state = if a.kind == "radio" {
+                    self.radio_state(a)
+                } else {
+                    self.native.action_state(a)
+                };
                 // None: no player here (Linux or macOS without ffplay, mpv or vlc)
                 available = cfg!(windows) || state.is_some();
                 if state.is_none() {
@@ -403,11 +489,7 @@ impl ControlDeck {
     }
 
     /// `POST /api/controls/command/{kind}`. Err only when `stop` ended the request.
-    pub async fn act(
-        self: &Arc<Self>,
-        command: DeckCommand,
-        stop: &Stop,
-    ) -> Result<DeckResult, Cancelled> {
+    pub async fn act(&self, command: DeckCommand, stop: &Stop) -> Result<DeckResult, Cancelled> {
         let DeckCommand {
             kind,
             id,
@@ -450,14 +532,73 @@ impl ControlDeck {
             }
             "profile" => return self.profile(&id, stop).await,
             "duck" => {
-                lock(&self.state).duck_percent = if op == "off" {
-                    None
+                let percent = (op != "off").then(|| value.unwrap_or(25).clamp(0, 100));
+                self.blocking(move |d| {
+                    lock(&d.state).duck_percent = percent;
+                    Step::Done(true)
+                })
+                .await
+            }
+            "media" => {
+                let value = i64::from(value.unwrap_or(0));
+                if matches!(op.as_str(), "next" | "prev" | "playpause") {
+                    let changed = self.run_with_media_focus(
+                        async {
+                            let (ok, was_playing) =
+                                self.native.media_action_with_state(&id, &op, value).await;
+                            if ok && (op != "playpause" || !was_playing) {
+                                self.blocking(|d| d.stop_radios(None, true)).await;
+                            }
+                            ok
+                        },
+                        stop,
+                    );
+                    Some(Step::Done(changed.await?))
                 } else {
-                    Some(value.unwrap_or(25).clamp(0, 100))
-                };
-                Some(Step::Done(true))
+                    Some(Step::Done(self.native.media_action(&id, &op, value).await))
+                }
+            }
+            "sleep" => {
+                if value.is_some_and(|v| v > 0) {
+                    match self.native.media().await {
+                        Err(_) => return Ok(DeckResult::fail(CONTROL_FAILED)),
+                        Ok(players) if !players.iter().any(|p| p.id == id) => {
+                            return Ok(DeckResult::fail("Select an active media player"));
+                        }
+                        Ok(_) => {}
+                    }
+                }
+                let deadline = value
+                    .filter(|v| *v > 0)
+                    .map(|v| (self.now)() + i64::from(v.clamp(1, 360)) * 60_000);
+                self.blocking(move |d| {
+                    let mut state = lock(&d.state);
+                    d.restore_fade_locked(&mut state, &id);
+                    match deadline {
+                        None => {
+                            state.sleep.shift_remove(&id);
+                        }
+                        Some(at) => {
+                            state.sleep.insert(id, at);
+                        }
+                    }
+                    Step::Done(true)
+                })
+                .await
             }
             "panic" => self.blocking(|d| d.act_panic()).await,
+            "sound-stop" => {
+                self.blocking(move |d| {
+                    if id.is_empty() {
+                        d.stop_radios(None, true);
+                        d.native.stop_sound(None);
+                    } else {
+                        d.stop_radio(&id, true);
+                    }
+                    Step::Done(true)
+                })
+                .await
+            }
             "action" => return self.action(&id, &op, value, stop).await,
             "brightness" => match value {
                 Some(v @ 0..=100) => {
@@ -662,7 +803,7 @@ impl ControlDeck {
         Step::Done(ok)
     }
 
-    async fn profile(self: &Arc<Self>, id: &str, stop: &Stop) -> Result<DeckResult, Cancelled> {
+    async fn profile(&self, id: &str, stop: &Stop) -> Result<DeckResult, Cancelled> {
         let c = self.cfg.get();
         let Some(profile) = c.controls.profiles.iter().find(|p| p.id == id).cloned() else {
             return Ok(DeckResult::fail("No such profile"));
@@ -791,7 +932,7 @@ impl ControlDeck {
 
     /// A configured control the phone names (or a profile runs).
     async fn action(
-        self: &Arc<Self>,
+        &self,
         id: &str,
         op: &str,
         value: Option<i32>,
@@ -806,6 +947,9 @@ impl ControlDeck {
                 && matches!(action.kind.as_str(), "task" | "server" | "sound" | "radio"))
         {
             return Ok(DeckResult::fail("Control is disabled"));
+        }
+        if action.kind == "radio" {
+            return self.radio_action(&action.id, op, stop).await;
         }
         let ok = self
             .platform(
@@ -823,16 +967,31 @@ impl ControlDeck {
         })
     }
 
-    /// The agent is stopping: every hold ends (microphones restored), task programs end (at most 8 s), and the native
-    /// side lets go. Once; blocks.
+    /// The agent is stopping: every hold ends (microphones restored), ducked and fading sessions get their volume back,
+    /// task programs end (at most 8 s), and the native side lets go. Once; blocks.
     pub fn dispose(&self) {
         if self.disposed.swap(true, Ordering::SeqCst) {
             return;
         }
         self.ptt.sweep(true);
+        {
+            let mut state = lock(&self.state);
+            self.restore_ducking_locked(&mut state);
+            let players: Vec<String> = state.fades.keys().cloned().collect();
+            for player in players {
+                self.restore_fade_locked(&mut state, &player);
+            }
+        }
         self.tasks.stop_all(Duration::from_secs(8));
         self.native.dispose();
     }
+}
+
+/// Unix milliseconds now.
+fn unix_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis() as i64)
 }
 
 fn item(id: &str, name: &str, kind: &str, state: Option<String>) -> DeckItem {

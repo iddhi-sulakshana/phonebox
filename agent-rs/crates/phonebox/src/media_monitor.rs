@@ -130,6 +130,53 @@ impl MediaDeck for NoDeck {
     }
 }
 
+/// The deck the state's media reads, put in once it exists (main builds the state's sources first).
+#[derive(Default)]
+pub struct DeckSlot {
+    deck: std::sync::RwLock<Option<Arc<dyn MediaDeck>>>,
+    none: NoDeck,
+}
+
+impl DeckSlot {
+    pub fn set(&self, deck: Arc<dyn MediaDeck>) {
+        *self.deck.write().unwrap_or_else(|e| e.into_inner()) = Some(deck);
+    }
+
+    fn get(&self) -> Option<Arc<dyn MediaDeck>> {
+        self.deck.read().unwrap_or_else(|e| e.into_inner()).clone()
+    }
+}
+
+impl MediaDeck for DeckSlot {
+    fn effective_media(&self, system: Option<MediaSnapshot>) -> Option<MediaSnapshot> {
+        match self.get() {
+            Some(deck) => deck.effective_media(system),
+            None => system,
+        }
+    }
+    fn try_control_radio<'a>(
+        &'a self,
+        action: &'a str,
+        system: Option<&'a MediaSnapshot>,
+    ) -> futures_util::future::BoxFuture<'a, Option<bool>> {
+        Box::pin(async move {
+            match self.get() {
+                Some(deck) => deck.try_control_radio(action, system).await,
+                None => None,
+            }
+        })
+    }
+    fn stop_all_radios(&self) {
+        if let Some(deck) = self.get() {
+            deck.stop_all_radios();
+        }
+    }
+    fn media_focus(&self) -> Arc<tokio::sync::Mutex<()>> {
+        self.get()
+            .map_or_else(|| self.none.media_focus(), |deck| deck.media_focus())
+    }
+}
+
 /// A Windows media session's app id as a name: the usual players by name, else the file name of the id's first part.
 pub fn friendly_app(id: &str) -> String {
     let l = id.to_lowercase();

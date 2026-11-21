@@ -19,6 +19,14 @@ impl SettingsHooks {
             .push(hook);
     }
 
+    /// A hook that runs before the others (the deck stops what was disabled first).
+    pub fn add_first(&self, hook: Hook) {
+        self.hooks
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(0, hook);
+    }
+
     /// Every hook, in the order they were added (blocking: run it off the async workers).
     pub fn run(&self) {
         // a copy: a hook may take time, and nothing else should wait on this list meanwhile

@@ -49,7 +49,9 @@ async fn spotify_act(
         crate::media_monitor::with_media_focus(s.deck.as_ref(), async {
             let result = s.spotify.act(&action, id.as_deref()).await;
             if result.ok {
-                s.deck.stop_all_radios();
+                // waits while a station opens: off the async workers
+                let deck = s.deck.clone();
+                let _ = tokio::task::spawn_blocking(move || deck.stop_all_radios()).await;
             }
             result
         })

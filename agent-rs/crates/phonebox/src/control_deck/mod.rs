@@ -6,6 +6,8 @@ pub mod leases;
 pub mod midi;
 pub mod models;
 pub mod tasks;
+#[cfg(test)]
+pub(crate) mod testing;
 
 /// Monotonic milliseconds (`Environment.TickCount64` in the C# agent): leases, confirmations and caches.
 pub(crate) fn monotonic_ms() -> i64 {

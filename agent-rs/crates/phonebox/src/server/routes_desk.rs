@@ -81,7 +81,9 @@ async fn media_action(
         };
         let ok = control.await.unwrap_or(false);
         if ok && starting {
-            deck.stop_all_radios();
+            // waits while a station opens: off the async workers
+            let deck = deck.clone();
+            let _ = tokio::task::spawn_blocking(move || deck.stop_all_radios()).await;
         }
         (ok, deck.effective_media(media.snapshot()))
     };

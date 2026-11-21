@@ -2,19 +2,16 @@
 //! `ControlDeckTests.PanicMuteDrops…`.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use futures_util::future::BoxFuture;
 use indexmap::IndexMap;
 use serde_json::Value;
 
+use super::sleep::player_session_matches;
 use super::*;
-use crate::config::store::ConfigStore;
-
-fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(|e| e.into_inner())
-}
+use crate::control_deck::testing::{Event, lock, store};
 
 fn device(
     id: &str,
@@ -75,11 +72,30 @@ fn session(
     session_of(id, name, pid, device_id, volume, muted, peak, None, true)
 }
 
+fn spotify() -> DeckMedia {
+    DeckMedia {
+        id: "Spotify.exe".into(),
+        name: "Spotify".into(),
+        title: "Track".into(),
+        playing: true,
+        position: 0,
+        duration: 100_000,
+        can_seek: true,
+        can_shuffle: true,
+        can_repeat: true,
+        shuffle: false,
+        repeat: "None".into(),
+    }
+}
+
 /// `ControlDeckCommandTests.Native`: a speaker, a headset and a muted microphone; records every write.
 struct Native {
     writes: Mutex<Vec<String>>,
     sessions: Mutex<Vec<DeckSession>>,
     defaults: IndexMap<String, String>,
+    players: Mutex<Vec<DeckMedia>>,
+    /// The microphone: muted, and what it hears.
+    mic: Mutex<(bool, f64)>,
 }
 
 impl Native {
@@ -88,7 +104,17 @@ impl Native {
             writes: Mutex::default(),
             sessions: Mutex::default(),
             defaults: IndexMap::from([("output:1".to_string(), "speaker".to_string())]),
+            players: Mutex::new(vec![spotify()]),
+            mic: Mutex::new((true, 0.0)),
         }
+    }
+    fn set_volume(&self, id: &str, volume: i32) {
+        for s in lock(&self.sessions).iter_mut().filter(|s| s.id == id) {
+            s.volume = volume;
+        }
+    }
+    fn volumes(&self) -> Vec<i32> {
+        self.sessions().iter().map(|s| s.volume).collect()
     }
     fn write(&self, what: String) {
         lock(&self.writes).push(what);
@@ -112,7 +138,12 @@ impl DeckNative for Native {
             devices: vec![
                 device("speaker", "Speaker", "output", true, 40, false),
                 device("headset", "Headset", "output", false, 60, false),
-                device("mic", "Mic", "input", true, 70, true),
+                {
+                    let (muted, peak) = *lock(&self.mic);
+                    let mut mic = device("mic", "Mic", "input", true, 70, muted);
+                    mic.peak = peak;
+                    mic
+                },
             ],
             sessions: self.sessions(),
             defaults: Some(self.defaults.clone()),
@@ -155,21 +186,8 @@ impl DeckNative for Native {
         Box::pin(async { true })
     }
     fn media(&self) -> BoxFuture<'_, Result<Vec<DeckMedia>, String>> {
-        Box::pin(async {
-            Ok(vec![DeckMedia {
-                id: "Spotify.exe".into(),
-                name: "Spotify".into(),
-                title: "Track".into(),
-                playing: true,
-                position: 0,
-                duration: 100_000,
-                can_seek: true,
-                can_shuffle: true,
-                can_repeat: true,
-                shuffle: false,
-                repeat: "None".into(),
-            }])
-        })
+        let players = lock(&self.players).clone();
+        Box::pin(async move { Ok(players) })
     }
     fn media_action<'a>(&'a self, _: &'a str, action: &'a str, _: i64) -> BoxFuture<'a, bool> {
         self.write(format!("media:{action}"));
@@ -190,16 +208,11 @@ impl DeckNative for Native {
     }
 }
 
-fn store(dir: &tempfile::TempDir, json: &str) -> Arc<ConfigStore> {
-    let path = dir.path().join("config.json");
-    std::fs::write(&path, json).unwrap();
-    Arc::new(ConfigStore::new(path))
-}
-
 struct Fixture {
     _dir: tempfile::TempDir,
     native: Arc<Native>,
     deck: Arc<ControlDeck>,
+    now: Arc<std::sync::atomic::AtomicI64>,
 }
 
 impl Fixture {
@@ -211,18 +224,26 @@ impl Fixture {
         let dir = tempfile::tempdir().unwrap();
         let cfg = store(&dir, json);
         let native = Arc::new(Native::new());
+        let now = Arc::new(std::sync::atomic::AtomicI64::new(1000));
+        let clock = now.clone();
         let deck = ControlDeck::new(
             cfg,
             native.clone(),
             DeckOptions {
-                now: Some(Arc::new(|| 1000)),
+                now: Some(Arc::new(move || clock.load(Ordering::SeqCst))),
+                ..DeckOptions::default()
             },
         );
         Fixture {
             _dir: dir,
             native,
             deck,
+            now,
         }
+    }
+
+    fn advance(&self, ms: i64) {
+        self.now.fetch_add(ms, Ordering::SeqCst);
     }
 
     async fn act(&self, kind: &str, id: &str, value: Option<i32>, op: Option<&str>) -> DeckResult {
@@ -449,6 +470,157 @@ async fn power_actions_cannot_bypass_opt_in_or_hold_nonce() {
     assert!(f.native.writes().is_empty());
 }
 
+#[tokio::test]
+async fn sleep_fades_only_the_selected_player_then_pauses_and_restores_volume() {
+    let f = Fixture::new("{}");
+    f.native.set_sessions(vec![
+        session("spotify-session", "Spotify", 123, "speaker", 80, false, 0.0),
+        session("browser", "Chrome", 124, "speaker", 55, false, 0.0),
+    ]);
+    assert!(f.act("sleep", "Spotify.exe", Some(1), None).await.ok);
+    f.advance(45_000);
+    f.deck.tick_sleep(&Stop::default()).await;
+    assert_eq!(f.native.volumes(), [40, 55]);
+    f.advance(15_000);
+    f.deck.tick_sleep(&Stop::default()).await;
+    assert_eq!(f.native.volumes(), [80, 55]);
+    assert!(f.native.writes().contains(&"media:pause".to_string()));
+}
+
+#[tokio::test]
+async fn sleep_fade_preserves_manual_volume_changes() {
+    let f = Fixture::new("{}");
+    f.native.set_sessions(vec![session(
+        "spotify-session",
+        "Spotify",
+        123,
+        "speaker",
+        80,
+        false,
+        0.0,
+    )]);
+    assert!(f.act("sleep", "Spotify.exe", Some(1), None).await.ok);
+    f.advance(45_000);
+    f.deck.tick_sleep(&Stop::default()).await;
+    assert_eq!(f.native.volumes(), [40]);
+    f.native.set_volume("spotify-session", 65);
+    f.advance(15_000);
+    f.deck.tick_sleep(&Stop::default()).await;
+    assert_eq!(f.native.volumes(), [65]);
+}
+
+#[tokio::test]
+async fn disabled_control_is_hidden_rejected_and_stopped() {
+    let f = Fixture::new(
+        r#"{"actions":[{"id":"r1","label":"Station 1","kind":"radio","target":"https://example.com/1","value":80,"enabled":false},{"id":"r2","label":"Station 2","kind":"radio","target":"https://example.com/2","value":80,"enabled":true},{"id":"s1","label":"Chime","kind":"sound","target":"chime.wav","value":50,"enabled":false}]}"#,
+    );
+    let snapshot = f.snapshot().await.to_string();
+    assert!(!snapshot.contains("\"r1\""));
+    assert!(snapshot.contains("\"r2\""));
+    let refused = f.act("action", "r1", None, None).await;
+    assert!(!refused.ok);
+    assert_eq!(refused.error.as_deref(), Some("Control is disabled"));
+    assert!(f.act("action", "r1", None, Some("stop")).await.ok);
+    assert!(f.act("action", "s1", None, Some("stop")).await.ok);
+    f.deck.stop_disabled_controls();
+    let writes = f.native.writes();
+    assert!(writes.contains(&"stop:r1".to_string()));
+    assert!(writes.contains(&"stop:s1".to_string()));
+    assert!(!writes.contains(&"stop:r2".to_string()));
+}
+
+#[test]
+fn sleep_fade_matches_the_players_own_audio_session() {
+    for (player, session, expected) in [
+        ("Spotify.exe", "Spotify", true),
+        (
+            "SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify",
+            "Spotify",
+            true,
+        ),
+        (
+            "Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic",
+            "Microsoft.Photos",
+            false,
+        ),
+    ] {
+        assert_eq!(
+            player_session_matches(player, session),
+            expected,
+            "{player} / {session}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_sleep_timer_can_be_cancelled_after_its_player_closed() {
+    let f = Fixture::new("{}");
+    assert!(f.act("sleep", "Spotify.exe", Some(30), None).await.ok);
+    let player = lock(&f.native.players).remove(0); // the player is closed
+    let cancel = f.act("sleep", "Spotify.exe", Some(0), None).await;
+    lock(&f.native.players).push(player); // ... and reopened later
+    f.advance(31 * 60_000);
+    f.deck.tick_sleep(&Stop::default()).await;
+    assert!(!f.native.writes().contains(&"media:pause".to_string()));
+    assert!(cancel.ok);
+}
+
+// Rust-only: sleep needs a player that is there; ducking lowers the other sessions only while a microphone hears.
+
+#[tokio::test]
+async fn a_sleep_timer_needs_an_active_player_and_shows_on_the_phone() {
+    let f = Fixture::new("{}");
+    let r = f.act("sleep", "VLC.exe", Some(5), None).await;
+    assert_eq!(r.error.as_deref(), Some("Select an active media player"));
+    assert!(f.act("sleep", "Spotify.exe", Some(500), None).await.ok);
+    // at most 6 hours
+    assert_eq!(
+        f.snapshot().await["sleep"],
+        serde_json::json!([{"id":"Spotify.exe","at":1000 + 360 * 60_000}])
+    );
+}
+
+#[tokio::test]
+async fn ducking_lowers_other_sessions_while_a_microphone_hears_and_restores_them() {
+    let f = Fixture::new("{}");
+    let own = std::process::id() as i32;
+    f.native.set_sessions(vec![
+        session("chrome", "Chrome", 10, "speaker", 81, false, 0.0),
+        session("agent", "PhoneBox", own, "speaker", 70, false, 0.0),
+    ]);
+    assert!(f.act("duck", "", Some(50), None).await.ok);
+    // each tick reads the audio again (the deck reuses a reading for 400 ms)
+    let tick = |f: &Fixture| {
+        let deck = f.deck.clone();
+        async move {
+            tokio::task::spawn_blocking(move || {
+                deck.invalidate();
+                deck.tick_ducking()
+            })
+            .await
+            .unwrap()
+        }
+    };
+    // a muted microphone hears nothing
+    tick(&f).await;
+    assert_eq!(f.native.volumes(), [81, 70]);
+    *lock(&f.native.mic) = (false, 0.5);
+    tick(&f).await;
+    // 40.5 rounds to even; the agent's own session is left alone
+    assert_eq!(f.native.volumes(), [40, 70]);
+    tick(&f).await;
+    assert_eq!(f.native.volumes(), [40, 70]);
+    *lock(&f.native.mic) = (false, 0.01);
+    tick(&f).await;
+    assert_eq!(f.native.volumes(), [81, 70]);
+    // ducked again, then the agent stops: the volume comes back
+    *lock(&f.native.mic) = (false, 0.5);
+    tick(&f).await;
+    assert_eq!(f.native.volumes(), [40, 70]);
+    f.deck.dispose();
+    assert_eq!(f.native.volumes(), [81, 70]);
+}
+
 // Rust-only: the phone's request limits, the generic outcome texts and what the snapshot says about each control.
 
 #[tokio::test]
@@ -665,31 +837,6 @@ async fn capture_lists_controllable_devices_then_every_application() {
 }
 
 // ControlDeckPanicTests
-
-/// A set-once signal a test thread can wait on.
-#[derive(Default)]
-struct Event {
-    set: Mutex<bool>,
-    changed: Condvar,
-}
-
-impl Event {
-    fn set(&self) {
-        *lock(&self.set) = true;
-        self.changed.notify_all();
-    }
-    fn is_set(&self) -> bool {
-        *lock(&self.set)
-    }
-    fn wait(&self, limit: Duration) -> bool {
-        let guard = lock(&self.set);
-        let (guard, _) = self
-            .changed
-            .wait_timeout_while(guard, limit, |set| !*set)
-            .unwrap_or_else(|e| e.into_inner());
-        *guard
-    }
-}
 
 /// `ControlDeckPanicTests.PanicNative`: a speaker whose mute can be held mid-way, and a microphone whose mute can fail.
 struct PanicNative {

@@ -74,8 +74,8 @@ fn main() -> ExitCode {
     let ping = phonebox::ping_monitor::PingMonitor::new(cfg.clone());
     let audio = phonebox::audio_control::AudioControl::new();
     let media = phonebox::media_monitor::MediaMonitor::new();
-    let deck: Arc<dyn phonebox::media_monitor::MediaDeck> =
-        Arc::new(phonebox::media_monitor::NoDeck::default());
+    // the state's media reads the control deck, which comes with the state
+    let deck = Arc::new(phonebox::media_monitor::DeckSlot::default());
     // the "work" frame, the process list and the permission hook read the same session monitor
     let sessions =
         phonebox::session_monitor::SessionMonitor::new(Some(cfg.clone()), app_paths::home());
@@ -113,7 +113,6 @@ fn main() -> ExitCode {
     state.system = system;
     state.ping = ping;
     state.audio = audio;
-    state.deck = deck;
     state.obs = obs;
     state.privacy = privacy;
     state.wifi = Arc::new(wifi);
@@ -121,8 +120,11 @@ fn main() -> ExitCode {
     media.start(state.stop.clone());
     state.media = media;
     // the rules and the charge guard use the monitors put in above; /api/state reads the same engine
-    let state = state.rewire();
+    let state = state
+        .rewire()
+        .with_controls(Arc::new(phonebox::control_deck::core::NoNative));
     rules.set(state.rules.clone());
+    deck.set(state.controls.clone());
     let controls = state.controls.clone();
     let runtime = tokio::runtime::Runtime::new().expect("tokio runtime");
     let result = runtime.block_on(serve(state, config_path));
@@ -190,6 +192,7 @@ async fn serve(state: AppState, config_path: std::path::PathBuf) -> std::io::Res
     state.privacy.start(state.stop.clone()); // every 2 s (macOS: unknown)
     state.rules.start(state.stop.clone()); // after 3 s, then every second
     state.charge.start(state.stop.clone()); // after 5 s, then every 30 s
+    state.controls.start(state.stop.clone()); // every 250 ms: panic mutes, holds, stations, sleep timers, ducking
     // every second: the phones' screens follow the Mac's lock while display.followComputerLock is on
     phonebox::session_lock_monitor::start(state.cfg.clone(), state.adb.clone(), state.stop.clone());
     log::info(

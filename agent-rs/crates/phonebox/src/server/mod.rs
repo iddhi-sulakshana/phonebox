@@ -375,7 +375,7 @@ impl AppState {
             settings_hooks,
             console: Arc::new(crate::app_console::AppConsole::new(cfg.clone())),
             tasks: controls.tasks(),
-            controls,
+            controls: controls.clone(),
             charge: Arc::new(crate::charge_guard::ChargeGuard::new(
                 cfg.clone(),
                 ha.clone(),
@@ -411,7 +411,7 @@ impl AppState {
             apps: crate::app_catalog::AppCatalog::new(cfg.clone()),
             dictation: crate::dictation::Dictation::new(cfg.clone()),
             media: crate::media_monitor::MediaMonitor::new(),
-            deck: Arc::new(crate::media_monitor::NoDeck::default()),
+            deck: controls.clone(),
             spectrum: crate::spectrum_analyzer::SpectrumAnalyzer::new(cfg.clone()),
             icons: Arc::new(crate::shortcut_icon_uploads::ShortcutIconUploads::new(
                 icons_dir,
@@ -451,6 +451,34 @@ impl AppState {
             inputs,
             crate::rule_engine::RuleClock::system(),
         );
+        self
+    }
+
+    /// The Control Deck over the platform's native side, as main runs it: settings saves stop what was disabled
+    /// (before the other hooks) and reconcile the stations (after them); `/api/media` and the Spotify routes take
+    /// turns with it.
+    pub fn with_controls(
+        mut self,
+        native: Arc<dyn crate::control_deck::models::DeckNative>,
+    ) -> AppState {
+        let controls = crate::control_deck::core::ControlDeck::new(
+            self.cfg.clone(),
+            native,
+            Default::default(),
+        );
+        {
+            let deck = controls.clone();
+            self.settings_hooks
+                .add_first(Arc::new(move || deck.stop_disabled_controls()));
+        }
+        {
+            let deck = controls.clone();
+            self.settings_hooks
+                .add(Arc::new(move || deck.reconcile_radios(true)));
+        }
+        self.tasks = controls.tasks();
+        self.deck = controls.clone();
+        self.controls = controls;
         self
     }
 
