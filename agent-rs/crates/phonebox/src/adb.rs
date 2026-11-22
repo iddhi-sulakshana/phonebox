@@ -1518,8 +1518,9 @@ mod tests {
         )
         .unwrap();
         std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // 2 s: a script's start alone can take half a second on a loaded CI runner (macOS under Rosetta)
         let runner = ProcessRunner {
-            timeout: Duration::from_millis(500),
+            timeout: Duration::from_secs(2),
         };
         let out = runner
             .run(&script, "-s FAKE1 reverse --list")

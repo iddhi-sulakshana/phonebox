@@ -163,7 +163,8 @@ pub fn uid() -> u32 {
     0
 }
 
-#[cfg(test)]
+// the Linux and macOS helper: nothing on Windows runs it, so neither do its tests
+#[cfg(all(test, unix))]
 mod tests {
     use std::path::Path;
     use std::time::{Duration, Instant};
@@ -277,8 +278,6 @@ mod tests {
         assert!(!done_early, "the run waited for the child");
     }
 
-    // the Linux and macOS helper: nothing on Windows runs it
-    #[cfg(unix)]
     #[test]
     fn a_tool_that_finishes_returns_its_output_and_a_failing_one_none() {
         assert_eq!(run("sh", &["-c", "printf hi"]).as_deref(), Some("hi"));

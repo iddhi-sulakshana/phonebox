@@ -346,7 +346,16 @@ def run(csharp_cmd: str, rust_cmd: str, corpus: list[dict], fixture: Path, cert:
             answers = []
             for a in agents:
                 extra = {"X-Config-Version": a.config_version()} if entry.get("config_version") else None
-                answers.append(request(a.port, with_keys(entry, keys), extra, a.lan_port))
+                try:
+                    answers.append(request(a.port, with_keys(entry, keys), extra, a.lan_port))
+                except (OSError, http.client.HTTPException) as e:
+                    # which request and which agent, and what the agents printed (a hosted runner is gone afterwards)
+                    print(f"{entry.get('name')}: the {a.label} agent did not answer ({e!r})", file=sys.stderr)
+                    for b in agents:
+                        b.log.flush()
+                        tail = (b.dir / "stdout.log").read_text(encoding="utf-8", errors="replace")[-4000:]
+                        print(f"--- {b.label} agent output (exit code {b.proc.poll()}):\n{tail}", file=sys.stderr)
+                    raise
             problems += diff(entry, answers[0], answers[1])
             if entry.get("config_file"):
                 ca, cb = (saved_config(a.config.read_bytes(), a.lan_port) for a in agents)

@@ -477,7 +477,8 @@
     "name": "deck: state",
     "path": "/api/controls/state",
     "ignore": [
-      "/media"
+      "/media",
+      "/hardwareLoading"
     ],
     "ignore_on": {
       "darwin": [
@@ -655,7 +656,8 @@
       "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
     },
     "ignore": [
-      "/media"
+      "/media",
+      "/hardwareLoading"
     ],
     "ignore_on": {
       "darwin": [
