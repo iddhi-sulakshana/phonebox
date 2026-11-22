@@ -204,7 +204,9 @@ def _first_json_difference(a, b, path="") -> str | None:
         return None
     if isinstance(a, list):
         if len(a) != len(b):
-            return f"{path or '/'}: {len(a)} items != {len(b)} items"
+            # both lists, so a CI log says which items differ (a run on a hosted runner cannot be looked at later)
+            return (f"{path or '/'}: {len(a)} items != {len(b)} items "
+                    f"(C# {json.dumps(a)[:1500]} | Rust {json.dumps(b)[:1500]})")
         for i, (x, y) in enumerate(zip(a, b)):
             d = _first_json_difference(x, y, f"{path}/{i}")
             if d:

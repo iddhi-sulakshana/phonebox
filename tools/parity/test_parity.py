@@ -85,6 +85,17 @@ class DiffTests(unittest.TestCase):
         self.assertEqual(len(parity.diff(entry, a, resp(body=b'{"link": "x", "expiresAt": 2, "attempt": 2}'))), 1)
 
 
+class ListDifferenceTests(unittest.TestCase):
+    def test_lists_of_different_lengths_show_both_lists(self):
+        entry = {"name": "adapters", "compare": "json"}
+        a = resp(body=b'[{"name": "en0"}, {"name": "en1"}]')
+        b = resp(body=b'[{"name": "en0"}]')
+        [problem] = parity.diff(entry, a, b)
+        self.assertIn("2 items != 1 items", problem)
+        self.assertIn('"en1"', problem)
+        self.assertIn('Rust [{"name": "en0"}]', problem)
+
+
 class ConfigTests(unittest.TestCase):
     def test_a_wifi_fixture_gets_each_agents_wifi_port(self):
         text = '{\n  "lan": { "enabled": true, "port": 8766, "token": "t" },\n  "x": 1\n}\n'
