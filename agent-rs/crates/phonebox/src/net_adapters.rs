@@ -80,6 +80,30 @@ pub(crate) fn mac_kind(sdl_type: u8, media: Media) -> AdapterKind {
     }
 }
 
+/// The `GetAdaptersAddresses` flags .NET passes (`SystemNetworkInterface.GetNetworkInterfaces`): gateways, WINS and
+/// all interfaces, so filter and hidden interfaces are listed as C# listed them.
+#[cfg_attr(not(windows), allow(dead_code))]
+const GAA_FLAGS: u32 = 0x0040 | 0x0080 | 0x0100;
+
+/// `struct ifmediareq` (net/if.h, inside `#pragma pack(4)`).
+#[cfg(unix)]
+#[repr(C, packed(4))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+struct IfMediaReq {
+    ifm_name: [libc::c_char; libc::IFNAMSIZ],
+    ifm_current: i32,
+    ifm_mask: i32,
+    ifm_status: i32,
+    ifm_active: i32,
+    ifm_count: i32,
+    ifm_ulist: *mut i32,
+}
+
+/// `_IOWR('i', 56, struct ifmediareq)`.
+#[cfg(unix)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+const SIOCGIFMEDIA: libc::c_ulong = 0xc02c_6938;
+
 /// Name, then for each address family entry: IPv4 address, link-level type/flags/counters (macOS).
 #[cfg(unix)]
 struct IfAddr {
@@ -223,21 +247,6 @@ mod os {
 mod os {
     use super::*;
 
-    /// `struct ifmediareq` (net/if_media.h).
-    #[repr(C)]
-    struct IfMediaReq {
-        ifm_name: [libc::c_char; libc::IFNAMSIZ],
-        ifm_current: i32,
-        ifm_mask: i32,
-        ifm_status: i32,
-        ifm_active: i32,
-        ifm_count: i32,
-        ifm_ulist: *mut i32,
-    }
-
-    /// `_IOWR('i', 56, struct ifmediareq)`.
-    const SIOCGIFMEDIA: libc::c_ulong = 0xc030_6938;
-
     /// `SIOCGIFMEDIA` for `name`, as .NET asks it.
     fn media(name: &str) -> Media {
         // SAFETY: a plain datagram socket, closed below.
@@ -260,10 +269,8 @@ mod os {
         // SAFETY: closes the socket opened above, once.
         unsafe { libc::close(fd) };
         if rc == 0 {
-            Media::Read {
-                current: request.ifm_current,
-                status: request.ifm_status,
-            }
+            let (current, status) = (request.ifm_current, request.ifm_status);
+            Media::Read { current, status }
         } else if errno == Some(libc::EOPNOTSUPP) || errno == Some(libc::EINVAL) {
             Media::Unsupported
         } else {
@@ -300,8 +307,8 @@ mod os {
 mod os {
     use super::*;
     use windows::Win32::NetworkManagement::IpHelper::{
-        GAA_FLAG_INCLUDE_GATEWAYS, GetAdaptersAddresses, GetIfEntry2, IP_ADAPTER_ADDRESSES_LH,
-        MIB_IF_ROW2,
+        GET_ADAPTERS_ADDRESSES_FLAGS as Flags, GetAdaptersAddresses, GetIfEntry2,
+        IP_ADAPTER_ADDRESSES_LH, MIB_IF_ROW2,
     };
     use windows::Win32::Networking::WinSock::{AF_INET, AF_UNSPEC, SOCKADDR_IN};
 
@@ -327,7 +334,7 @@ mod os {
             let rc = unsafe {
                 GetAdaptersAddresses(
                     u32::from(AF_UNSPEC.0),
-                    GAA_FLAG_INCLUDE_GATEWAYS,
+                    Flags(super::GAA_FLAGS),
                     None,
                     Some(buf.as_mut_ptr().cast()),
                     &mut size,
@@ -422,6 +429,30 @@ mod tests {
         assert!(!mac_up(IFF_UP | IFF_RUNNING, read(ETHER, 0)));
         assert!(!mac_up(IFF_UP | IFF_RUNNING, read(WIFI, 0)));
         assert!(!mac_up(IFF_UP | IFF_RUNNING, Media::Failed));
+    }
+
+    #[test]
+    fn windows_lists_adapters_with_dotnets_flags() {
+        // IncludeWins 0x40 | IncludeGateways 0x80 | IncludeAllInterfaces 0x100
+        assert_eq!(GAA_FLAGS, 0x01c0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_media_request_is_the_sdks() {
+        // net/if.h wraps it in #pragma pack(4): the list pointer follows the five ints with no padding
+        assert_eq!(std::mem::size_of::<IfMediaReq>(), 44);
+        let iowr = |group: u8, number: u8, size: usize| {
+            0xc000_0000
+                | ((size as libc::c_ulong & 0x1fff) << 16)
+                | (libc::c_ulong::from(group) << 8)
+                | libc::c_ulong::from(number)
+        };
+        assert_eq!(
+            SIOCGIFMEDIA,
+            iowr(b'i', 56, std::mem::size_of::<IfMediaReq>())
+        );
+        assert_eq!(SIOCGIFMEDIA, 0xc02c_6938);
     }
 
     #[test]
