@@ -98,26 +98,31 @@ jobs:
     strategy:
       matrix:
         include:
-          - { os: windows-latest, rid: win-x64, exe: .exe }
+          - { os: windows-latest, rid: win-x64, exe: .exe, target: "" }
           # Ubuntu 22.04: glibc 2.35, so the agent also runs on older distributions than a 24.04 build would
-          - { os: ubuntu-22.04, rid: linux-x64, exe: "" }
-          - { os: ubuntu-22.04-arm, rid: linux-arm64, exe: "" }
-          - { os: macos-latest, rid: osx-arm64, exe: "" }
-          - { os: macos-15-intel, rid: osx-x64, exe: "" }
+          - { os: ubuntu-22.04, rid: linux-x64, exe: "", target: "" }
+          - { os: ubuntu-22.04-arm, rid: linux-arm64, exe: "", target: "" }
+          - { os: macos-latest, rid: osx-arm64, exe: "", target: "" }
+          # built for Intel on Apple silicon, as rust.yml tests it; the smoke test runs it under Rosetta 2
+          - { os: macos-latest, rid: osx-x64, exe: "", target: x86_64-apple-darwin }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Rust toolchain (from rust-toolchain.toml)
-        run: rustup toolchain install 1.98.0 --profile minimal
-      # one executable that embeds everything it serves; Windows links the C runtime in (agent-rs/.cargo/config.toml)
+        run: rustup toolchain install 1.98.0 --profile minimal ${{ matrix.target && format('-t {0}', matrix.target) || '' }}
+      - name: Rosetta 2
+        if: matrix.target == 'x86_64-apple-darwin'
+        run: arch -x86_64 /usr/bin/true 2>/dev/null || softwareupdate --install-rosetta --agree-to-license
+      # one executable that embeds everything it serves; Windows links the C runtime in (agent-rs/.cargo/config.toml).
+      # No build cache here: a release builds from scratch
       - name: Build the agent
         working-directory: agent-rs
-        run: cargo build --release --locked -p phonebox-agent
+        run: cargo build --release --locked -p phonebox-agent ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
       - name: Stage the zip's two files
         shell: bash
         run: |
           mkdir out
-          cp "agent-rs/target/release/PhoneBoxAgent${{ matrix.exe }}" agent-rs/THIRD-PARTY-NOTICES.txt out/
+          cp "agent-rs/target/${{ matrix.target && format('{0}/', matrix.target) || '' }}release/PhoneBoxAgent${{ matrix.exe }}" agent-rs/THIRD-PARTY-NOTICES.txt out/
       # PhoneBox's own certificate (tools/make-macos-signing-cert.sh): every release has the same designated
       # requirement, so macOS keeps the Accessibility permission across updates (#269). Without the secrets the release
       # stops: an ad hoc signature would make every Mac lose the permission again.
@@ -147,7 +152,8 @@ jobs:
           newest=$(objdump -T out/PhoneBoxAgent | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n1)
           echo "needs $newest"
           [ "$(printf '%s\n' "$newest" GLIBC_2.35 | sort -V | tail -n1)" = GLIBC_2.35 ]
-      - name: Smoke-test the agent on its native architecture
+      # on its own architecture, or under Rosetta 2 for the Intel Mac build
+      - name: Smoke-test the agent
         shell: bash
         run: |
           if [ "$RUNNER_OS" = Windows ]; then py=python; else py=python3; fi

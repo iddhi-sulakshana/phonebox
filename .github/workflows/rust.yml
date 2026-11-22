@@ -1,7 +1,10 @@
 name: rust
 
 on:
+  # main and pull requests (a branch with an open pull request would otherwise run everything twice, and macOS runners
+  # are few)
   push:
+    branches: [main]
     # the agent embeds the panel and (until the switch) the settings page and catalogs from agent/, the C# oracle
     paths: ["agent-rs/**", "agent/**", "android/app/src/main/assets/www/**", "tools/parity/**", "tools/ui-tests/**", "tools/check-notices.py", "tools/zip-agent.py", "tools/smoke-agent.py", "tools/test-release-metadata.py", ".github/workflows/rust.yml"]
   pull_request:
@@ -16,10 +19,17 @@ permissions:
 
 jobs:
   test:
+    name: test (${{ matrix.name }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
+        include:
+          - { name: ubuntu-latest, os: ubuntu-latest, target: "" }
+          - { name: ubuntu-24.04-arm, os: ubuntu-24.04-arm, target: "" }
+          - { name: macos-latest, os: macos-latest, target: "" }
+          # the Intel Mac build, its tests run by Rosetta 2 on Apple silicon (the Intel runners are several times slower)
+          - { name: macos x64 under Rosetta, os: macos-latest, target: x86_64-apple-darwin }
+          - { name: windows-latest, os: windows-latest, target: "" }
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -27,10 +37,17 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Rust toolchain (from rust-toolchain.toml)
-        run: rustup toolchain install 1.98.0 --profile minimal -c clippy,rustfmt
+        run: rustup toolchain install 1.98.0 --profile minimal -c clippy,rustfmt ${{ matrix.target && format('-t {0}', matrix.target) || '' }}
+      - name: Rosetta 2
+        if: matrix.target == 'x86_64-apple-darwin'
+        run: arch -x86_64 /usr/bin/true 2>/dev/null || softwareupdate --install-rosetta --agree-to-license
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: agent-rs
+          key: ${{ matrix.target }}
       - run: cargo fmt --all --check
-      - run: cargo clippy --locked --workspace --all-targets -- -D warnings
-      - run: cargo test --locked --workspace
+      - run: cargo clippy --locked --workspace --all-targets ${{ matrix.target && format('--target {0}', matrix.target) || '' }} -- -D warnings
+      - run: cargo test --locked --workspace ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
       # the notices every zip carries must name each crate the agent is built from (agent-rs/scripts/notices.sh)
       - name: Third-party notices and the release version checks
         if: matrix.os == 'ubuntu-latest'
@@ -46,25 +63,33 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: windows-latest, rid: win-x64, exe: .exe }
-          - { os: ubuntu-22.04, rid: linux-x64, exe: "" }
-          - { os: ubuntu-22.04-arm, rid: linux-arm64, exe: "" }
-          - { os: macos-latest, rid: osx-arm64, exe: "" }
-          - { os: macos-15-intel, rid: osx-x64, exe: "" }
+          - { os: windows-latest, rid: win-x64, exe: .exe, target: "" }
+          - { os: ubuntu-22.04, rid: linux-x64, exe: "", target: "" }
+          - { os: ubuntu-22.04-arm, rid: linux-arm64, exe: "", target: "" }
+          - { os: macos-latest, rid: osx-arm64, exe: "", target: "" }
+          # built for Intel on Apple silicon; the smoke test runs it under Rosetta 2
+          - { os: macos-latest, rid: osx-x64, exe: "", target: x86_64-apple-darwin }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Rust toolchain (from rust-toolchain.toml)
-        run: rustup toolchain install 1.98.0 --profile minimal
+        run: rustup toolchain install 1.98.0 --profile minimal ${{ matrix.target && format('-t {0}', matrix.target) || '' }}
+      - name: Rosetta 2
+        if: matrix.target == 'x86_64-apple-darwin'
+        run: arch -x86_64 /usr/bin/true 2>/dev/null || softwareupdate --install-rosetta --agree-to-license
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: agent-rs
+          key: ${{ matrix.rid }}
       - name: Build the agent
         working-directory: agent-rs
-        run: cargo build --release --locked -p phonebox-agent
+        run: cargo build --release --locked -p phonebox-agent ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
       - name: Stage the zip's two files
         id: stage
         shell: bash
         run: |
           mkdir out
-          cp "agent-rs/target/release/PhoneBoxAgent${{ matrix.exe }}" agent-rs/THIRD-PARTY-NOTICES.txt out/
+          cp "agent-rs/target/${{ matrix.target && format('{0}/', matrix.target) || '' }}release/PhoneBoxAgent${{ matrix.exe }}" agent-rs/THIRD-PARTY-NOTICES.txt out/
           # the first `version =` of agent-rs/Cargo.toml is [workspace.package]'s (Ubuntu 22.04's Python has no tomllib)
           echo "version=$(sed -n 's/^version = "\(.*\)"$/\1/p' agent-rs/Cargo.toml | head -n1)" >> "$GITHUB_OUTPUT"
       # the release signs with PhoneBox's own certificate; the same action with a throwaway one here (as build.yml)
@@ -123,7 +148,8 @@ jobs:
           newest=$(objdump -T out/PhoneBoxAgent | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n1)
           echo "needs $newest"
           [ "$(printf '%s\n' "$newest" GLIBC_2.35 | sort -V | tail -n1)" = GLIBC_2.35 ]
-      - name: Smoke-test the agent on its native architecture
+      # on its own architecture, or under Rosetta 2 for the Intel Mac build
+      - name: Smoke-test the agent
         shell: bash
         run: |
           if [ "$RUNNER_OS" = Windows ]; then py=python; else py=python3; fi
@@ -146,8 +172,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Apple silicon only: the comparison is about behavior, which does not depend on the processor (the Intel
+          # build's own tests run under Rosetta 2 in the test job)
           - { os: macos-latest, tfm: net10.0, exe: "", python: python3 }
-          - { os: macos-15-intel, tfm: net10.0, exe: "", python: python3 }
           - { os: windows-latest, tfm: net10.0-windows10.0.19041.0, exe: ".exe", python: python }
     runs-on: ${{ matrix.os }}
     steps:
@@ -157,6 +184,9 @@ jobs:
           dotnet-version: 10.0.x
       - name: Rust toolchain (from rust-toolchain.toml)
         run: rustup toolchain install 1.98.0 --profile minimal
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: agent-rs
       - name: Build the C# agent
         run: dotnet build -c Release agent/PhoneBox.Agent -f ${{ matrix.tfm }} -v q -nologo
       - name: Build the Rust agent
@@ -236,6 +266,9 @@ jobs:
           node-version: 22
       - name: Rust toolchain (from rust-toolchain.toml)
         run: rustup toolchain install 1.98.0 --profile minimal
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: agent-rs
       - name: Install Playwright
         working-directory: tools/ui-tests
         run: npm ci && npx playwright install --with-deps chromium
