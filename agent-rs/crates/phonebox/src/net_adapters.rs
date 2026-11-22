@@ -35,6 +35,51 @@ pub fn all() -> Vec<NetAdapter> {
     os::all()
 }
 
+/// What `SIOCGIFMEDIA` said about a macOS interface: no media (virtual interfaces), an error, or its current media
+/// word and status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) enum Media {
+    Unsupported,
+    Failed,
+    Read { current: i32, status: i32 },
+}
+
+/// .NET's `OperationalStatus.Up` on macOS (`GetNativeIPInterfaceStatistics`): administratively up (`IFF_UP`) with a
+/// link: an active media, or no media at all (loopback, tunnels).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) fn mac_up(flags: u32, media: Media) -> bool {
+    const IFF_UP: u32 = 0x1;
+    const IFM_AVALID: i32 = 0x1;
+    const IFM_ACTIVE: i32 = 0x2;
+    flags & IFF_UP != 0
+        && match media {
+            Media::Unsupported => true,
+            Media::Failed => false,
+            Media::Read { status, .. } => status & IFM_AVALID != 0 && status & IFM_ACTIVE != 0,
+        }
+}
+
+/// .NET's `NetworkInterfaceType` on macOS: the link-level `sdl_type` (if_types.h), with Ethernet whose media is
+/// 802.11 reported as Wi-Fi.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) fn mac_kind(sdl_type: u8, media: Media) -> AdapterKind {
+    const IFM_NMASK: i32 = 0xe0;
+    const IFM_IEEE80211: i32 = 0x80;
+    match sdl_type {
+        6 => match media {
+            Media::Read { current, .. } if current & IFM_NMASK == IFM_IEEE80211 => {
+                AdapterKind::Wireless80211
+            }
+            _ => AdapterKind::Ethernet,
+        },
+        24 => AdapterKind::Loopback,
+        55 | 57 => AdapterKind::Tunnel,
+        23 => AdapterKind::Ppp,
+        _ => AdapterKind::Unknown,
+    }
+}
+
 /// Name, then for each address family entry: IPv4 address, link-level type/flags/counters (macOS).
 #[cfg(unix)]
 struct IfAddr {
@@ -178,15 +223,51 @@ mod os {
 mod os {
     use super::*;
 
-    /// .NET's mapping of the link-level `sdl_type` (if_types.h).
-    pub fn kind_of(sdl_type: u8) -> AdapterKind {
-        match sdl_type {
-            6 => AdapterKind::Ethernet,
-            24 => AdapterKind::Loopback,
-            71 => AdapterKind::Wireless80211,
-            55 | 57 => AdapterKind::Tunnel,
-            23 => AdapterKind::Ppp,
-            _ => AdapterKind::Unknown,
+    /// `struct ifmediareq` (net/if_media.h).
+    #[repr(C)]
+    struct IfMediaReq {
+        ifm_name: [libc::c_char; libc::IFNAMSIZ],
+        ifm_current: i32,
+        ifm_mask: i32,
+        ifm_status: i32,
+        ifm_active: i32,
+        ifm_count: i32,
+        ifm_ulist: *mut i32,
+    }
+
+    /// `_IOWR('i', 56, struct ifmediareq)`.
+    const SIOCGIFMEDIA: libc::c_ulong = 0xc030_6938;
+
+    /// `SIOCGIFMEDIA` for `name`, as .NET asks it.
+    fn media(name: &str) -> Media {
+        // SAFETY: a plain datagram socket, closed below.
+        let fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
+        if fd < 0 {
+            return Media::Failed;
+        }
+        // SAFETY: all-zero is a valid ifmediareq (no list asked for).
+        let mut request: IfMediaReq = unsafe { std::mem::zeroed() };
+        for (dst, src) in request
+            .ifm_name
+            .iter_mut()
+            .zip(name.bytes().take(libc::IFNAMSIZ - 1))
+        {
+            *dst = src as libc::c_char;
+        }
+        // SAFETY: `request` is a valid ifmediareq the call fills; `fd` is open.
+        let rc = unsafe { libc::ioctl(fd, SIOCGIFMEDIA, &mut request as *mut IfMediaReq) };
+        let errno = std::io::Error::last_os_error().raw_os_error();
+        // SAFETY: closes the socket opened above, once.
+        unsafe { libc::close(fd) };
+        if rc == 0 {
+            Media::Read {
+                current: request.ifm_current,
+                status: request.ifm_status,
+            }
+        } else if errno == Some(libc::EOPNOTSUPP) || errno == Some(libc::EINVAL) {
+            Media::Unsupported
+        } else {
+            Media::Failed
         }
     }
 
@@ -195,17 +276,16 @@ mod os {
         group(&entries)
             .into_iter()
             .map(|(name, ipv4)| {
-                let link = entries.iter().find(|e| e.name == name).and_then(|_| {
-                    entries
-                        .iter()
-                        .filter(|e| e.name == name)
-                        .find_map(|e| e.link)
-                });
+                let link = entries
+                    .iter()
+                    .filter(|e| e.name == name)
+                    .find_map(|e| e.link);
+                let media = media(&name);
                 NetAdapter {
                     id: name.clone(),
                     description: name.clone(),
-                    kind: link.map_or(AdapterKind::Unknown, |l| kind_of(l.0)),
-                    up: link.is_some_and(|l| l.1 & libc::IFF_RUNNING as u32 != 0),
+                    kind: link.map_or(AdapterKind::Unknown, |l| mac_kind(l.0, media)),
+                    up: link.is_some_and(|l| mac_up(l.1, media)),
                     bytes: link.map(|l| (l.2, l.3)),
                     has_ipv4_gateway: false,
                     ipv4,
@@ -321,6 +401,49 @@ mod os {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const IFF_UP: u32 = 0x1;
+    const IFF_RUNNING: u32 = 0x40;
+    const ETHER: i32 = 0x20;
+    const WIFI: i32 = 0x80;
+    const VALID: i32 = 0x1;
+    const ACTIVE: i32 = 0x2;
+
+    #[test]
+    fn a_mac_interface_is_up_as_dotnet_says() {
+        let read = |current, status| Media::Read { current, status };
+        // loopback and tunnels have no media: up when the administrator enabled them
+        assert!(mac_up(IFF_UP | IFF_RUNNING, Media::Unsupported));
+        assert!(!mac_up(IFF_RUNNING, Media::Unsupported));
+        // Ethernet and Wi-Fi: an active link
+        assert!(mac_up(IFF_UP | IFF_RUNNING, read(ETHER, VALID | ACTIVE)));
+        assert!(!mac_up(IFF_UP | IFF_RUNNING, read(ETHER, VALID)));
+        // no valid media status, or the question failed: not up (.NET says Unknown or Down)
+        assert!(!mac_up(IFF_UP | IFF_RUNNING, read(ETHER, 0)));
+        assert!(!mac_up(IFF_UP | IFF_RUNNING, read(WIFI, 0)));
+        assert!(!mac_up(IFF_UP | IFF_RUNNING, Media::Failed));
+    }
+
+    #[test]
+    fn a_mac_interface_type_is_dotnets() {
+        let wifi = Media::Read {
+            current: WIFI,
+            status: VALID | ACTIVE,
+        };
+        let wired = Media::Read {
+            current: ETHER,
+            status: VALID | ACTIVE,
+        };
+        assert_eq!(mac_kind(6, wifi), AdapterKind::Wireless80211);
+        assert_eq!(mac_kind(6, wired), AdapterKind::Ethernet);
+        assert_eq!(mac_kind(6, Media::Failed), AdapterKind::Ethernet);
+        assert_eq!(mac_kind(71, Media::Unsupported), AdapterKind::Unknown);
+        assert_eq!(mac_kind(24, Media::Unsupported), AdapterKind::Loopback);
+        assert_eq!(mac_kind(55, Media::Unsupported), AdapterKind::Tunnel);
+        assert_eq!(mac_kind(57, Media::Unsupported), AdapterKind::Tunnel);
+        assert_eq!(mac_kind(23, Media::Unsupported), AdapterKind::Ppp);
+        assert_eq!(mac_kind(209, Media::Unsupported), AdapterKind::Unknown);
+    }
 
     #[test]
     fn the_machine_has_a_loopback_and_named_adapters() {
