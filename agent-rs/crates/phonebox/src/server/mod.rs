@@ -20,6 +20,8 @@ mod routes_update;
 mod routes_widgets;
 pub mod static_files;
 #[cfg(test)]
+mod stop_tests;
+#[cfg(test)]
 mod tests_task10;
 #[cfg(feature = "tls")]
 pub mod tls;
@@ -616,25 +618,49 @@ fn claude_hook(
 /// The agent is stopping (Ctrl+C, SIGTERM, or a restart from the settings page). Live streams end on it, so the
 /// server's graceful shutdown can finish while a phone is connected.
 #[derive(Clone)]
-pub struct Stop(Arc<tokio::sync::watch::Sender<bool>>);
+pub struct Stop(Arc<StopState>);
+
+/// The async side (a watch channel) and the blocking side (a flag and a condition variable) of [`Stop`].
+struct StopState {
+    tx: tokio::sync::watch::Sender<bool>,
+    flag: Mutex<bool>,
+    woken: std::sync::Condvar,
+}
 
 impl Default for Stop {
     fn default() -> Self {
-        Stop(Arc::new(tokio::sync::watch::channel(false).0))
+        Stop(Arc::new(StopState {
+            tx: tokio::sync::watch::channel(false).0,
+            flag: Mutex::new(false),
+            woken: std::sync::Condvar::new(),
+        }))
     }
 }
 
 impl Stop {
     pub fn stop(&self) {
-        self.0.send_replace(true);
+        self.0.tx.send_replace(true);
+        *self.0.flag.lock().unwrap_or_else(|e| e.into_inner()) = true;
+        self.0.woken.notify_all();
     }
     pub fn is_stopped(&self) -> bool {
-        *self.0.borrow()
+        *self.0.tx.borrow()
     }
     /// Returns once [`Stop::stop`] was called (at once if it already was).
     pub async fn stopped(&self) {
-        let mut rx = self.0.subscribe();
+        let mut rx = self.0.tx.subscribe();
         let _ = rx.wait_for(|stopped| *stopped).await;
+    }
+    /// Blocks this (plain) thread for `d`, or until [`Stop::stop`] is called: true when the agent is stopping. One
+    /// timed wait, so a loop that sleeps with it wakes once per period, as C#'s `Task.Delay(d, ct)` does.
+    pub fn sleep(&self, d: std::time::Duration) -> bool {
+        let flag = self.0.flag.lock().unwrap_or_else(|e| e.into_inner());
+        let (flag, _) = self
+            .0
+            .woken
+            .wait_timeout_while(flag, d, |stopped| !*stopped)
+            .unwrap_or_else(|e| e.into_inner());
+        *flag
     }
 }
 

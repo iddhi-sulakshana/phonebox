@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::{Mutex, OnceLock, mpsc};
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 /// Places searched after PATH.
@@ -83,8 +83,97 @@ fn run_inner(timeout_ms: u64, tool: &str, args: &[&str], need_success: bool) -> 
     }
     let mut child = cmd.spawn().ok()?;
     let deadline = Instant::now() + Duration::from_millis(timeout_ms);
-    let (tx, rx) = mpsc::channel::<(bool, Vec<u8>)>();
-    for (is_out, mut pipe) in [
+    let (status, output) = wait_for(&mut child, deadline)?;
+    if need_success && !status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&output).into_owned())
+}
+
+/// The tool's exit status and standard output (standard error is drained), read with poll(2) in this thread: it
+/// sleeps until output or the end of the output arrives, or the deadline, never on a timer (C#'s WaitForExitAsync).
+/// None when the deadline passes: a tool still running ends with its process group; one that exited while a child of
+/// its own still holds the output open is left alone.
+#[cfg(unix)]
+fn wait_for(
+    child: &mut std::process::Child,
+    deadline: Instant,
+) -> Option<(std::process::ExitStatus, Vec<u8>)> {
+    use std::os::fd::AsRawFd;
+    let mut out = child.stdout.take();
+    let mut err = child.stderr.take();
+    let mut stdout = Vec::new();
+    let mut buf = vec![0u8; 64 * 1024];
+    while out.is_some() || err.is_some() {
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            if !matches!(child.try_wait(), Ok(Some(_))) {
+                kill_tree(child);
+            }
+            return None;
+        }
+        let mut fds: Vec<libc::pollfd> = [
+            out.as_ref().map(|p| p.as_raw_fd()),
+            err.as_ref().map(|p| p.as_raw_fd()),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|fd| libc::pollfd {
+            fd,
+            events: libc::POLLIN,
+            revents: 0,
+        })
+        .collect();
+        // rounded up, so that a wait shorter than a millisecond does not spin
+        let ms = i32::try_from(left.as_millis() + 1).unwrap_or(i32::MAX);
+        // SAFETY: fds holds fds.len() initialised pollfd entries for pipes this function owns and keeps open.
+        let ready = unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, ms) };
+        if ready < 0 {
+            if std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
+                continue;
+            }
+            kill_tree(child);
+            return None;
+        }
+        let mut ready = fds.iter().map(|fd| fd.revents != 0);
+        if out.is_some() && ready.next() == Some(true) {
+            match out.as_mut().map(|p| p.read(&mut buf)) {
+                Some(Ok(n)) if n > 0 => stdout.extend_from_slice(&buf[..n]),
+                Some(Err(e)) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                _ => out = None,
+            }
+        }
+        if err.is_some() && ready.next() == Some(true) {
+            match err.as_mut().map(|p| p.read(&mut buf)) {
+                Some(Ok(n)) if n > 0 => {}
+                Some(Err(e)) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                _ => err = None,
+            }
+        }
+    }
+    // the output ended, so the tool has exited (or is exiting); one that closed its output and runs on gets the rest
+    // of the deadline
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Some((status, stdout)),
+            Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
+            _ => {
+                kill_tree(child);
+                return None;
+            }
+        }
+    }
+}
+
+/// [`wait_for`] where poll(2) is missing: a thread per output pipe, the exit looked at every 10 ms (nothing on Windows
+/// runs these tools).
+#[cfg(not(unix))]
+fn wait_for(
+    child: &mut std::process::Child,
+    deadline: Instant,
+) -> Option<(std::process::ExitStatus, Vec<u8>)> {
+    let (tx, rx) = std::sync::mpsc::channel::<(bool, Vec<u8>)>();
+    let pipes: [(bool, Option<Box<dyn Read + Send>>); 2] = [
         (
             true,
             child
@@ -99,10 +188,9 @@ fn run_inner(timeout_ms: u64, tool: &str, args: &[&str], need_success: bool) -> 
                 .take()
                 .map(|p| Box::new(p) as Box<dyn Read + Send>),
         ),
-    ]
-    .into_iter()
-    .filter_map(|(o, p)| p.map(|p| (o, p)))
-    {
+    ];
+    for (is_out, pipe) in pipes {
+        let Some(mut pipe) = pipe else { continue };
         let tx = tx.clone();
         std::thread::spawn(move || {
             let mut bytes = Vec::new();
@@ -111,17 +199,15 @@ fn run_inner(timeout_ms: u64, tool: &str, args: &[&str], need_success: bool) -> 
         });
     }
     drop(tx);
-
     let status = loop {
         match child.try_wait() {
-            Ok(Some(status)) => break Some(status),
+            Ok(Some(status)) => break status,
             Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(10)),
-            _ => break None,
+            _ => {
+                kill_tree(child);
+                return None;
+            }
         }
-    };
-    let Some(status) = status else {
-        kill_tree(&mut child);
-        return None;
     };
     let mut output = None;
     for _ in 0..2 {
@@ -132,10 +218,7 @@ fn run_inner(timeout_ms: u64, tool: &str, args: &[&str], need_success: bool) -> 
             Err(_) => return None, // a child still holds the output open: the deadline wins
         }
     }
-    if need_success && !status.success() {
-        return None;
-    }
-    output.map(|b| String::from_utf8_lossy(&b).into_owned())
+    output.map(|bytes| (status, bytes))
 }
 
 /// `Process.Kill(entireProcessTree: true)`: the process group on Unix (the tool runs in its own group); these macOS
@@ -276,6 +359,35 @@ mod tests {
         );
         assert_eq!(run.join().unwrap(), None);
         assert!(!done_early, "the run waited for the child");
+    }
+
+    /// This thread's voluntary context switches (Linux): one per wake from a wait.
+    #[cfg(target_os = "linux")]
+    fn my_wakes() -> u64 {
+        let status = std::fs::read_to_string("/proc/thread-self/status").unwrap();
+        let n = status
+            .lines()
+            .find_map(|l| l.strip_prefix("voluntary_ctxt_switches:"))
+            .unwrap();
+        n.trim().parse().unwrap()
+    }
+
+    // While a tool runs, the caller sleeps until the tool's output or exit arrives (C#'s WaitForExitAsync); it used to
+    // look every 10 ms, 100 wakes a second per tool, which tripled the idle agent's wake-ups on the MacBook (the media
+    // and audio readers run nowplaying-cli and osascript every few seconds).
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn waiting_for_a_tool_does_not_poll() {
+        let before = my_wakes();
+        assert_eq!(
+            run_with_timeout(5000, "sleep", &["0.5"]),
+            Some(String::new())
+        );
+        let woke = my_wakes() - before;
+        assert!(
+            woke <= 10,
+            "the caller woke {woke} times while the tool ran for 0.5 s"
+        );
     }
 
     #[test]

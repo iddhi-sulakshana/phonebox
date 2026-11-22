@@ -85,7 +85,8 @@ impl MediaMonitor {
         *locked(&self.last_sample)
     }
 
-    /// Reads what plays every second; a change that matters pokes the phone.
+    /// Reads what plays every second; a change that matters pokes the phone. Between reads the thread waits once
+    /// (one wake per second when idle, as C#'s `Task.Delay(1000, ct)`), and the agent's stop ends the wait at once.
     pub fn start(self: &Arc<Self>, stop: crate::server::Stop) -> std::thread::JoinHandle<()> {
         let me = self.clone();
         std::thread::Builder::new()
@@ -93,11 +94,8 @@ impl MediaMonitor {
             .spawn(move || {
                 while !stop.is_stopped() {
                     me.poll();
-                    for _ in 0..10 {
-                        if stop.is_stopped() {
-                            break;
-                        }
-                        std::thread::sleep(Duration::from_millis(100));
+                    if stop.sleep(Duration::from_secs(1)) {
+                        break;
                     }
                 }
             })
@@ -886,6 +884,57 @@ impl reqwest::dns::Resolve for PublicResolver {
 mod tests {
     use super::*;
     use chrono::{TimeDelta, Utc};
+
+    /// The "media" threads of this process by id (Linux), with their voluntary context switches: one per wake from a
+    /// sleep.
+    #[cfg(target_os = "linux")]
+    fn media_threads() -> std::collections::HashMap<String, u64> {
+        std::fs::read_dir("/proc/self/task")
+            .unwrap()
+            .flatten()
+            .filter(|t| {
+                std::fs::read_to_string(t.path().join("comm")).is_ok_and(|c| c.trim() == "media")
+            })
+            .filter_map(|t| {
+                let status = std::fs::read_to_string(t.path().join("status")).ok()?;
+                let n = status
+                    .lines()
+                    .find_map(|l| l.strip_prefix("voluntary_ctxt_switches:"))?;
+                Some((
+                    t.file_name().to_string_lossy().into_owned(),
+                    n.trim().parse().ok()?,
+                ))
+            })
+            .collect()
+    }
+
+    // Between polls the thread waits once (C#'s Task.Delay(1000, ct)); it used to wake ten times a second to look for
+    // the stop, which made the idle agent wake three times as often as C# on the MacBook resource run.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_media_thread_wakes_once_a_second_between_polls() {
+        let before: std::collections::HashSet<String> = media_threads().into_keys().collect();
+        let stop = crate::server::Stop::default();
+        let thread = MediaMonitor::new().start(stop.clone());
+        std::thread::sleep(Duration::from_millis(300)); // past the first poll
+        let mine = |all: std::collections::HashMap<String, u64>| -> u64 {
+            all.into_iter()
+                .filter(|(id, _)| !before.contains(id))
+                .map(|(_, n)| n)
+                .sum()
+        };
+        let start = mine(media_threads());
+        std::thread::sleep(Duration::from_secs(2));
+        let woke = mine(media_threads()) - start;
+        stop.stop();
+        let stopped_at = Instant::now();
+        thread.join().unwrap();
+        assert!(
+            stopped_at.elapsed() < Duration::from_secs(2),
+            "the stop ends the wait at once"
+        );
+        assert!(woke <= 8, "the media thread woke {woke} times in 2 s");
+    }
 
     fn monitor() -> Arc<MediaMonitor> {
         let m = MediaMonitor::new();
