@@ -2,9 +2,9 @@ name: release
 
 # Builds every release artifact on GitHub's runners and publishes them with checksums as a GitHub release: the Rust
 # agent (agent-rs/) for five targets and the Android app. The version is agent-rs/Cargo.toml's (docs/RELEASING.md).
-# Until the switch it is 1.0.0-alpha.N, published as a pre-release that never becomes "latest"; a final version such as
-# 1.0.0 also needs the `final` input (ask the owner first). Start it from Actions › release › Run workflow, on the
-# branch to release, after bumping the version.
+# A pre-release (x.y.z-alpha.N) is published as a pre-release that never becomes "latest"; a final version (such as
+# 1.0.0) also needs the `final` input, and only a published final release from main updates the Scoop and winget
+# manifests. Start it from Actions › release › Run workflow, on the branch to release, after bumping the version.
 #
 # The APK must be signed with the same key as the app already on the phones, or Android refuses the update. Add the
 # key as repository secrets: PHONEBOX_KEYSTORE_BASE64 (base64 of the .jks / .keystore file), PHONEBOX_STORE_PASSWORD,
@@ -216,7 +216,7 @@ jobs:
           ---
           The Windows agent is not code-signed. [Privacy policy](https://github.com/${{ github.repository }}/blob/main/PRIVACY.md)
           EOF
-      # a pre-release (1.0.0-alpha.N) is never "latest": setup and the updater of a stable install skip it
+      # a pre-release (x.y.z-alpha.N) is never "latest": setup and the updater of a stable install skip it
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -230,7 +230,7 @@ jobs:
           gh release create "v$v" dist/* --title "PhoneBox $v" --notes-file notes.md --target "${{ github.sha }}" "${flags[@]}"
       # Only a published final release from main updates the package manifests: a draft's downloads are not public
       # yet, a pre-release is not for package users, and a push from another branch would move main. They point at
-      # this repository from 1.0.0 on (plan 8 moves winget to its own identifier).
+      # this repository from 1.0.0 on (winget under iddhi-sulakshana.PhoneBox; submitting it to winget-pkgs is manual).
       - name: Update the Scoop bucket and the winget manifests
         if: ${{ !inputs.draft && needs.version.outputs.prerelease == 'false' && github.ref == 'refs/heads/main' }}
         run: |

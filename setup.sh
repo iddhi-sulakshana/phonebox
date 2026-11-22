@@ -4,9 +4,6 @@
 #   curl -fsSL https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/main/setup.sh | bash
 #   curl -fsSL https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/main/setup.sh | bash -s -- --no-phone
 #
-# Until 1.0.0 there are only pre-releases (1.0.0-alpha.N): take this script from the rust-agent branch and add --pre:
-#   curl -fsSL https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/rust-agent/setup.sh | bash -s -- --pre
-#
 # Run it as yourself, not with sudo: it asks for sudo only to install packages, and asks first.
 # Running it again updates PhoneBox or repairs the installation; settings are kept.
 #
@@ -17,7 +14,7 @@
 #   --no-autostart      do not start PhoneBox at login
 #   --no-start          install only; do not start the agent
 #   --no-extras         do not offer the optional helpers (playerctl, xprintidle, nowplaying-cli ...)
-#   --version <x.y.z>   install this release instead of the latest (such as 1.0.0-alpha.2)
+#   --version <x.y.z>   install this release instead of the latest (such as 1.0.0)
 #   --pre               install the newest release, pre-releases included
 #   --dry-run           download and check everything, show what would happen, change nothing
 set -euo pipefail
@@ -515,7 +512,7 @@ main() {
     [ -n "$tag" ] || die "could not find a release on GitHub. Check the internet connection, or pass --version <version>."
   else
     tag="$(latest_version)"
-    [ -n "$tag" ] || die "could not find the latest release on GitHub. Check the internet connection; until 1.0.0 there are only pre-releases: pass --pre (or --version 1.0.0-alpha.N)."
+    [ -n "$tag" ] || die "could not find the latest release on GitHub. Check the internet connection, or pass --pre to take the newest pre-release."
   fi
   ver="${tag#v}"
   printf '%s' "$ver" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$' || die "unexpected version '$tag'."

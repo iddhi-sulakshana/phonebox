@@ -1,7 +1,7 @@
 """Validate the source metadata and catalog shipped in every release:  python3 tools/check-release.py [--final]
 
-The release version is agent-rs/Cargo.toml's. Until the switch it is 1.0.0-alpha.N; a final version (no "-") is refused
-unless the release asks for it with --final (the release workflow's `final` input: ask the owner before 1.0.0).
+The release version is agent-rs/Cargo.toml's, x.y.z or x.y.z-alpha.N. A final version (no "-") is refused unless the
+release asks for it with --final (the release workflow's `final` input; build.yml always passes it since 1.0.0).
 """
 import json, pathlib, re, sys, tomllib
 

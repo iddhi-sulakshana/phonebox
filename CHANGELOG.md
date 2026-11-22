@@ -1,25 +1,33 @@
 # Changelog
 
-## 1.0.0-alpha.2 — 2026-11-22
+## 1.0.0 — 2026-11-22
 
-A second pre-release, so an installed 1.0.0-alpha.1 can update itself to a newer release. Nothing else changed.
+The desktop agent is now one Rust program, and replaces the C# agent of 0.9.x. The phone app, the panel and the
+settings page stay as they are: the agent reads the same `config.json`, keeps the same settings, pairing and icons,
+and answers the phone the same way.
 
-## 1.0.0-alpha.1 — 2026-11-22
+- One program with nothing else to install: no .NET runtime, and a much smaller download (see "Resources" below).
+- Updates come from this repository (iddhi-sulakshana/phonebox); a saved update source of the original project is
+  switched to it.
+- The Android app is signed with this repository's key, so a phone with the original project's app uninstalls it
+  once (below); later updates install normally.
 
-A pre-release of the desktop agent rewritten in Rust, which replaces the C# agent from 1.0.0 on. Not for general use
-yet. The phone app, the panel and the settings page stay as they are; the agent reads the same `config.json` and
-answers the phone the same way.
+**Switching from 0.9.x**
 
-- One program with nothing else to install: no .NET runtime, and a much smaller download.
-- Install it with `setup.sh --pre` (macOS, Linux) or `setup.ps1 -Pre` (Windows); an alpha updates itself to the next
-  alpha, then to 1.0.0, from this repository's releases.
-- The Android app is signed with this repository's key: a phone with the app from the original project has to
-  uninstall it once before this one installs.
-- macOS asks once more for Accessibility and Automation (a new signing certificate). Windows builds are not
-  code-signed.
-- The changes listed under Unreleased below are included.
+1. Run this repository's setup script; it installs 1.0.0 over the C# agent and keeps settings, the Wi-Fi pairing,
+   icons and pushed values:
+   - macOS and Linux: `curl -fsSL https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/main/setup.sh | bash`
+   - Windows: `irm https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/main/setup.ps1 | iex`
+2. On the phone, uninstall PhoneBox once: Android refuses an update signed with another key.
+3. Unplug the phone and plug it back in (the agent looks for a missing app when a phone connects), then use
+   Settings › General › Install the phone app. A phone that uses Wi-Fi only: install `PhoneBox-1.0.0.apk` from this
+   release by hand and pair it again.
+4. On macOS, allow Accessibility and Automation once more when asked (the new signing certificate). Windows builds
+   are not code-signed.
 
-## Unreleased
+**Resources**
+
+<!-- resources -->
 
 **Widgets**
 - Audio mixers on Windows: one control per app instead of one per Windows audio session. An app that plays on two
@@ -49,6 +57,51 @@ answers the phone the same way.
   On a rooted phone the shortcuts can turn its charger off and on (for example `adb shell su -c 'echo 0 > …'`), and the
   phone then stays plugged in while not charging. Battery care waited for it to be unplugged, so a battery that ran
   down while the computer was off stayed low once the cable had power again.
+
+**Known limits and differences from the C# agent**
+
+- Windows and Linux were not checked on real hardware (no Windows PC or Linux desktop was at hand): the tray,
+  per-app audio, GPU counters, Razer batteries, X11 idle time and the session-end guard rest on the ported tests and
+  the comparison runs against the C# agent on GitHub's runners and a Linux server.
+- Deliberate differences: unknown fields in `config.json` are kept when the agent saves it; a phone on adb over Wi-Fi
+  that refuses the reverse rule (Android 8 does while its USB connection is still registered) no longer stops the
+  agent's phone round; a `null` night start or end in a hand-edited `config.json` loads as the default time; two
+  `null` values that only hand-written API calls send are handled differently (a nested value field falls back to
+  its default where C# refused the save; a name unknown to its section is refused where C# ignored it).
+- The Claude quota ignores the system proxy, follows no redirects and trusts the built-in root certificates, not the
+  system store: behind a proxy or a TLS-inspecting certificate it shows "Could not reach Anthropic".
+- Pairing still goes through the original project's page (`ersinkoc.github.io/phonebox/pair/`), whose
+  "Download the app" offers that project's app, signed with the other key; install this release's APK instead.
+- Over Wi-Fi the agent speaks HTTP/1.1 only, and a percent-encoded API path is refused.
+- Feeds: items keyed by their link may show as unread once (links are normalized differently).
+- Program icons are fetched once more after the switch; process start times have whole-second precision; a missing
+  answer from `adb devices` clears the phone list for up to 4 seconds.
+- `config.json` may differ byte for byte in how emoji, no-break spaces and private-use characters are escaped, and in
+  numbers in free-form widget options; both agents read either form.
+- On macOS, deck tasks can outlive an agent that was killed, as with the C# agent.
+- `setup.sh --pre` and `setup.ps1 -Pre` take the newest published release, not the highest version.
+- Smaller details: SVG uploads accept internal-DTD entities and refuse SVGs that are not UTF-8; a typing tool can stay
+  running after a dictation hang-up; ping gives DNS at most 5 seconds; the macOS network rate dips every 4 GiB; the
+  busy-port message no longer says "Kestrel".
+
+## 1.0.0-alpha.2 — 2026-11-22
+
+A second pre-release, so an installed 1.0.0-alpha.1 can update itself to a newer release. Nothing else changed.
+
+## 1.0.0-alpha.1 — 2026-11-22
+
+A pre-release of the desktop agent rewritten in Rust, which replaces the C# agent from 1.0.0 on. Not for general use
+yet. The phone app, the panel and the settings page stay as they are; the agent reads the same `config.json` and
+answers the phone the same way.
+
+- One program with nothing else to install: no .NET runtime, and a much smaller download.
+- Install it with `setup.sh --pre` (macOS, Linux) or `setup.ps1 -Pre` (Windows); an alpha updates itself to the next
+  alpha, then to 1.0.0, from this repository's releases.
+- The Android app is signed with this repository's key: a phone with the app from the original project has to
+  uninstall it once before this one installs.
+- macOS asks once more for Accessibility and Automation (a new signing certificate). Windows builds are not
+  code-signed.
+- The changes listed under 1.0.0 above (then "Unreleased") are included.
 
 ## 0.9.23 — 2026-11-20
 

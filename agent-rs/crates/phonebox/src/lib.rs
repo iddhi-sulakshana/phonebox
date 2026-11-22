@@ -96,10 +96,3 @@ pub mod work_buddy;
 mod core_audit_tests;
 #[cfg(test)]
 pub(crate) mod testutil;
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn crate_version_is_alpha() {
-        assert!(env!("CARGO_PKG_VERSION").starts_with("1.0.0-alpha."));
-    }
-}

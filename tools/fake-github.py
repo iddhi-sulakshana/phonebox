@@ -5,7 +5,8 @@
 
 - GET /repos/<owner>/<repo>/releases?...      <folder>/releases.json, read on every request, so a check can switch
                                               releases between rounds
-- GET /repos/<owner>/<repo>/releases/latest   404: no full release, as on the fork before 1.0.0
+- GET /repos/<owner>/<repo>/releases/latest   the first release in releases.json that is neither a draft nor a
+                                              pre-release (what a final agent asks for); 404 when there is none
 - GET /download/<name>                        <folder>/<name> (an asset's browser_download_url)
 - GET /repos/<o>/<r>/releases/assets/<name>   <folder>/<name> (an asset's API url, the fallback)
 
@@ -58,7 +59,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             listed = self.folder / 'releases.json'
             return self.send(200, listed.read_bytes() if listed.exists() else b'[]')
         if len(parts) == 5 and parts[0] == 'repos' and parts[3:] == ['releases', 'latest']:
-            return self.send(404, b'{"message": "Not Found"}')
+            listed = self.folder / 'releases.json'
+            full = [r for r in (json.loads(listed.read_text()) if listed.exists() else [])
+                    if not r.get('draft') and not r.get('prerelease')]
+            return self.send(200, json.dumps(full[0]).encode()) if full else self.send(404, b'{"message": "Not Found"}')
         name = None
         if len(parts) == 2 and parts[0] == 'download':
             name = parts[1]
@@ -73,8 +77,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 def main(argv):
     if argv[:1] == ['release']:
-        # python3 tools/fake-github.py release <port> <tag> <asset names...>  -> one release object as JSON
-        print(json.dumps(release(int(argv[1]), argv[2], argv[3:])))
+        # python3 tools/fake-github.py release <port> <tag> <asset names...>  -> one release object as JSON (a
+        # pre-release when the tag has a "-", as release.yml publishes them)
+        print(json.dumps(release(int(argv[1]), argv[2], argv[3:], prerelease='-' in argv[2])))
         return
     Handler.folder = pathlib.Path(argv[0]).resolve()
     server = http.server.ThreadingHTTPServer(('127.0.0.1', int(argv[1])), Handler)

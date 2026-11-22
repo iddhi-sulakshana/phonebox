@@ -11,10 +11,6 @@
 
     & ([scriptblock]::Create((irm https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/main/setup.ps1))) -NoPhone
 
-  Until 1.0.0 there are only pre-releases (1.0.0-alpha.N): take this script from the rust-agent branch and add -Pre:
-
-    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/rust-agent/setup.ps1))) -Pre
-
   What it does, asking first before anything outside the PhoneBox folders:
     1. Checks this PC (Windows 10/11, x64) and finds the latest PhoneBox release.
     2. Downloads the agent and checks its SHA-256 checksum (and its build provenance when the GitHub CLI is signed in).
@@ -35,7 +31,7 @@
 .PARAMETER NoStart
   Install only; do not start the agent.
 .PARAMETER Version
-  Install this release (for example 1.0.0-alpha.2) instead of the latest.
+  Install this release (for example 1.0.0) instead of the latest.
 .PARAMETER Pre
   Install the newest release, pre-releases included.
 .PARAMETER DryRun
@@ -115,7 +111,7 @@ function Get-LatestVersion {
     $response = $request.GetResponse()
     try { $location = [string]$response.Headers['Location'] } finally { $response.Close() }
     if ($location -match '/tag/([^/?#]+)$') { return $Matches[1] }
-    throw 'Could not find the latest release on GitHub. Check the internet connection; until 1.0.0 there are only pre-releases: pass -Pre (or -Version 1.0.0-alpha.N).'
+    throw 'Could not find the latest release on GitHub. Check the internet connection, or pass -Pre to take the newest pre-release.'
 }
 
 function Get-NewestRelease {
