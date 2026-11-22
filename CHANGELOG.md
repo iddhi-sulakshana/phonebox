@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.1 — 2026-11-23
 
 - **TeamClaude in the AI quotas widget.** Pick TeamClaude among a quotas widget's providers to see your TeamClaude
   proxy's team pool: the tokens of the last 24 hours with an hourly chart, the pool's weekly use with its projection
