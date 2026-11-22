@@ -336,8 +336,15 @@ impl QuotaMonitor {
         if forecast.is_err() {
             view.forecast = last.as_ref().and_then(|l| l.forecast.clone());
         }
-        let error = series.as_ref().err().or(forecast.as_ref().err()).cloned();
-        if series.is_err() && forecast.is_err() {
+        // neither route there: not a TeamClaude server (or a wrong prefix)
+        let missing = matches!((&series, &forecast), (Ok(None), Ok(None)));
+        let error = series
+            .as_ref()
+            .err()
+            .or(forecast.as_ref().err())
+            .cloned()
+            .or_else(|| missing.then(|| format!("No TeamClaude at {}", target.host)));
+        if (series.is_err() && forecast.is_err()) || missing {
             view.updated_at = last.as_ref().and_then(|l| l.updated_at);
         }
         view.error = error;

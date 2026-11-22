@@ -421,3 +421,13 @@ fn the_target_needs_a_widget_that_lists_teamclaude() {
         ("https://tc.example.com", "tc-cc")
     );
 }
+
+#[tokio::test]
+async fn an_address_without_teamclaude_says_so() {
+    let dir = tempfile::tempdir().unwrap();
+    let (http, _) = fake(|_| (404, "Not Found".into()));
+    let m = monitor(http, &dir);
+    assert!(!m.refresh_teamclaude(&target(), 1).await);
+    let error = m.teamclaude().unwrap().error.unwrap();
+    assert!(error.contains("No TeamClaude at tc.example.com"), "{error}");
+}
