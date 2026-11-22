@@ -501,25 +501,9 @@ impl QuotaMonitor {
                 next_antigravity = Instant::now() + Duration::from_secs(if ok { 60 } else { 30 });
             }
             // TeamClaude only while a widget shows it
-            match self.teamclaude_target() {
-                None => {
-                    self.clear_teamclaude();
-                    next_teamclaude = Instant::now();
-                }
-                Some(target) if Instant::now() >= next_teamclaude => {
-                    let refresh = self.refresh_teamclaude(&target, crate::server::now_ms());
-                    let ok = tokio::select! {
-                        _ = stop.stopped() => break,
-                        ok = refresh => ok,
-                    };
-                    next_teamclaude = Instant::now()
-                        + if ok {
-                            teamclaude::POLL
-                        } else {
-                            teamclaude::RETRY
-                        };
-                }
-                Some(_) => {}
+            tokio::select! {
+                _ = stop.stopped() => break,
+                _ = self.teamclaude_tick(&mut next_teamclaude) => {}
             }
             tokio::select! {
                 _ = stop.stopped() => break,

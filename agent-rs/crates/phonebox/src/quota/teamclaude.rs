@@ -18,6 +18,11 @@ pub const RETRY: Duration = Duration::from_secs(30);
 const MAX_POINTS: usize = 96;
 /// Users listed by name; the rest are added up.
 const TOP: usize = 5;
+/// The most hourly buckets read from a reply (a month): the server's count sizes a buffer.
+const MAX_BUCKETS: usize = 24 * 31;
+const SET_ADDRESS: &str = "Set the TeamClaude address in Settings › TeamClaude";
+const SET_KEY: &str = "Set the TeamClaude key in Settings › TeamClaude";
+const BAD_ADDRESS: &str = "The TeamClaude address must start with http:// or https://";
 
 /// Where the numbers come from: the server's base URL (scheme, host and any path prefix, no trailing slash), the key
 /// and the host to show.
@@ -28,7 +33,10 @@ pub struct Target {
     pub host: String,
 }
 
-/// `scheme://authority[/path]` without a trailing slash and with the host in lower case, for http and https only.
+/// `scheme://authority[/prefix]` with the host in lower case, for http and https only. TeamClaude matches its routes on
+/// the exact path, so a path is kept only as a reverse proxy's prefix: it is cut at a `teamclaude` or `teamrouter`
+/// segment (a pasted dashboard address) or at `tc-acct` (Claude Code pinned to one account, which TeamClaude forwards
+/// to Anthropic), and a final `v1` goes.
 fn base_url(raw: &str) -> Option<(String, String)> {
     let uri: http::Uri = raw.trim().parse().ok()?;
     let scheme = uri.scheme_str()?.to_ascii_lowercase();
@@ -44,8 +52,28 @@ fn base_url(raw: &str) -> Option<(String, String)> {
         .port()
         .map(|p| format!(":{p}"))
         .unwrap_or_default();
-    let path = uri.path().trim_end_matches('/');
+    let mut segments: Vec<&str> = uri.path().split('/').filter(|s| !s.is_empty()).collect();
+    if let Some(i) = segments
+        .iter()
+        .position(|s| matches!(*s, "teamclaude" | "teamrouter" | "tc-acct"))
+    {
+        segments.truncate(i);
+    }
+    if segments.last() == Some(&"v1") {
+        segments.pop();
+    }
+    let path: String = segments.iter().map(|s| format!("/{s}")).collect();
     Some((format!("{scheme}://{host}{port}{path}"), host))
+}
+
+/// TeamClaude lets callers on its own computer in without a key.
+fn is_loopback(host: &str) -> bool {
+    host == "localhost"
+        || host
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|ip| ip.is_loopback())
 }
 
 fn is_anthropic(host: &str) -> bool {
@@ -60,8 +88,12 @@ fn non_blank(v: Option<&Value>) -> Option<&str> {
 
 /// The server and key: the settings' own, else Claude Code's (`env.ANTHROPIC_BASE_URL` with `ANTHROPIC_API_KEY` or
 /// `ANTHROPIC_AUTH_TOKEN` in `~/.claude/settings.json`) when it goes through a proxy rather than Anthropic. Claude
-/// Code's key is used only for Claude Code's own server; None when there is no server or no key for it.
-pub fn resolve(cfg: Option<&TeamClaudeConfig>, claude_settings: Option<&Value>) -> Option<Target> {
+/// Code's key is used only for Claude Code's own server; a server on this computer needs none. Otherwise what to set,
+/// as the card shows it.
+pub fn resolve(
+    cfg: Option<&TeamClaudeConfig>,
+    claude_settings: Option<&Value>,
+) -> Result<Target, String> {
     let env = claude_settings.and_then(|s| s.get("env"));
     let claude_code = non_blank(env.and_then(|e| e.get("ANTHROPIC_BASE_URL")))
         .and_then(base_url)
@@ -70,20 +102,20 @@ pub fn resolve(cfg: Option<&TeamClaudeConfig>, claude_settings: Option<&Value>) 
         .or_else(|| non_blank(env.and_then(|e| e.get("ANTHROPIC_AUTH_TOKEN"))));
     let own_url = cfg.map(|c| c.url.trim()).filter(|u| !u.is_empty());
     let (base, host) = match own_url {
-        Some(url) => base_url(url)?,
-        None => claude_code.clone()?,
+        Some(url) => base_url(url).ok_or(BAD_ADDRESS)?,
+        None => claude_code.clone().ok_or(SET_ADDRESS)?,
     };
     let own_key = cfg.map(|c| c.key.trim()).filter(|k| !k.is_empty());
-    let key = match own_key {
-        Some(k) => k,
-        None if claude_code.as_ref().is_some_and(|(b, _)| *b == base) => claude_code_key?,
-        None => return None,
+    let claude_codes = claude_code
+        .as_ref()
+        .filter(|(b, _)| *b == base)
+        .and(claude_code_key);
+    let key = match own_key.or(claude_codes) {
+        Some(k) => k.to_string(),
+        None if is_loopback(&host) => String::new(),
+        None => return Err(SET_KEY.into()),
     };
-    Some(Target {
-        base,
-        key: key.to_string(),
-        host,
-    })
+    Ok(Target { base, key, host })
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
@@ -160,7 +192,12 @@ impl TeamView {
 
 fn numbers(v: Option<&Value>) -> Vec<u64> {
     v.and_then(Value::as_array)
-        .map(|a| a.iter().map(|n| n.as_u64().unwrap_or(0)).collect())
+        .map(|a| {
+            a.iter()
+                .take(MAX_BUCKETS)
+                .map(|n| n.as_u64().unwrap_or(0))
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -214,8 +251,11 @@ pub fn summarize(series: Option<&Value>, forecast: Option<&Value>, now: i64) -> 
         return view;
     };
     let mut totals = TokenTotals::default();
-    let mut hourly =
-        vec![0u64; series.get("buckets").and_then(Value::as_u64).unwrap_or(0) as usize];
+    let buckets = series
+        .get("buckets")
+        .and_then(Value::as_u64)
+        .map_or(0, |n| n.min(MAX_BUCKETS as u64) as usize);
+    let mut hourly = vec![0u64; buckets];
     let mut users: Vec<(String, u64)> = Vec::new();
     if let Some(clients) = series.get("clients").and_then(Value::as_object) {
         for (name, c) in clients {
@@ -286,8 +326,9 @@ fn read_reply(reply: Result<UsageReply, HttpFail>, host: &str) -> Result<Option<
 }
 
 impl QuotaMonitor {
-    /// The server and key while an enabled page's quotas widget lists TeamClaude; None otherwise (no requests then).
-    pub fn teamclaude_target(&self) -> Option<Target> {
+    /// The server and key (or what to set) while an enabled page's quotas widget lists TeamClaude; None otherwise (no
+    /// requests then).
+    pub fn teamclaude_target(&self) -> Option<Result<Target, String>> {
         let cfg = self.cfg.as_ref()?.get();
         if !cfg.shows_teamclaude() {
             return None;
@@ -295,19 +336,51 @@ impl QuotaMonitor {
         let settings = std::fs::read_to_string(&self.claude_settings_path)
             .ok()
             .and_then(|t| serde_json::from_str::<Value>(&t).ok());
-        resolve(cfg.team_claude.as_ref(), settings.as_ref())
+        Some(resolve(cfg.team_claude.as_ref(), settings.as_ref()))
+    }
+
+    /// One look from the usage loop: nothing while no widget shows TeamClaude; what to set on the card while the
+    /// settings name no usable server (no request then); a reading when one is due (`next`).
+    pub(crate) async fn teamclaude_tick(&self, next: &mut tokio::time::Instant) {
+        use tokio::time::Instant;
+        match self.teamclaude_target() {
+            None => {
+                self.clear_teamclaude();
+                *next = Instant::now();
+            }
+            Some(Err(reason)) => {
+                self.state
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .teamclaude = Some(TeamView {
+                    error: Some(reason),
+                    ..TeamView::named()
+                });
+                *next = Instant::now();
+            }
+            Some(Ok(target)) if Instant::now() >= *next => {
+                let ok = self
+                    .refresh_teamclaude(&target, crate::server::now_ms())
+                    .await;
+                *next = Instant::now() + if ok { POLL } else { RETRY };
+            }
+            Some(Ok(_)) => {}
+        }
     }
 
     /// One reading of both routes. A failed route keeps what it gave last time, with the reason in `error`; true when
-    /// neither failed.
+    /// the card shows no error.
     pub async fn refresh_teamclaude(&self, target: &Target, now: i64) -> bool {
         let get = |path: &str| {
             (self.http)(UsageRequest {
                 url: format!("{}{path}", target.base),
-                headers: vec![
-                    ("x-api-key".into(), target.key.clone()),
-                    ("Accept".into(), "application/json".into()),
-                ],
+                headers: [
+                    ("Accept".to_string(), "application/json".to_string()),
+                    ("x-api-key".to_string(), target.key.clone()),
+                ]
+                .into_iter()
+                .filter(|(_, v)| !v.is_empty())
+                .collect(),
                 body: None,
             })
         };

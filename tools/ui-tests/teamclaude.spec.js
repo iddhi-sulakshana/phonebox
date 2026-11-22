@@ -42,7 +42,7 @@ async function show(page, options, data) {
     localStorage.clear();
     localStorage.setItem('pb-demo-config', JSON.stringify({
       night: { enabled: false }, shortcuts: [], display: { idleReturnSec: 0 },
-      pages: [{ id: 'q', title: 'Quotas', widgets: [{ id: 'q1', type: 'quotas', x: 0, y: 0, w: 12, h: 6, options: opts }] }],
+      pages: [{ id: 'q', title: 'Quotas', widgets: [{ id: 'q1', type: 'quotas', x: 0, y: 0, w: opts.w || 12, h: opts.h || 6, options: opts }] }],
     }));
   }, options);
   await page.reload();
@@ -114,4 +114,18 @@ test('without TeamClaude among the providers there is no card', async ({ page })
   await show(page, { providers: ['claude', 'codex'] }, sample());
   await expect(page.locator('.w-quotas .q-card')).toHaveCount(2);
   await expect(page.locator('.w-quotas .q-team')).toHaveCount(0);
+});
+
+// review: a 4×3 widget is under the panel's 200 px rule that hides the footers; the TeamClaude error must stay
+test('a small widget still shows the error', async ({ page }) => {
+  await show(page, { providers: ['teamclaude'], w: 4, h: 3 }, sample({ error: 'TeamClaude refused the key (HTTP 401)' }));
+  const card = page.locator('.w-quotas .q-team');
+  await expect(card.locator('.q-err')).toBeVisible();
+  await expect(card.locator('.q-tc-big')).toBeVisible();
+  const clipped = await card.locator('.q-err').evaluate((e) => {
+    const c = e.closest('.q-card').getBoundingClientRect();
+    const r = e.getBoundingClientRect();
+    return r.bottom > c.bottom + 1 || r.height < 8;
+  });
+  expect(clipped).toBe(false);
 });

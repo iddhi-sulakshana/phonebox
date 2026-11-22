@@ -69,9 +69,9 @@ fn a_blank_key_takes_claude_codes_only_for_the_same_server() {
     let cc = claude_code("https://tc.example.com", "ANTHROPIC_API_KEY", "tc-cc");
     let same = resolve(Some(&cfg("https://TC.example.com/", "")), Some(&cc)).unwrap();
     assert_eq!(same.key, "tc-cc");
-    assert_eq!(
-        resolve(Some(&cfg("https://elsewhere.example.com", "")), Some(&cc)),
-        None,
+    let elsewhere = resolve(Some(&cfg("https://elsewhere.example.com", "")), Some(&cc));
+    assert!(
+        elsewhere.unwrap_err().contains("key"),
         "Claude Code's key is never sent to another server"
     );
 }
@@ -79,25 +79,96 @@ fn a_blank_key_takes_claude_codes_only_for_the_same_server() {
 #[test]
 fn anthropic_itself_is_not_a_teamclaude_server() {
     for base in ["https://api.anthropic.com", "https://anthropic.com/"] {
-        assert_eq!(
+        assert!(
             resolve(
                 None,
                 Some(&claude_code(base, "ANTHROPIC_API_KEY", "sk-ant"))
-            ),
-            None,
+            )
+            .is_err(),
             "{base}"
         );
     }
-    assert_eq!(resolve(None, None), None);
-    assert_eq!(resolve(None, Some(&json!({ "env": {} }))), None);
+    assert!(resolve(None, None).is_err());
+    assert!(resolve(None, Some(&json!({ "env": {} }))).is_err());
 }
 
 #[test]
 fn a_path_is_kept_for_a_proxy_under_a_prefix_and_junk_is_refused() {
     let t = resolve(Some(&cfg("https://gw.example.com/tc/", "k")), None).unwrap();
     assert_eq!(t.base, "https://gw.example.com/tc");
-    assert_eq!(resolve(Some(&cfg("not a url", "k")), None), None);
-    assert_eq!(resolve(Some(&cfg("ftp://tc.example.com", "k")), None), None);
+    assert!(resolve(Some(&cfg("not a url", "k")), None).is_err());
+    assert!(resolve(Some(&cfg("ftp://tc.example.com", "k")), None).is_err());
+}
+
+// review: TeamClaude matches its routes on the exact path, so a pasted dashboard address or Claude Code's pinned form
+// (`…/tc-acct/<pin>`, which TeamClaude forwards to Anthropic) must come down to the server itself
+#[test]
+fn a_dashboard_or_pinned_address_is_cut_to_the_server() {
+    for (url, base) in [
+        (
+            "https://tc.example.com/teamclaude/dashboard",
+            "https://tc.example.com",
+        ),
+        (
+            "https://tc.example.com/teamrouter/dashboard",
+            "https://tc.example.com",
+        ),
+        (
+            "https://tc.example.com/tc-acct/abc123",
+            "https://tc.example.com",
+        ),
+        ("https://tc.example.com/v1", "https://tc.example.com"),
+        ("https://gw.example.com/tc/v1/", "https://gw.example.com/tc"),
+        (
+            "https://gw.example.com/tc/teamclaude/dashboard",
+            "https://gw.example.com/tc",
+        ),
+        (
+            "https://gw.example.com/teamclaudeish",
+            "https://gw.example.com/teamclaudeish",
+        ),
+    ] {
+        assert_eq!(
+            resolve(Some(&cfg(url, "k")), None).unwrap().base,
+            base,
+            "{url}"
+        );
+    }
+    let pinned = claude_code(
+        "https://tc.example.com/tc-acct/pin1",
+        "ANTHROPIC_API_KEY",
+        "tc-cc",
+    );
+    let t = resolve(None, Some(&pinned)).unwrap();
+    assert_eq!(
+        (t.base.as_str(), t.key.as_str()),
+        ("https://tc.example.com", "tc-cc")
+    );
+}
+
+// review: TeamClaude lets loopback callers in without a key, and its local setup sets none
+#[test]
+fn a_local_teamclaude_needs_no_key() {
+    for url in [
+        "http://localhost:3456",
+        "http://127.0.0.1:3456/",
+        "http://[::1]:3456",
+    ] {
+        let t = resolve(Some(&cfg(url, "")), None).unwrap();
+        assert_eq!(t.key, "", "{url}");
+    }
+    assert!(resolve(Some(&cfg("https://tc.example.com", "")), None).is_err());
+}
+
+// review: a widget that lists TeamClaude without a usable server says what to set
+#[test]
+fn an_unusable_setting_says_what_to_fix() {
+    let none = resolve(None, None).unwrap_err();
+    assert!(none.contains("Settings › TeamClaude"), "{none}");
+    let scheme = resolve(Some(&cfg("tc.example.com", "k")), None).unwrap_err();
+    assert!(scheme.contains("http://"), "{scheme}");
+    let key = resolve(Some(&cfg("https://tc.example.com", "")), None).unwrap_err();
+    assert!(key.contains("key"), "{key}");
 }
 
 // ------------------------------------------------------------------------------------------------ summarize
@@ -189,6 +260,17 @@ fn the_top_five_users_and_the_rest() {
         (2, 30),
         "idle users are left out"
     );
+}
+
+// review: the server's bucket count sizes a buffer; a wrong one must not take the agent down
+#[test]
+fn a_huge_bucket_count_is_capped() {
+    let mut s = series(&[("alice", 10, 1, 5)]);
+    s["buckets"] = json!(1_000_000_000_000_u64);
+    s["clients"]["alice"]["inputTokens"] = json!(vec![1u64; 5000]);
+    let v = summarize(Some(&s), None, 0);
+    assert_eq!(v.hourly.len(), 24 * 31);
+    assert_eq!(v.tokens.unwrap().input, 24 * 31);
 }
 
 #[test]
@@ -415,7 +497,10 @@ fn the_target_needs_a_widget_that_lists_teamclaude() {
         .unwrap();
     file.set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(5))
         .unwrap();
-    let t = m.teamclaude_target().expect("the widget lists TeamClaude");
+    let t = m
+        .teamclaude_target()
+        .expect("the widget lists TeamClaude")
+        .expect("Claude Code's server and key");
     assert_eq!(
         (t.base.as_str(), t.key.as_str()),
         ("https://tc.example.com", "tc-cc")
@@ -430,4 +515,52 @@ async fn an_address_without_teamclaude_says_so() {
     assert!(!m.refresh_teamclaude(&target(), 1).await);
     let error = m.teamclaude().unwrap().error.unwrap();
     assert!(error.contains("No TeamClaude at tc.example.com"), "{error}");
+}
+
+#[tokio::test]
+async fn a_keyless_local_server_gets_no_key_header() {
+    let dir = tempfile::tempdir().unwrap();
+    let (http, seen) = fake(|_| (200, series(&[]).to_string()));
+    let m = monitor(http, &dir);
+    let local = resolve(Some(&cfg("http://localhost:3456", "")), None).unwrap();
+    assert!(m.refresh_teamclaude(&local, 1).await);
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen.len(), 2);
+    for r in seen.iter() {
+        assert!(
+            !r.headers
+                .iter()
+                .any(|(k, _)| k.eq_ignore_ascii_case("x-api-key")),
+            "{:?}",
+            r.headers
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_widget_without_a_usable_server_shows_why_without_asking() {
+    use crate::config::store::ConfigStore;
+    let dir = tempfile::tempdir().unwrap();
+    let cfg_path = dir.path().join("config.json");
+    std::fs::write(
+        &cfg_path,
+        r#"{"pages":[{"id":"ai","enabled":true,"widgets":[{"id":"q1","type":"quotas","options":{"providers":["teamclaude"]}}]}]}"#,
+    )
+    .unwrap();
+    let (http, seen) = fake(|_| (200, String::new()));
+    let m = QuotaMonitor {
+        http,
+        antigravity_https: None,
+        ..QuotaMonitor::new(
+            Some(Arc::new(ConfigStore::new(cfg_path))),
+            dir.path(),
+            dir.path(),
+        )
+    };
+    let mut next = tokio::time::Instant::now();
+    m.teamclaude_tick(&mut next).await;
+    assert!(seen.lock().unwrap().is_empty(), "no server: no request");
+    let v = m.teamclaude().expect("the card says why");
+    assert!(v.error.unwrap().contains("Settings › TeamClaude"));
+    assert_eq!(v.tokens, None);
 }

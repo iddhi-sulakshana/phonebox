@@ -469,7 +469,14 @@ body.offline .offline-msg { display: flex; }
   .q-tc-users { grid-column: 1 / -1; }
   .q-tc-user:nth-child(n+5) { display: none; }
 }
-@container (max-height: 200px) { .q-tc-bars, .q-tc-sub, .q-tc-users { display: none; } .q-tc-body { grid-template-columns: 1fr 1.4fr; } }
+.q-team .q-upd { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.q-team .q-foot .q-err { white-space: normal; text-align: right; }
+@container (max-height: 200px) {
+  .q-tc-bars, .q-tc-sub, .q-tc-users { display: none; }
+  .q-tc-body { grid-template-columns: 1fr 1.4fr; }
+  /* the other cards drop their footer here; the TeamClaude error stays, or stale numbers would pass for current */
+  .q-team .q-foot { display: flex; }
+}
 
 @container (max-width: 420px) { .q-grid { flex-direction: column; } }
 

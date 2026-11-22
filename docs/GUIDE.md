@@ -41,7 +41,7 @@ Every page is a 12 × 6 grid. Start a page from one of the 30 templates (or from
 |---|---|
 | **Home** — clock, weather, now playing, CPU / GPU / RAM / network tiles | **Dashboard** — gauges, clock, media and a few shortcut keys |
 | <img src="screenshots/home.png" alt="Home"> | <img src="screenshots/dashboard.png" alt="Dashboard"> |
-| **AI quotas** — Claude and Codex limits, reset times, "at this pace: full in 1 d 5 h"; a TeamClaude team pool (tokens, forecast, top users) | **Sessions** — Claude Code / Codex / Cursor sessions and GitHub |
+| **AI quotas** — Claude and Codex limits, reset times, "at this pace: full in 1 d 5 h" | **Sessions** — Claude Code / Codex / Cursor sessions and GitHub |
 | <img src="screenshots/ai.png" alt="AI quotas"> | <img src="screenshots/work.png" alt="Sessions"> |
 | **System** — CPU, GPU, memory, disks, network and ping charts | **Processes** — heaviest apps; tap one to end an instance or all of them |
 | <img src="screenshots/system.png" alt="System"> | <img src="screenshots/procs-sheet.png" alt="Processes"> |
@@ -122,6 +122,17 @@ in if needed. The agent reads measured session and weekly buckets, plus the plan
 CLI reports without plan metadata keep the neutral Antigravity title. Older IDE servers can supply model quotas
 through `GetUserStatus`; unavailable measurements are skipped, and weekly limits are never invented. Refresh
 failures retain the last measurements with an error.
+
+**TeamClaude** shows the team pool of a [TeamClaude](https://github.com/KarpelesLab/teamclaude) proxy instead of one
+account: the tokens of the last 24 hours with an hourly chart, the pool's weekly use with its projection to the next
+refills (the dashed line) under the dry line, and the top five users. Switch it on by ticking **TeamClaude** among an
+AI quotas widget's providers (or under **Settings › AI quotas › Tracked AI services** for widgets without their own
+list). The agent finds the server and key by itself when Claude Code goes through TeamClaude (`ANTHROPIC_BASE_URL` in
+`~/.claude/settings.json`); otherwise enter them under **Settings › TeamClaude**. A read-only key (`"role":
+"readonly"` in TeamClaude) is enough, a TeamClaude on the same computer needs none, and the address may be the
+dashboard's own (`…/teamclaude/dashboard`). The card shows what to set when something is missing, and keeps the
+last numbers with the error when the server can't be reached or refuses the key. In a widget that pages, the
+TeamClaude card has a page of its own.
 
 Tap an AI session to see its model, timing and token details. Token counters describe the local session rather than
 the account allowance. Prompt/response text and tool arguments are not included in this panel data.
