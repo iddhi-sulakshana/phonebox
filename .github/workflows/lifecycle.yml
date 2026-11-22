@@ -4,6 +4,8 @@ name: lifecycle
 # agent starts on a spare port, and POST /api/update/check and /api/update/apply must bring it to release `to` (a
 # newer one, normally the next pre-release) from this repository's GitHub releases. Run it by hand once both releases
 # are published; agent-rs/scripts/remote-update-check.sh proves the same path against a local fake GitHub before that.
+# GitHub dispatches only workflows that are on the default branch: until rust-agent is merged, run a copy with a push
+# trigger from a throwaway branch (as for 1.0.0-alpha.1 to 1.0.0-alpha.2).
 on:
   workflow_dispatch:
     inputs:
@@ -36,7 +38,11 @@ jobs:
           app="$HOME/Library/Application Support/PhoneBox/app"
           test -x "$app/PhoneBoxAgent"
           echo "APP=$app" >> "$GITHUB_ENV"
+      # GitHub's runners share addresses, so their anonymous API limit (60 an hour) is often used up: the agent then
+      # retries with the gh CLI's token as it does on a user's machine, here the job's read-only token
       - name: Start it on a spare port
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           export HOME="$RUNNER_TEMP/home"
           printf '{"deviceSerial": "__lifecycle__", "updates": {"auto": false, "repo": "%s"}, "lan": {"enabled": false}}\n' \
@@ -46,6 +52,7 @@ jobs:
           python3 -c 'import json, os; v = json.load(open("info.json"))["version"]; assert v == os.environ["FROM"], v; print("running", v)'
       - name: Check and apply the update
         run: |
+          curl -sS https://api.github.com/rate_limit | python3 -c 'import json, sys; r = json.load(sys.stdin)["rate"]; print("anonymous API calls left here:", r["remaining"], "of", r["limit"])' || true
           curl -fsS -X POST "http://127.0.0.1:$PORT/api/update/check" | tee check.json; echo
           python3 -c 'import json, os; s = json.load(open("check.json")); assert s["latest"] == os.environ["TO"] and s["agentUpdate"], s'
           test "$(curl -sS -o /dev/null -w '%{http_code}' -X POST "http://127.0.0.1:$PORT/api/update/apply")" = 202
