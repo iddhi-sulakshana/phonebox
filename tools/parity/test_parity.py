@@ -85,6 +85,16 @@ class DiffTests(unittest.TestCase):
         self.assertEqual(len(parity.diff(entry, a, resp(body=b'{"link": "x", "expiresAt": 2, "attempt": 2}'))), 1)
 
 
+class PlatformIgnoreTests(unittest.TestCase):
+    def test_ignore_on_applies_on_its_platform_only(self):
+        entry = {"name": "deck", "compare": "json", "ignore": ["/media"], "ignore_on": {"darwin": ["/audio"]}}
+        a = resp(body=b'{"audio": {"available": false}, "media": 1, "x": 1}')
+        b = resp(body=b'{"audio": {"available": true}, "media": 2, "x": 1}')
+        self.assertEqual(parity.diff(entry, a, b, platform="darwin"), [])
+        self.assertEqual(len(parity.diff(entry, a, b, platform="win32")), 1)
+        self.assertEqual(len(parity.diff(entry, a, b, platform="linux")), 1)
+
+
 class ListDifferenceTests(unittest.TestCase):
     def test_lists_of_different_lengths_show_both_lists(self):
         entry = {"name": "adapters", "compare": "json"}

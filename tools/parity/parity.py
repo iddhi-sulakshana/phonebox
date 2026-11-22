@@ -14,6 +14,8 @@ Corpus: a JSON list of requests. Fields:
   headers   extra headers ("{port}" filled in); a "Host" here replaces the default 127.0.0.1:<port>
   body      request body text or null
   ignore    JSON pointers removed from both bodies before comparing ("*" matches every array item / object key)
+  ignore_on {platform: [pointers]}: more pointers ignored on that platform only (sys.platform: "darwin", "win32",
+            "linux"), for readings a hosted runner cannot make steady there
   shape     JSON pointers compared by shape only: object keys (in order), array lengths and which values are objects
             or arrays; numbers, strings, booleans and null all count as the same (live readings such as CPU or ping)
   wait      seconds to wait before sending this request (lets the agents' monitors take their first samples)
@@ -215,7 +217,7 @@ def _first_json_difference(a, b, path="") -> str | None:
     return None if a == b else f"{path or '/'}: {json.dumps(a)[:120]} != {json.dumps(b)[:120]}"
 
 
-def diff(entry: dict, a: Response, b: Response) -> list[str]:
+def diff(entry: dict, a: Response, b: Response, platform: str = sys.platform) -> list[str]:
     """Differences between the C# answer (a) and the Rust answer (b), each prefixed with the request's name."""
     name = entry.get("name", entry.get("path", "?"))
     problems = []
@@ -233,7 +235,8 @@ def diff(entry: dict, a: Response, b: Response) -> list[str]:
         except ValueError as e:
             problems.append(f"{name}: body is not JSON ({e})")
         else:
-            ignore, shape = entry.get("ignore", []), entry.get("shape", [])
+            ignore = entry.get("ignore", []) + (entry.get("ignore_on") or {}).get(platform, [])
+            shape = entry.get("shape", [])
             d = _first_json_difference(shape_pointers(strip_pointers(ja, ignore), shape),
                                        shape_pointers(strip_pointers(jb, ignore), shape))
             if d:

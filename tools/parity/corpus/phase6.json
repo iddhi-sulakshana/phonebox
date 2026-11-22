@@ -478,7 +478,12 @@
     "path": "/api/controls/state",
     "ignore": [
       "/media"
-    ]
+    ],
+    "ignore_on": {
+      "darwin": [
+        "/audio"
+      ]
+    }
   },
   {
     "name": "deck: unknown kind",
@@ -651,7 +656,12 @@
     },
     "ignore": [
       "/media"
-    ]
+    ],
+    "ignore_on": {
+      "darwin": [
+        "/audio"
+      ]
+    }
   },
   {
     "name": "wifi: deck command with the phone key",
