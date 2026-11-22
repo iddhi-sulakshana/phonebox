@@ -347,9 +347,16 @@ fn bundles(root: &str) -> Vec<String> {
     out
 }
 
+/// `Path.GetFileName`: after the last separator (`\\` is one too on Windows).
+fn file_name(path: &str) -> &str {
+    path.rsplit(|c| c == '/' || (cfg!(windows) && c == '\\'))
+        .next()
+        .unwrap_or(path)
+}
+
 /// `Path.GetFileNameWithoutExtension`.
 fn name_without_extension(path: &str) -> &str {
-    let file = path.rsplit('/').next().unwrap_or(path);
+    let file = file_name(path);
     file.rfind('.').map_or(file, |dot| &file[..dot])
 }
 
@@ -420,7 +427,7 @@ fn make_icon(app: &AppEntry) -> Option<Vec<u8>> {
             if !name.to_ascii_lowercase().ends_with(".icns") {
                 name.push_str(".icns");
             }
-            let file = name.rsplit('/').next().unwrap_or(&name).to_string();
+            let file = file_name(&name).to_string();
             let icns = contents.join("Resources").join(file);
             let tmp_text = tmp.to_string_lossy().into_owned();
             if icns.is_file()
