@@ -56,6 +56,33 @@ jobs:
           python3 -I tools/check-notices.py
           python3 -I tools/test-release-metadata.py
 
+  # The Intel Mac build on an Intel Mac, natively: PhoneBox's own macOS 15 x86_64 VM, a throwaway runner (each job
+  # boots a fresh copy of a clean image, which is discarded after the job). Never for pull requests from forks, and
+  # not when the release workflow calls this one (there github.workflow is "release"): this single runner can be
+  # offline, so the Rosetta 2 jobs stay the gate.
+  intel-native:
+    name: test and smoke (macos x64, native)
+    if: github.workflow == 'rust' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, macOS, X64]
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: agent-rs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Rust toolchain (from rust-toolchain.toml)
+        run: rustup toolchain install 1.98.0 --profile minimal -c clippy
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: agent-rs
+      - run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - run: cargo test --locked --workspace
+      - name: Build the agent
+        run: cargo build --release --locked -p phonebox-agent
+      - name: Smoke-test the agent
+        working-directory: .
+        run: python3 -I tools/smoke-agent.py agent-rs/target/release/PhoneBoxAgent --version "$(sed -n 's/^version = "\(.*\)"$/\1/p' agent-rs/Cargo.toml | head -n1)"
+
   # What the release ships, built the same way on every push: one executable per target, signed on macOS (with a
   # throwaway certificate here), smoke-tested on its own architecture, and zipped with the notices.
   package:
