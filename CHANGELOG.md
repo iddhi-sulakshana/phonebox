@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **TeamClaude in the AI quotas widget.** Pick TeamClaude among a quotas widget's providers to see your TeamClaude
+  proxy's team pool: the tokens of the last 24 hours with an hourly chart, the pool's weekly use with its projection
+  to the refills, and the top five users. The agent reads the server and key from **Settings › TeamClaude**, or, when
+  those are empty, from Claude Code's own settings when Claude Code goes through TeamClaude. A read-only key is
+  enough; it stays on the computer. Requests run only while a page shows the card.
+
 ## 1.0.0 — 2026-11-22
 
 The desktop agent is now one Rust program, and replaces the C# agent of 0.9.x. The phone app, the panel and the
