@@ -1157,7 +1157,10 @@ mod tests {
         let pid = parent.id();
         wait_until("the child sleep", || !descendants(pid).is_empty());
         // on macOS the owner comes from ps, read at most every 2 s (C#'s cache too): wait until it lists the process
-        wait_until("ps lists the process", || mine(pid));
+        // and its child (a snapshot taken between the fork of sh and of sleep has only the parent)
+        wait_until("ps lists the process and its child", || {
+            mine(pid) && descendants(pid).iter().all(|k| mine(*k))
+        });
         let kids = descendants(pid);
         let r = procs.kill_pid(pid);
         assert_eq!(
