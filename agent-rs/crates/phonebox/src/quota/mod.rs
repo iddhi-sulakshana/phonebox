@@ -4,6 +4,7 @@ pub mod antigravity;
 pub mod claude;
 pub mod codex;
 pub mod connect;
+pub mod teamclaude;
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -188,6 +189,7 @@ pub(crate) struct State {
     pub antigravity: Option<QuotaProvider>,
     pub external: Vec<QuotaProvider>,
     pub overview: Option<QuotaOverview>,
+    pub teamclaude: Option<teamclaude::TeamView>,
 }
 
 pub struct QuotaMonitor {
@@ -196,6 +198,8 @@ pub struct QuotaMonitor {
     pub(crate) claude_cache_path: PathBuf,
     /// Claude Code's credentials file (read only).
     pub(crate) credentials_path: PathBuf,
+    /// Claude Code's settings (read only): its proxy and key, the TeamClaude default.
+    pub(crate) claude_settings_path: PathBuf,
     pub(crate) codex_sessions_root: PathBuf,
     pub(crate) http: UsageHttp,
     /// Only for the Antigravity server's HTTPS port (a self-signed certificate on this computer passes); None without
@@ -216,6 +220,7 @@ impl QuotaMonitor {
             cfg,
             claude_cache_path: local_dir.join("claude-quota.json"),
             credentials_path: home.join(".claude").join(".credentials.json"),
+            claude_settings_path: home.join(".claude").join("settings.json"),
             codex_sessions_root: home.join(".codex").join("sessions"),
             http: connect::usage_http(),
             #[cfg(feature = "tls")]
@@ -461,8 +466,8 @@ impl QuotaMonitor {
             .await
     }
 
-    /// The usage loop (every 30 s: CodexBar every 3 minutes, Codex, Antigravity every minute, Claude on its
-    /// schedule) and the cost overview loop (every 5 s while enabled), until `stop`.
+    /// The usage loop (every 30 s: CodexBar every 3 minutes, Codex, Antigravity and TeamClaude every minute, Claude on
+    /// its schedule) and the cost overview loop (every 5 s while enabled), until `stop`.
     pub fn start(self: &Arc<Self>, stop: Stop) {
         let me = self.clone();
         let usage_stop = stop.clone();
@@ -474,6 +479,7 @@ impl QuotaMonitor {
     async fn usage_loop(self: Arc<Self>, stop: Stop) {
         self.load_claude_cache(crate::server::now_ms());
         let (mut next_codexbar, mut next_antigravity) = (Instant::now(), Instant::now());
+        let mut next_teamclaude = Instant::now();
         while !stop.is_stopped() {
             if Instant::now() >= next_codexbar {
                 let path = tokio::task::spawn_blocking(|| tool_process::find("codexbar"))
@@ -493,6 +499,27 @@ impl QuotaMonitor {
             if Instant::now() >= next_antigravity {
                 let ok = self.refresh_antigravity(&stop).await;
                 next_antigravity = Instant::now() + Duration::from_secs(if ok { 60 } else { 30 });
+            }
+            // TeamClaude only while a widget shows it
+            match self.teamclaude_target() {
+                None => {
+                    self.clear_teamclaude();
+                    next_teamclaude = Instant::now();
+                }
+                Some(target) if Instant::now() >= next_teamclaude => {
+                    let refresh = self.refresh_teamclaude(&target, crate::server::now_ms());
+                    let ok = tokio::select! {
+                        _ = stop.stopped() => break,
+                        ok = refresh => ok,
+                    };
+                    next_teamclaude = Instant::now()
+                        + if ok {
+                            teamclaude::POLL
+                        } else {
+                            teamclaude::RETRY
+                        };
+                }
+                Some(_) => {}
             }
             tokio::select! {
                 _ = stop.stopped() => break,

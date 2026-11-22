@@ -57,6 +57,23 @@ async fn work_quotas_and_approvals_answer_their_empty_shapes() {
 }
 
 #[tokio::test]
+async fn quotas_carry_the_teamclaude_view_only_when_there_is_one() {
+    let (_d, s) = test_state();
+    let (_, _, body) = call(&s, "GET", "/api/quotas").await;
+    assert!(!body.contains("teamclaude"), "{body}");
+    s.quotas.state.lock().unwrap().teamclaude = Some(crate::quota::teamclaude::TeamView {
+        host: "tc.example.com".into(),
+        ..crate::quota::teamclaude::TeamView::named()
+    });
+    let (status, _, body) = call(&s, "GET", "/api/quotas").await;
+    assert_eq!(status, StatusCode::OK);
+    let v: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(v["teamclaude"]["name"], "TeamClaude");
+    assert_eq!(v["teamclaude"]["host"], "tc.example.com");
+    assert_eq!(v["providers"], serde_json::json!([]));
+}
+
+#[tokio::test]
 async fn the_work_feed_lists_sessions_and_github_in_csharp_key_order() {
     let (_d, s) = test_state();
     s.sessions

@@ -74,6 +74,9 @@ async fn quotas(State(s): State<AppState>) -> Response {
     struct Quotas {
         providers: Vec<crate::quota::QuotaProvider>,
         overview: Option<crate::codex_bar::QuotaOverview>,
+        /// this fork's addition, present only while a widget shows TeamClaude (C#'s reply otherwise)
+        #[serde(skip_serializing_if = "Option::is_none")]
+        teamclaude: Option<crate::quota::teamclaude::TeamView>,
     }
     let now = crate::server::now_ms();
     json_response(
@@ -81,6 +84,7 @@ async fn quotas(State(s): State<AppState>) -> Response {
         &Quotas {
             providers: s.quotas.snapshot(now),
             overview: s.quotas.overview(now),
+            teamclaude: s.quotas.teamclaude(),
         },
     )
 }
