@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0-alpha.2 — 2026-11-22
+
+A second pre-release, so an installed 1.0.0-alpha.1 can update itself to a newer release. Nothing else changed.
+
 ## 1.0.0-alpha.1 — 2026-11-22
 
 A pre-release of the desktop agent rewritten in Rust, which replaces the C# agent from 1.0.0 on. Not for general use
