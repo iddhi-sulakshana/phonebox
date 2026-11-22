@@ -82,6 +82,9 @@ pub struct AgentConfig {
     pub obs: ObsConfig,
     pub discord: DiscordConfig,
     pub console: ConsoleConfig,
+    /// A Rust-only setting: absent unless set (the C# agent's settings stay the same), never sent to the phone.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub team_claude: Option<TeamClaudeConfig>,
     #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
@@ -111,6 +114,7 @@ defaults!(AgentConfig {
     obs: ObsConfig::default(),
     discord: DiscordConfig::default(),
     console: ConsoleConfig::default(),
+    team_claude: None,
 });
 
 impl AgentConfig {
@@ -171,6 +175,19 @@ impl AgentConfig {
     pub fn show_quota_overview(&self) -> bool {
         self.widgets(true).iter().any(|w| {
             (w.r#type == "codexbar" || w.r#type == "quotas") && w.bool("showOverview") == Some(true)
+        })
+    }
+
+    /// True when an enabled page shows an AI quotas widget listing TeamClaude: in its own providers, or (without a
+    /// list of its own) in Settings › AI quotas, as the panel reads it.
+    pub fn shows_teamclaude(&self) -> bool {
+        let teamclaude = |p: &str| p == "teamclaude";
+        self.widgets(true).iter().any(|w| {
+            (w.r#type == "codexbar" || w.r#type == "quotas")
+                && match w.opt("providers").and_then(Value::as_array) {
+                    Some(list) => list.iter().filter_map(Value::as_str).any(teamclaude),
+                    None => self.codex_bar.providers.iter().any(|p| teamclaude(p)),
+                }
         })
     }
 }
@@ -885,6 +902,21 @@ defaults!(HomeAssistantConfig {
     token: None
 });
 
+/// TeamClaude, the multi-account Claude proxy: its address and a key its status routes accept (a read-only key is
+/// enough). Blank fields fall back to Claude Code's own settings (see `quota::teamclaude::resolve`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TeamClaudeConfig {
+    pub url: String,
+    pub key: String,
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
+    pub extra: Extra,
+}
+defaults!(TeamClaudeConfig {
+    url: String::new(),
+    key: String::new()
+});
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PhoneConfig {
@@ -1123,6 +1155,7 @@ defaults!(ConsoleKey {
 /// Every property name of the model, for reading keys in any case (`PropertyNameCaseInsensitive`).
 pub(crate) const KNOWN_FIELDS: &[&str] = &[
     "codexBar",
+    "teamClaude",
     "controls",
     "deviceSerial",
     "adbPath",
@@ -1762,5 +1795,66 @@ mod tests {
                 .iter()
                 .any(|w| w.r#type == "quotas")
         );
+    }
+
+    // TeamClaude (a Rust-only setting): absent unless set, so the C# agent's settings stay byte-identical
+    #[test]
+    fn team_claude_is_absent_by_default() {
+        let out = serde_json::to_value(load("{}")).unwrap();
+        assert!(out.get("teamClaude").is_none(), "{out}");
+    }
+
+    #[test]
+    fn team_claude_round_trips() {
+        let cfg =
+            load(r#"{ "teamClaude": { "url": "https://tc.example.com", "key": "tc-secret" } }"#);
+        let tc = cfg.team_claude.as_ref().expect("teamClaude read");
+        assert_eq!(tc.url, "https://tc.example.com");
+        assert_eq!(tc.key, "tc-secret");
+        let out = serde_json::to_value(&cfg).unwrap();
+        assert_eq!(out["teamClaude"]["url"], "https://tc.example.com");
+        assert_eq!(out["teamClaude"]["key"], "tc-secret");
+    }
+
+    #[test]
+    fn a_blank_team_claude_is_dropped() {
+        let cfg = load(r#"{ "teamClaude": { "url": "  ", "key": "" } }"#);
+        assert!(cfg.team_claude.is_none());
+        let trimmed =
+            load(r#"{ "teamClaude": { "url": " https://tc.example.com ", "key": " k " } }"#);
+        let tc = trimmed.team_claude.unwrap();
+        assert_eq!(
+            (tc.url.as_str(), tc.key.as_str()),
+            ("https://tc.example.com", "k")
+        );
+    }
+
+    #[test]
+    fn team_claude_never_reaches_the_phone() {
+        let cfg = load(
+            r#"{ "teamClaude": { "url": "https://tc.example.com", "key": "tc-secret-123" } }"#,
+        );
+        let public = serde_json::to_string(&super::public::to_public(&cfg, None, None)).unwrap();
+        assert!(!public.contains("teamClaude"), "{public}");
+        assert!(!public.contains("tc-secret-123"));
+    }
+
+    #[test]
+    fn shows_teamclaude_follows_the_quotas_widgets() {
+        // a second, enabled page: with every page disabled the first one is enabled again
+        let with = |providers: &str, enabled: bool| {
+            load(&format!(
+                r#"{{"pages":[{{"id":"ai","enabled":{enabled},"widgets":[{{"id":"q1","type":"quotas","options":{{"providers":{providers}}}}}]}},{{"id":"home","enabled":true,"widgets":[]}}]}}"#
+            ))
+        };
+        assert!(with(r#"["claude","teamclaude"]"#, true).shows_teamclaude());
+        assert!(!with(r#"["claude","codex"]"#, true).shows_teamclaude());
+        assert!(!with(r#"["teamclaude"]"#, false).shows_teamclaude());
+        // a widget without its own list follows Settings › AI quotas (codexBar.providers)
+        let fallback = load(
+            r#"{"codexBar":{"providers":["teamclaude"]},"pages":[{"id":"ai","enabled":true,"widgets":[{"id":"q1","type":"quotas"}]}]}"#,
+        );
+        assert!(fallback.shows_teamclaude());
+        assert!(!load("{}").shows_teamclaude());
     }
 }

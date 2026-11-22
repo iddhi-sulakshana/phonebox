@@ -20,8 +20,12 @@ pub fn normalize(mut c: AgentConfig, stale_ids: Option<&HashSet<String>>) -> Age
     c.weather.unit = normalize_weather_unit(Some(&c.weather.unit));
     c.weather.model = normalize_weather_model(Some(&c.weather.model));
     let mut seen = HashSet::new();
+    // "teamclaude" is this fork's addition (C# drops it); the other three are C#'s list
     c.codex_bar.providers.retain(|p| {
-        matches!(p.as_str(), "claude" | "codex" | "antigravity") && seen.insert(p.clone())
+        matches!(
+            p.as_str(),
+            "claude" | "codex" | "antigravity" | "teamclaude"
+        ) && seen.insert(p.clone())
     });
     c.codex_bar.page_size = c.codex_bar.page_size.clamp(0, 6);
     c.codex_bar.rotate_interval = c.codex_bar.rotate_interval.clamp(2, 300);
@@ -75,6 +79,17 @@ pub fn normalize(mut c: AgentConfig, stale_ids: Option<&HashSet<String>>) -> Age
         host
     });
     c.claude.timeout_sec = c.claude.timeout_sec.clamp(10, 3600);
+    // TeamClaude: trimmed; with nothing set the setting is gone (and the saved file stays as the C# agent writes it)
+    if let Some(tc) = c.team_claude.as_mut() {
+        tc.url = tc.url.trim().to_string();
+        tc.key = tc.key.trim().to_string();
+    }
+    if c.team_claude
+        .as_ref()
+        .is_some_and(|tc| tc.url.is_empty() && tc.key.is_empty() && tc.extra.is_empty())
+    {
+        c.team_claude = None;
+    }
     // this fork updates from its own releases, never from upstream's C# agent
     if is_blank(&c.updates.repo) || c.updates.repo == UPSTREAM_REPO {
         c.updates.repo = FORK_REPO.to_string();
