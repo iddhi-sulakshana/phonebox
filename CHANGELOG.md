@@ -27,7 +27,21 @@ and answers the phone the same way.
 
 **Resources**
 
-<!-- resources -->
+Measured on a MacBook Air M4 with both agents side by side and the same configuration: two runs of 34 minutes
+each (idle, a phone connected, every page cycling), sampled every second, child tools included.
+
+| MacBook Air M4, macOS 26.6 | C# 0.9.23 | Rust 1.0.0 | Change |
+|---|---|---|---|
+| CPU, idle (mean % of one core; with child tools) | 12.2% | 6.4% | -47% |
+| CPU, phone connected (mean / p95) | 12.1% / 16.3% | 5.8% / 8.8% | -52% |
+| CPU, all pages cycling (mean / p95) | 14.1% / 19.3% | 7.4% / 11.4% | -47% |
+| Memory (phys footprint, median / peak) | 230.9 MB / 247.6 MB | 13.6 MB / 18.7 MB | -94% |
+| Resident memory (median) | 206.6 MB | 29.1 MB | -86% |
+| Threads (median / peak) | 35 / 48 | 22 / 26 | -37% |
+| Idle wake-ups per second | 3.5 | 3.1 | -10% |
+| Installed size | 113.6 MB | 13.6 MB | -88% |
+| Download (osx-arm64 zip) | 44.3 MB | 5.8 MB | -87% |
+| Disk writes during the 32-min run | 0.0 kB | 0.0 kB | — |
 
 **Widgets**
 - Audio mixers on Windows: one control per app instead of one per Windows audio session. An app that plays on two
