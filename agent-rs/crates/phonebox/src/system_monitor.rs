@@ -1081,11 +1081,13 @@ mod tests {
     #[test]
     fn cpu_times_grow_between_two_reads() {
         let (idle0, total0) = cpu_times();
+        // spin until the counters move: a virtual machine's ticks can stand still for a while (macOS on CI)
         let spin = std::time::Instant::now();
-        while spin.elapsed() < std::time::Duration::from_millis(300) {
+        let (mut idle1, mut total1) = (idle0, total0);
+        while total1 == total0 && spin.elapsed() < std::time::Duration::from_secs(5) {
             std::hint::black_box(spin.elapsed());
+            (idle1, total1) = cpu_times();
         }
-        let (idle1, total1) = cpu_times();
         assert!(total0 > 0 && total1 > total0, "{total0} -> {total1}");
         assert!(idle1 >= idle0 && idle1 - idle0 <= total1 - total0);
     }

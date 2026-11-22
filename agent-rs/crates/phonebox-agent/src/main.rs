@@ -362,9 +362,11 @@ mod tests {
         assert_eq!(error.kind(), std::io::ErrorKind::AddrInUse);
         assert!(tray.is_none(), "nothing starts on a port that is taken");
         let text = std::fs::read_to_string(&log_path).unwrap();
+        // the log ends its lines as the platform does (CRLF on Windows)
+        let newline = if cfg!(windows) { "\r\n" } else { "\n" };
         let line = format!(
             " crit PhoneBoxAgent: Unable to start the server. | Failed to bind to address http://127.0.0.1:{port}: \
-             address already in use.\n"
+             address already in use.{newline}"
         );
         assert!(text.contains(&line), "{text}");
     }
