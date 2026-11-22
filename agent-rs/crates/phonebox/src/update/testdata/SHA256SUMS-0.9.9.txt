@@ -1,0 +1,7 @@
+da72c2917e3575e171c5419ac20f5accf689972f2694b1a569e6deb04994bf08  PhoneBox-0.9.9.apk
+07d2d81e217d7067807673ea63924a9ab373a6142f82a84829f5d2c40cf5263b  PhoneBox-0.9.9.intoto.jsonl
+a37fdd69197d0b7635f91dca4e0c4358c76a4aacf5fc3a3afbfe977ee3dff839  PhoneBoxAgent-0.9.9-linux-arm64.zip
+b47da3d09583268d7bacef2d4375555313bf455af8a3ab16fd4d7ee95082826e  PhoneBoxAgent-0.9.9-linux-x64.zip
+39114b5f1db06d66df3aa6c123a5eff7b66b6fcae5315a6af21bb3414745e58c  PhoneBoxAgent-0.9.9-osx-arm64.zip
+18f620183523c014668475deddc737f313912239d767bb8dcd6876d12f8f4818  PhoneBoxAgent-0.9.9-osx-x64.zip
+17e70d3df7db81eb767ee3328bdbdfc9f6492f69ebc63fe814afc96cf0990fd0  PhoneBoxAgent-0.9.9-win-x64.zip

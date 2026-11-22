@@ -52,6 +52,8 @@ tools/ui-tests/test-results/
 *.txt
 # shipped in every agent zip (agent-rs/scripts/notices.sh)
 !/agent-rs/THIRD-PARTY-NOTICES.txt
+# test data the Rust tests include (include_str!)
+!/agent-rs/crates/**/testdata/**
 # Python bytecode (tools/parity)
 __pycache__/
 *.pyc
