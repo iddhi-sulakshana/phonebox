@@ -4,7 +4,8 @@ The record for owner gate 1 (release 1.0.0) and owner gate 2 (removing `agent/`)
 spec and every roadmap exit check, with its status and evidence or the step still pending; the accepted risks the
 1.0.0 release notes must list; and the decisions still open for the owner.
 
-State: branch `rust-agent`, 2026-11-22, after plan 8 Tasks 1–5 (Stage A). Updated at each gate.
+State: branch `rust-agent`, 2026-11-22, after plan 8 Tasks 1–12 (Stage A, CI, the alphas and the phone checks),
+ready for owner gate 1. Updated at each gate.
 
 - **Spec:** `docs/superpowers/specs/2026-11-20-rust-agent-design.md` ("Verification", "Switch-over").
 - **Roadmap:** `docs/superpowers/plans/2026-11-20-rust-agent-roadmap.md`.
@@ -21,53 +22,55 @@ State: branch `rust-agent`, 2026-11-22, after plan 8 Tasks 1–5 (Stage A). Upda
 
 | # | Criterion | Status | Evidence | Pending step |
 |---|---|---|---|---|
-| S1 | Every route passes the parity harness on every platform | partly | Linux: phases 1–7 (30, 26, 26, 23, 21, 128 and 9 requests) with 0 differences, and all 96 C# route paths routed in Rust (plan 7, Task 13); again 0 differences after the asset move, phase 1 comparing `/`, `/favicon.ico` and `/api/catalog` byte for byte (plan 8, Task 5). | macOS (arm64, Intel) and Windows parity in `rust.yml`'s `parity` job: not run since plan 1, whose last PR run (44750943690) failed `parity (macos-15-intel)` phase 1 on `/audio` before audio was ported. Runs after the push (Task 10). |
-| S2 | The test coverage table has no gaps | met | `agent-rs/PORTING.md`: 898 C# test methods, 898 ported or ruled out (3 ruled out, each with its reason), 0 to do; the C# baseline ran 1623 test cases, all passed. Rust: 1293 + 2 tests pass on the server (plan 8, Task 3). The C# suite still passes with the moved resources (1623/1623, plan 8, Task 5). | The Windows- and macOS-only Rust tests (startup shortcut, job-object child, tray, `build.rs` resources and the `ProductVersion` readback) compile on the server and run only on CI (Task 10). |
-| S3 | The new browser suite passes against the Rust agent | pending | — | Plan 8 Task 7: the live-agent suite (settings load and save, the `X-Config-Version` conflict, the live preview, the pairing dialog and QR codes, shortcut icon upload and removal) in the Playwright container on the test server, against C# first, then Rust; CI job `ui-live` after the push. |
-| S4 | The macOS real-device and hardware checks pass | partly | MacBook hardware comparisons of the two agents pass: `pc` and `ping` (plan 2, Task 14), desk controls (plan 3, Task 12), the Wi-Fi certificate and pairing (plan 4, Task 8), sessions, quotas and a permission prompt (plan 5, Task 14), integrations (plan 6, Task 32). | The phone checks P1–P7 (section 3) with `agent-rs/scripts/mac-phone-check.sh` (USB and `--wifi`), `mac-dev-check.sh --phone`, the lock follow and the fork's APK over USB (Task 12). |
-| S5 | The Rust agent is lighter on every measured axis on the owner's MacBook | pending | — | Plan 8 Task 8 builds the tooling (`tools/resources/`, `agent-rs/scripts/mac-resources.sh`) and proves it with a cross-check on the test server. The MacBook run (about 70 minutes) waits for the owner's go at gate 1 (Task 13). |
-| S6 | 1.0.0 carries settings, pairings, icons and pushed values over | partly | The Rust agent uses the same folders and files; it read the installed C# agent's `lan-cert.pfx` with the same fingerprint (plan 4, Task 8); `config.json` byte parity (PR1); the updater swaps the program in the install folder (plan 7, Task 13). | A real switch on the MacBook with the fork's setup script (Tasks 11 and 13, with the owner's consent to replace the install). |
+| S1 | Every route passes the parity harness on every platform | met | Linux: phases 1–7 (30, 26, 26, 23, 21, 128 and 9 requests) with 0 differences, and all 96 C# route paths routed in Rust (plan 7, Task 13; plan 8, Task 5). macOS (Apple silicon) and Windows: phases 1–7 green in `rust.yml`'s `parity` job on every run since 44997776943, and in both release runs (plan 8, Tasks 10–11). macOS Intel is not run by the harness — a ruling (Task 10): behavior does not depend on the processor, and the Intel build's own tests pass natively on the self-hosted macOS 15 Intel runner and under Rosetta 2. | — |
+| S2 | The test coverage table has no gaps | met | `agent-rs/PORTING.md`: 898 C# test methods, 898 ported or ruled out (3 ruled out, each with its reason), 0 to do; the C# baseline ran 1623 test cases, all passed. Rust: 1310 + 2 tests pass on Linux x64 and arm64, macOS arm64, macOS Intel (native and Rosetta 2) and Windows in CI, the Windows- and macOS-only tests included (plan 8, Task 10). | — |
+| S3 | The new browser suite passes against the Rust agent | met | Plan 8 Task 7: the live-agent suite (settings load and save, the `X-Config-Version` conflict, the live preview, the pairing dialog and QR codes, shortcut icon upload and removal) against C# first, then Rust; CI job `ui-live` green on every run since the push (Task 10). | — |
+| S4 | The macOS real-device and hardware checks pass | met | MacBook hardware comparisons of the two agents: `pc` and `ping` (plan 2, Task 14), desk controls (plan 3, Task 12), the Wi-Fi certificate and pairing (plan 4, Task 8), sessions, quotas and a permission prompt (plan 5, Task 14), integrations (plan 6, Task 32). The phone checks P1–P7 on the owner's phone (plan 8, Task 12; section 3). | — |
+| S5 | The Rust agent is lighter on every measured axis on the owner's MacBook | pending | Plan 8 Task 8 built the tooling (`tools/resources/`, `agent-rs/scripts/mac-resources.sh`) and proved it with a cross-check on the test server. | The MacBook run (about 70 minutes) on the owner's go at gate 1 (Task 13). |
+| S6 | 1.0.0 carries settings, pairings, icons and pushed values over | partly | The Rust agent uses the same folders and files; it read the installed C# agent's `lan-cert.pfx` with the same fingerprint (plan 4, Task 8; again with the phone, P2); `config.json` byte parity (PR1); `setup.sh` and `setup.ps1` installed 1.0.0-alpha.2 on macOS, Ubuntu x64 and arm64 and Windows and replaced a running agent (`setup.yml`); an installed alpha.1 updated itself to alpha.2 from the releases (`lifecycle.yml`; plan 8, Task 11). | A real switch on the MacBook with the fork's setup script (Task 13, with the owner's consent to replace the install). |
 | S7 | `agent/` and its tests are removed after the switch | pending | — | Owner gate 2 (Task 14): a final C#↔Rust parity run on every OS and `port-status.py --check` as evidence, then the removal. |
 
 ## 2. Roadmap exit checks (plans 1–7)
 
 | Plan | Exit check | Status | Evidence | Pending step |
 |---|---|---|---|---|
-| 1 | The owner's phone shows the panel from the Rust agent over USB; the phase-1 corpus passes on Linux, macOS and Windows | partly | PR1: the phone showed the panel over USB and CI was green on all 8 jobs of plan 1's head. Linux phase 1: 0 differences on the current code (plan 8, Task 5). | The phone check on the current code: it ran before the 0.9.23 rebase (P1, Task 12). macOS and Windows phase 1 after the push, including the failed `macos-15-intel` run (Task 10). |
+| 1 | The owner's phone shows the panel from the Rust agent over USB; the phase-1 corpus passes on Linux, macOS and Windows | met | P1 on the current code (plan 8, Task 12): the full panel over USB from 1.0.0-alpha.2. Phase 1: 0 differences on Linux (plan 8, Task 5), macOS and Windows (CI, Task 10). | — |
 | 2 | `pc` and `ping` in `/api/state` match C# on the MacBook hardware run | met | Plan 2, Task 14: `mac-state-compare.sh` and `compare-pc-ping.py`. | — |
-| 3 | Media, volume, shortcuts and apps work from the phone on the MacBook | partly | Plan 3, Task 12: "desk controls match" between the two agents on the MacBook (92 apps, icon PNG, volume set and read back, a shortcut run). | Driving them from the phone (P3, Task 12). |
-| 4 | The phone switches USB ⇄ Wi-Fi with an existing pairing, no re-pair | partly | Plan 4, Task 8: the Rust agent read the installed agent's `lan-cert.pfx` (same fingerprint), `/api/pair` matched, the served certificate matched, HTTPS answered 200 with the key and 403 without. | The phone half, `mac-phone-check.sh --wifi` (P2, Task 12). |
-| 5 | Sessions, quotas and a Claude Code permission prompt round-trip on the MacBook | met | Plan 5, Task 14: the installed hook command run with a `PermissionRequest`, answered through a stand-in for the phone on a live stream; sessions, the GitHub user and the quota providers compared live with C# (3 sessions; no quota provider on either agent). | Confirming it on the real phone, `mac-dev-check.sh --phone` (P4, Task 12). |
-| 6 | The full route corpus passes on all platforms | partly | Linux phases 1–6, 0 differences (plan 6, Task 32), and phases 1–7 since (plan 7, Task 13; plan 8, Task 5); MacBook integrations match (plan 6, Task 32). | macOS and Windows parity (Task 10); follow-the-lock on the Mac (P5, Task 12). |
-| 7 | A `1.0.0-alpha.N` pre-release installs with `setup.sh` on the MacBook and updates itself to the next alpha | partly | On the test server, `agent-rs/scripts/remote-update-check.sh` (plan 7, Task 13): alpha.1 → alpha.2 by check and apply against a fake GitHub, relaunched as a new process; a wrong checksum and a program that does not start were refused with the install unchanged; no request carried a token. `setup.sh --pre` / `setup.ps1 -Pre` tests pass (plan 7, Task 12). | The owner's six secrets; alpha.1 and alpha.2 published; `lifecycle.yml` (self-update across two published alphas on `macos-latest`) and `setup.yml` (Task 11); the MacBook install replaced with an alpha only with the owner's consent. |
+| 3 | Media, volume, shortcuts and apps work from the phone on the MacBook | met | Plan 3, Task 12: "desk controls match" between the two agents on the MacBook. P3 (plan 8, Task 12): from the phone, the volume (over USB and over Wi-Fi), media play and pause, an app (Calculator) and a shortcut (Mute on and off). | — |
+| 4 | The phone switches USB ⇄ Wi-Fi with an existing pairing, no re-pair | met | Plan 4, Task 8: the Rust agent read the installed agent's `lan-cert.pfx` (same fingerprint), `/api/pair` matched, the served certificate matched. P2 (plan 8, Task 12): the phone came over Wi-Fi to the Rust agent with the pairing it made with C#, TLS on Android 8 included; again with the fork's app after it paired once. | — |
+| 5 | Sessions, quotas and a Claude Code permission prompt round-trip on the MacBook | met | Plan 5, Task 14 (through a stand-in for the phone). P4 (plan 8, Task 12): the installed hook's prompt showed on the real phone and Allow there reached the hook; sessions, the GitHub user and quotas the same as C#. | — |
+| 6 | The full route corpus passes on all platforms | met | Linux phases 1–7, 0 differences (plans 6–8); macOS and Windows phases 1–7 on CI (plan 8, Task 10); MacBook integrations match (plan 6, Task 32). P5 (plan 8, Task 12): locking the Mac put the phone to sleep within a second and unlocking woke it; with a secure lock screen on the phone the panel shows after the phone's own unlock, as with C#. | — |
+| 7 | A `1.0.0-alpha.N` pre-release installs with `setup.sh` on the MacBook and updates itself to the next alpha | partly | `remote-update-check.sh` on the test server (plan 7, Task 13). Published: 1.0.0-alpha.1 and 1.0.0-alpha.2 (pre-releases). `lifecycle.yml` on `macos-latest`: `setup.sh` installed alpha.1, which updated itself to alpha.2 by check and apply. `setup.yml`: `setup.sh` (macOS, Ubuntu x64 and arm64) and `setup.ps1` installed alpha.2 and replaced a running agent (plan 8, Task 11). | The owner's MacBook itself still runs the C# agent: replacing it is the real switch at gate 1 (S6). |
 
-## 3. Pending steps in detail
+## 3. Steps since Stage A, and what gate 1 still runs
 
-**After the push (Task 10), on CI:**
+**CI (Task 10), done:** the `rust.yml` matrix (fmt, clippy and tests on Ubuntu x64 and arm64, macOS arm64, macOS
+Intel under Rosetta 2, Windows) green, with the Windows-only code and tests, the `build.rs` resources, the
+`ProductVersion` readback and the CRLF log test; parity phases 1–7 on macOS (Apple silicon) and Windows; the package
+job (throwaway macOS certificate, PE checks, glibc floor, smoke test, zip); `ui-live`. A self-hosted macOS 15 Intel
+runner (a throwaway VM per job on the test server, never for fork pull requests or releases) also runs clippy, the
+tests, the release build and the smoke test natively.
 
-- C1: the `rust.yml` matrix (fmt, clippy and tests on Ubuntu x64 and arm64, macOS arm64 and Intel, Windows) and
-  parity phases 1–7 on macOS and Windows; none of it has run since plan 1.
-- C2–C4: Windows-only code checked so far only by the cross-build (icons, D3DKMT/PDH, Razer HID, camera and privacy,
-  the Core Audio and GSMTC deck, WinRT playback, the raw Win32 tray), the Windows-only tests (startup shortcut,
-  job-object child), the `build.rs` resources and the `ProductVersion` readback; the Windows `agent.log` line-end test
-  (CRLF), whose RED exists only on Windows.
-- C5: the package job (throwaway macOS certificate, PE checks, glibc floor, smoke test, zip).
-- The browser suite's `ui-live` job (Task 7).
+**Phone (Task 12; Huawei RNE-L22, Android 8), done:** P1 USB on the current code; P2 Wi-Fi with the existing pairing;
+P3 desk controls from the phone; P4 a Claude prompt answered on the phone; P5 follow the computer's lock; P6 an
+Android 8 phone on Wi-Fi adb that refuses `adb reverse` (logged once, the round goes on, the panel stays on Wi-Fi);
+P7 the agent installed the fork's APK over USB after the upstream app was uninstalled (with the owner's consent), and
+the fork's app then paired once over Wi-Fi.
 
-**With the phone (Task 12; Huawei RNE-L22, Android 8):**
+**Releases (Task 11), done:** 1.0.0-alpha.1 and 1.0.0-alpha.2 built, reviewed (assets, checksums, zip contents,
+architectures, macOS signatures) and published as pre-releases; `setup.yml` and `lifecycle.yml` (alpha.1 → alpha.2)
+green. `lifecycle.yml` can be dispatched only once it is on `main`; until then it runs from a throwaway branch.
 
-- P1 USB on the current code; P2 Wi-Fi with the existing pairing; P3 desk controls from the phone; P4 a Claude prompt
-  answered on the phone; P5 follow the computer's lock (lock → phone asleep, unlock → awake with the panel); P6 an
-  Android 8 phone on Wi-Fi adb that refuses `adb reverse` (the owner's requested departure); P7 the agent installs the
-  fork's APK over USB (needs the signed APK and the owner's consent to uninstall the upstream app).
-
-**Releases (Task 11):** alpha.1 as a draft, reviewed, published; alpha.2; `lifecycle.yml` alpha.1 → alpha.2 and
-`setup.yml` (which skips every install step until an alpha is published).
+**Found by P7, for the switch procedure:** the agent looks for a missing app only while its own `adb reverse` rule is
+absent (as C# does), so after uninstalling the old app the user unplugs the phone and plugs it back in (or restarts
+the agent) before Settings › Install the phone app offers the install.
 
 **In the 1.0.0 bump (Task 13):** `build.yml`'s metadata job runs `check-release.py --final`; the
 `crate_version_is_alpha` test changes; the Scoop bucket's `homepage` and `autoupdate.url` move to the fork; the winget
 manifests take the identifier the owner picks; `remote-update-check.sh` runs alpha → 1.0.0; the setup headers,
-`setup.yml` and `RELEASING.md` drop the pre-release wording; the CHANGELOG carries the switch procedure and section 4.
+`setup.yml` and `RELEASING.md` drop the pre-release wording; the CHANGELOG carries the switch procedure (with the
+replug step above) and section 4. Then the MacBook resource run (S5), a draft, the merge to `main`, publishing from
+`main`, and `lifecycle.yml` alpha → 1.0.0.
 
 **Fixed in plan 8 Stage A:** the push-store deadlock when a value expires before the 2 s save (Task 1); the panic on a
 non-ASCII app name, and a null `night.start` / `night.end` in a save refused as in C# (Task 2); a BOM before
@@ -104,8 +107,8 @@ From the ledgers and PR #1 (user-visible):
    and trusts the webpki roots, not the system store; the quota then shows "Could not reach Anthropic".
 6. **Pairing goes through the original project's page** (`ersinkoc.github.io/phonebox/pair/`), whose "Download the
    app" offers that project's APK, signed with the other key (unless the owner moves the host, section 5).
-7. **Wi-Fi details:** ALPN offers HTTP/1.1 only; a percent-encoded API path gets 403 over Wi-Fi; TLS on Android 8 is
-   unproven on the phone if P2 is still open at the release.
+7. **Wi-Fi details:** ALPN offers HTTP/1.1 only; a percent-encoded API path gets 403 over Wi-Fi (TLS on Android 8 is
+   proven on the owner's phone, P2).
 8. **Feed read state may not carry over:** item ids keyed by link come from the WHATWG URL parser.
 9. **One icon refetch after the switch:** the program-icon revision differs.
 10. **Process start times have whole-second precision.**
@@ -135,9 +138,7 @@ From the ledgers and PR #1 (user-visible):
    fork's issues and `CONTRIBUTING.md` asks for an issue first; `SECURITY.md` and the issue template still link the
    original project's advisories, and `PRIVACY.md` its issues. Enable them and point those texts at the fork, or
    have them reworded.
-4. **The six release secrets:** `PHONEBOX_KEYSTORE_BASE64`, `PHONEBOX_STORE_PASSWORD`, `PHONEBOX_KEY_ALIAS`,
-   `PHONEBOX_KEY_PASSWORD`, `MACOS_SIGNING_P12_BASE64`, `MACOS_SIGNING_P12_PASSWORD`. Without them the release stops
-   before publishing anything.
+4. ~~The six release secrets~~ — set by the owner; both alphas were signed with them.
 5. **The MacBook resource run:** about 70 minutes of two agents beside the installed one on spare ports, possibly
    with one-time Automation or Local Network prompts; it is S5's measurement.
 6. **Replacing the MacBook install with an alpha** (plan 7's exit check and S6).
@@ -152,4 +153,4 @@ From the ledgers and PR #1 (user-visible):
    Accept them as departures (item 17 of section 4), or have them fixed, which needs the reader to know each field's
    containing type.
 8. **The gates themselves:** consent to 1.0.0 (Task 13) and, after it has run a while, to removing `agent/`
-   (Task 14); reconnecting the phone and consenting to uninstall the upstream app on it (Task 12).
+   (Task 14). (The phone checks and the upstream app's uninstall, Task 12, are done.)
