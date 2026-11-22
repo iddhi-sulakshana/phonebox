@@ -1,0 +1,159 @@
+[
+  {
+    "name": "work: no sessions in the parity home",
+    "path": "/api/work",
+    "wait": 3,
+    "ignore": [
+      "/github"
+    ]
+  },
+  {
+    "name": "conversation without id",
+    "path": "/api/work/conversation",
+    "compare": "bytes"
+  },
+  {
+    "name": "conversation of an unknown session",
+    "path": "/api/work/conversation?id=claude:nope"
+  },
+  {
+    "name": "quotas: no tools in the parity home",
+    "path": "/api/quotas"
+  },
+  {
+    "name": "approvals",
+    "path": "/api/approvals"
+  },
+  {
+    "name": "decision for an unknown id",
+    "method": "POST",
+    "path": "/api/approvals/nope?decision=allow",
+    "compare": "bytes"
+  },
+  {
+    "name": "decision without decision",
+    "method": "POST",
+    "path": "/api/approvals/nope",
+    "compare": "bytes"
+  },
+  {
+    "name": "hook status",
+    "path": "/api/claude/hook",
+    "ignore": [
+      "/path"
+    ]
+  },
+  {
+    "name": "docker: warm-up (the first probe may outlast the 2 s a request waits)",
+    "path": "/api/docker",
+    "compare": "status"
+  },
+  {
+    "name": "docker",
+    "path": "/api/docker",
+    "ignore": [
+      "/snapshot/error",
+      "/snapshot/updated"
+    ],
+    "shape": [
+      "/snapshot/containers"
+    ],
+    "wait": 3
+  },
+  {
+    "name": "docker action on an unknown container",
+    "method": "POST",
+    "path": "/api/docker/x/start"
+  },
+  {
+    "name": "command widget on a missing page",
+    "path": "/api/widget/nope/nope",
+    "compare": "bytes"
+  },
+  {
+    "name": "command widget with a bad force",
+    "path": "/api/widget/nope/nope?force=maybe",
+    "compare": "bytes"
+  },
+  {
+    "name": "hook endpoint: invalid JSON",
+    "method": "POST",
+    "path": "/api/hooks/claude/permission",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "not json",
+    "compare": "bytes"
+  },
+  {
+    "name": "hook endpoint: not a permission request",
+    "method": "POST",
+    "path": "/api/hooks/claude/permission",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"hook_event_name\":\"Stop\"}",
+    "compare": "bytes"
+  },
+  {
+    "name": "approvals need POST",
+    "path": "/api/approvals/nope?decision=allow",
+    "compare": "status"
+  },
+  {
+    "name": "wifi: the hook endpoint stays local",
+    "wifi": true,
+    "method": "POST",
+    "path": "/api/hooks/claude/permission",
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A",
+      "Content-Type": "application/json"
+    },
+    "body": "{}"
+  },
+  {
+    "name": "wifi: hook status stays local",
+    "wifi": true,
+    "path": "/api/claude/hook",
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    }
+  },
+  {
+    "name": "wifi: hook install stays local",
+    "wifi": true,
+    "method": "POST",
+    "path": "/api/claude/hook",
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    }
+  },
+  {
+    "name": "wifi: hook removal stays local",
+    "wifi": true,
+    "method": "DELETE",
+    "path": "/api/claude/hook",
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    }
+  },
+  {
+    "name": "wifi: work",
+    "wifi": true,
+    "path": "/api/work",
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    },
+    "ignore": [
+      "/github"
+    ]
+  },
+  {
+    "name": "wifi: approvals",
+    "wifi": true,
+    "path": "/api/approvals",
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    }
+  }
+]

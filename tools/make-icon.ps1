@@ -1,7 +1,7 @@
 # Renders the PhoneBox icon (same design as the Android launcher icon) as a multi-size .ico.
-# Usage: pwsh tools/make-icon.ps1  ->  agent/PhoneBox.Agent/phonebox.ico
+# Usage: pwsh tools/make-icon.ps1  ->  agent-rs/assets/phonebox.ico
 Add-Type -AssemblyName System.Drawing
-$outDir = Join-Path $PSScriptRoot '..\agent\PhoneBox.Agent'
+$outDir = Join-Path $PSScriptRoot '..\agent-rs\assets'
 $out = Join-Path (Resolve-Path -LiteralPath $outDir).Path 'phonebox.ico'
 
 function New-RoundRect([float]$x, [float]$y, [float]$w, [float]$h, [float]$r) {

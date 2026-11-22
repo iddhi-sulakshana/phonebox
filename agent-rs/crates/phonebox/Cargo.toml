@@ -1,0 +1,133 @@
+[package]
+name = "phonebox"
+description = "PhoneBox desktop agent library"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[features]
+# HTTPS (rustls). On in every real build; scripts/remote-cross-check.sh type-checks the Windows and macOS code without it,
+# since its crypto (ring) needs that platform's C toolchain to build.
+default = ["tls"]
+tls = ["reqwest/rustls-tls", "reqwest/rustls-tls-native-roots", "dep:rustls", "dep:rustls-native-certs", "dep:tokio-rustls", "dep:hyper-rustls", "dep:webpki-roots"]
+
+[lints]
+workspace = true
+
+[dependencies]
+rust-embed = { version = "8", features = ["debug-embed"] }
+axum = { version = "0.8", features = ["ws"] }
+base64 = "0.22"
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+getrandom = "0.3"
+indexmap = { version = "2", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["full"] }
+futures-util = { version = "0.3", default-features = false }
+# OBS Studio's obs-websocket client (TLS for wss:// comes from tokio-rustls, under `tls`)
+tokio-tungstenite = { version = "0.29", default-features = false, features = ["handshake"] }
+tower = { version = "0.5", default-features = false, features = ["util"] }
+serde_json = { version = "1", features = ["preserve_order", "raw_value"] }
+regex = "1"
+# outbound HTTP; TLS (rustls) comes with the first plan that needs it
+reqwest = { version = "0.12", default-features = false, features = ["stream", "gzip", "deflate", "brotli"] }
+# the quota checks' client (QuotaMonitor): HTTP/1.1 over its own IPv4-first connect, TLS from hyper-rustls (feature `tls`)
+# the Wi-Fi port is served by hyper directly, for its header timeout
+hyper = { version = "1", features = ["client", "http1", "server"] }
+hyper-util = { version = "0.1", features = ["client-legacy", "http1", "server", "service", "tokio"] }
+http = "1"
+http-body-util = "0.1"
+hyper-rustls = { version = "0.27", default-features = false, features = ["http1", "ring", "tls12"], optional = true }
+webpki-roots = { version = "1", optional = true }
+# the Wi-Fi port's TLS server (feature `tls`); ring only, as reqwest's client
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"], optional = true }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"], optional = true }
+# the system's trusted roots (C#'s clients use the OS certificate store), for TLS the agent sets up itself (OBS wss://)
+rustls-native-certs = { version = "0.8", optional = true }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# calendar time zones (Ics): IANA zones from the system tzdb (bundled on Windows), gaps and folds as C# reads them
+jiff = "0.2"
+# the process table (ProcessMonitor): names, CPU time, memory and start times on every OS
+sysinfo = { version = "0.40", default-features = false, features = ["system"] }
+# shortcut icon uploads: the revision (SHA-256) and the SVG check (an XML parser that never fetches a DTD)
+sha2 = "0.10"
+# the agent update's zip (Deflate only, the pure-Rust backend)
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
+roxmltree = "0.20"
+# the Wi-Fi certificate (plan 4): PKCS#12 and the self-signed P-256 certificate, all pure Rust so every target builds them
+p256 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
+sha1 = "0.10"
+hmac = "0.12"
+des = "0.8"
+rc2 = "0.8"
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+
+[target.'cfg(windows)'.dependencies]
+# the privacy monitor's camera callback (#[implement] expands to windows_core paths)
+windows-core = "0.62"
+# waiting on WinRT operations with a timeout (the deck's player opening a source)
+windows-future = "0.3"
+# the photo frame's scaled copies on Windows (C# used GDI+): JPEG and PNG in, JPEG out
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+windows = { version = "0.62", features = [
+    "ApplicationModel",
+    "Devices_Enumeration",
+    "Foundation",
+    "Foundation_Collections",
+    "Management_Deployment",
+    "Media",
+    "Media_Control",
+    "Media_Core",
+    "Media_Devices",
+    "Media_Playback",
+    "Media_Streaming_Adaptive",
+    "Storage_Streams",
+    "Win32_Devices_DeviceAndDriverInstallation",
+    "Win32_Devices_Display",
+    "Win32_Devices_HumanInterfaceDevice",
+    "Win32_Devices_Properties",
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Media_Audio",
+    "Win32_Media_Audio_Endpoints",
+    "Win32_Media_MediaFoundation",
+    "Win32_NetworkManagement_IpHelper",
+    "Win32_NetworkManagement_Ndis",
+    "Win32_Networking_WinSock",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_Storage_Packaging_Appx",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
+    "Win32_System_Registry",
+    "Win32_System_RemoteDesktop",
+    "Win32_System_Services",
+    "Win32_System_IO",
+    "Win32_System_JobObjects",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Power",
+    "Win32_System_Shutdown",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_PropertiesSystem",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }
+tempfile = "3"
+# a real WebSocket client for the trackpad socket tests
+tokio-tungstenite = "0.29"
+futures-util = { version = "0.3", features = ["sink"] }

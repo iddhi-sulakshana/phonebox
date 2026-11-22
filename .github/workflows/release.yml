@@ -1,13 +1,16 @@
 name: release
 
-# Builds every release artifact on GitHub's runners and publishes them with checksums as a GitHub release.
-# scripts/release.ps1 dispatches this workflow. Start it from Actions › release › Run workflow after bumping the version.
+# Builds every release artifact on GitHub's runners and publishes them with checksums as a GitHub release: the Rust
+# agent (agent-rs/) for five targets and the Android app. The version is agent-rs/Cargo.toml's (docs/RELEASING.md).
+# A pre-release (x.y.z-alpha.N) is published as a pre-release that never becomes "latest"; a final version (such as
+# 1.0.0) also needs the `final` input, and only a published final release from main updates the Scoop and winget
+# manifests. Start it from Actions › release › Run workflow, on the branch to release, after bumping the version.
 #
 # The APK must be signed with the same key as the app already on the phones, or Android refuses the update. Add the
 # key as repository secrets: PHONEBOX_KEYSTORE_BASE64 (base64 of the .jks / .keystore file), PHONEBOX_STORE_PASSWORD,
 # PHONEBOX_KEY_ALIAS and PHONEBOX_KEY_PASSWORD. Without them the workflow stops before publishing anything.
 # The macOS agent is signed with PhoneBox's own certificate, MACOS_SIGNING_P12_BASE64 and MACOS_SIGNING_P12_PASSWORD
-# (tools/make-macos-signing-cert.sh); without them the workflow stops too.
+# (tools/make-macos-signing-cert.sh); without them the workflow stops too. The Windows agent is not code-signed.
 on:
   workflow_dispatch:
     inputs:
@@ -15,6 +18,10 @@ on:
         description: Create the release as a draft
         type: boolean
         default: true
+      final:
+        description: Allow a final version (no -alpha.N), such as 1.0.0; ask the owner first
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -24,25 +31,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # the C# agent's CI stays as the parity oracle until the switch; the Rust agent's tests, parity runs and packaging
   checks:
     uses: ./.github/workflows/build.yml
+  rust:
+    uses: ./.github/workflows/rust.yml
 
   version:
-    needs: checks
+    needs: [checks, rust]
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.v.outputs.version }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # agent-rs/Cargo.toml's version; Android's versionName must match, and a final one needs the `final` input
       - id: v
         name: Read and check the version
+        env:
+          FINAL: ${{ inputs.final }}
         run: |
-          v=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' agent/PhoneBox.Agent/PhoneBox.Agent.csproj | head -n1)
-          grep -q "versionName = \"$v\"" android/app/build.gradle.kts || { echo "::error::android versionName does not match $v"; exit 1; }
+          v=$(python3 -c "import tomllib; print(tomllib.load(open('agent-rs/Cargo.toml', 'rb'))['workspace']['package']['version'])")
+          if [ "$FINAL" = true ]; then python3 tools/check-release.py --final; else python3 tools/check-release.py; fi
           if git ls-remote --exit-code --tags origin "refs/tags/v$v" >/dev/null; then echo "::error::v$v is already released; bump the version first"; exit 1; fi
-          echo "version=$v" >> "$GITHUB_OUTPUT"
-      - name: Check release metadata
-        run: python3 tools/check-release.py
+          case "$v" in *-*) prerelease=true ;; *) prerelease=false ;; esac
+          { echo "version=$v"; echo "prerelease=$prerelease"; } >> "$GITHUB_OUTPUT"
 
   apk:
     needs: version
@@ -85,27 +98,31 @@ jobs:
     strategy:
       matrix:
         include:
-          - { os: windows-latest, rid: win-x64, tfm: net10.0-windows10.0.19041.0 }
-          - { os: ubuntu-latest, rid: linux-x64, tfm: net10.0 }
-          - { os: ubuntu-24.04-arm, rid: linux-arm64, tfm: net10.0 }
-          - { os: macos-latest, rid: osx-arm64, tfm: net10.0 }
-          - { os: macos-15-intel, rid: osx-x64, tfm: net10.0 }
+          - { os: windows-latest, rid: win-x64, exe: .exe, target: "" }
+          # Ubuntu 22.04: glibc 2.35, so the agent also runs on older distributions than a 24.04 build would
+          - { os: ubuntu-22.04, rid: linux-x64, exe: "", target: "" }
+          - { os: ubuntu-22.04-arm, rid: linux-arm64, exe: "", target: "" }
+          - { os: macos-latest, rid: osx-arm64, exe: "", target: "" }
+          # built for Intel on Apple silicon, as rust.yml tests it; the smoke test runs it under Rosetta 2
+          - { os: macos-latest, rid: osx-x64, exe: "", target: x86_64-apple-darwin }
     runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
-      actions: read # SignPath fetches the unsigned agent from this run's artifacts
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
-        with:
-          dotnet-version: 10.0.x
-      - name: Unit tests
-        run: dotnet test agent/PhoneBox.Agent.Tests --nologo
-      # Self-contained single file: no .NET runtime to install. Not compressed (the zip is barely smaller and a
-      # compressed bundle costs about 90 MB more memory in a process that runs all day); native libraries stay
-      # loose next to the exe instead of being extracted to the temp folder at run time.
-      - name: Publish (self-contained, single file)
-        run: dotnet publish agent/PhoneBox.Agent -c Release -f ${{ matrix.tfm }} -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -o out --nologo
+      - name: Rust toolchain (from rust-toolchain.toml)
+        run: rustup toolchain install 1.98.0 --profile minimal ${{ matrix.target && format('-t {0}', matrix.target) || '' }}
+      - name: Rosetta 2
+        if: matrix.target == 'x86_64-apple-darwin'
+        run: arch -x86_64 /usr/bin/true 2>/dev/null || softwareupdate --install-rosetta --agree-to-license
+      # one executable that embeds everything it serves; Windows links the C runtime in (agent-rs/.cargo/config.toml).
+      # No build cache here: a release builds from scratch
+      - name: Build the agent
+        working-directory: agent-rs
+        run: cargo build --release --locked -p phonebox-agent ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+      - name: Stage the zip's two files
+        shell: bash
+        run: |
+          mkdir out
+          cp "agent-rs/target/${{ matrix.target && format('{0}/', matrix.target) || '' }}release/PhoneBoxAgent${{ matrix.exe }}" agent-rs/THIRD-PARTY-NOTICES.txt out/
       # PhoneBox's own certificate (tools/make-macos-signing-cert.sh): every release has the same designated
       # requirement, so macOS keeps the Accessibility permission across updates (#269). Without the secrets the release
       # stops: an ad hoc signature would make every Mac lose the permission again.
@@ -116,28 +133,38 @@ jobs:
           binary: out/PhoneBoxAgent
           p12-base64: ${{ secrets.MACOS_SIGNING_P12_BASE64 }}
           p12-password: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}
-      # Authenticode signing through SignPath Foundation, before the smoke test, the zip, the checksums, the attestation
-      # and the Scoop/winget hash, which all cover the signed file. It is on while the repository variable
-      # SIGNPATH_SIGNING_POLICY names a policy (release-signing); each request waits for a manual approval in SignPath.
-      - name: Sign PhoneBoxAgent.exe (SignPath)
-        if: matrix.rid == 'win-x64' && vars.SIGNPATH_SIGNING_POLICY != ''
-        uses: ./.github/actions/sign-windows-agent
-        with:
-          exe: out/PhoneBoxAgent.exe
-          signing-policy: ${{ vars.SIGNPATH_SIGNING_POLICY }}
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          trusted: ${{ vars.SIGNPATH_SIGNING_POLICY == 'release-signing' }}
-      - name: Smoke-test the published agent on its native architecture
+      # setup.ps1 reads ProductVersion; a console program would open a window, and a dynamic C runtime needs the
+      # Visual C++ redistributable, which a clean Windows does not have
+      - name: Check the Windows executable
+        if: matrix.rid == 'win-x64'
         shell: pwsh
         run: |
-          $exe = if ($IsWindows) { 'out/PhoneBoxAgent.exe' } else { 'out/PhoneBoxAgent' }
-          python tools/smoke-agent.py $exe --version '${{ needs.version.outputs.version }}'
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $exe = 'out/PhoneBoxAgent.exe'
+          $bytes = [IO.File]::ReadAllBytes($exe)
+          $subsystem = [BitConverter]::ToUInt16($bytes, [BitConverter]::ToInt32($bytes, 0x3C) + 0x5C)
+          if ($subsystem -ne 2) { throw "not a GUI program (subsystem $subsystem)" }
+          if ([Text.Encoding]::ASCII.GetString($bytes).ToLowerInvariant().Contains('vcruntime140')) { throw 'needs VCRUNTIME140.dll' }
+          $product = (Get-Item $exe).VersionInfo.ProductVersion
+          if ($product -ne '${{ needs.version.outputs.version }}') { throw "ProductVersion is '$product'" }
+      - name: Check the glibc the Linux agent needs
+        if: startsWith(matrix.rid, 'linux-')
+        run: |
+          newest=$(objdump -T out/PhoneBoxAgent | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -n1)
+          echo "needs $newest"
+          [ "$(printf '%s\n' "$newest" GLIBC_2.35 | sort -V | tail -n1)" = GLIBC_2.35 ]
+      # on its own architecture, or under Rosetta 2 for the Intel Mac build
+      - name: Smoke-test the agent
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then py=python; else py=python3; fi
+          "$py" tools/smoke-agent.py "out/PhoneBoxAgent${{ matrix.exe }}" --version "${{ needs.version.outputs.version }}"
+      # the executable and the notices at the zip root, as setup and the updater expect
       - name: Zip
-        shell: pwsh
+        shell: bash
         run: |
-          New-Item -ItemType Directory -Force dist | Out-Null
-          Compress-Archive -Path out/* -DestinationPath "dist/PhoneBoxAgent-${{ needs.version.outputs.version }}-${{ matrix.rid }}.zip"
+          if [ "$RUNNER_OS" = Windows ]; then py=python; else py=python3; fi
+          mkdir -p dist
+          "$py" tools/zip-agent.py out "dist/PhoneBoxAgent-${{ needs.version.outputs.version }}-${{ matrix.rid }}.zip"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-agent-${{ matrix.rid }}
@@ -187,27 +214,35 @@ jobs:
           cat >> notes.md <<'EOF'
 
           ---
-          [Code signing policy](https://github.com/ersinkoc/phonebox#code-signing-policy) · [Privacy policy](https://github.com/ersinkoc/phonebox/blob/main/PRIVACY.md)
+          The Windows agent is not code-signed. [Privacy policy](https://github.com/${{ github.repository }}/blob/main/PRIVACY.md)
           EOF
+      # a pre-release (x.y.z-alpha.N) is never "latest": setup and the updater of a stable install skip it
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
+          DRAFT: ${{ inputs.draft }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
         run: |
           v="${{ needs.version.outputs.version }}"
-          gh release create "v$v" dist/* --title "PhoneBox $v" --notes-file notes.md --target "${{ github.sha }}" ${{ inputs.draft && '--draft' || '' }}
-      # a draft's downloads are not public yet, so the package manifests follow only published releases
+          flags=()
+          if [ "$DRAFT" = true ]; then flags+=(--draft); fi
+          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease --latest=false); fi
+          gh release create "v$v" dist/* --title "PhoneBox $v" --notes-file notes.md --target "${{ github.sha }}" "${flags[@]}"
+      # Only a published final release from main updates the package manifests: a draft's downloads are not public
+      # yet, a pre-release is not for package users, and a push from another branch would move main. They point at
+      # this repository from 1.0.0 on (winget under iddhi-sulakshana.PhoneBox; submitting it to winget-pkgs is manual).
       - name: Update the Scoop bucket and the winget manifests
-        if: ${{ !inputs.draft }}
+        if: ${{ !inputs.draft && needs.version.outputs.prerelease == 'false' && github.ref == 'refs/heads/main' }}
         run: |
           v="${{ needs.version.outputs.version }}"
           sha=$(sha256sum "dist/PhoneBoxAgent-$v-win-x64.zip" | cut -d' ' -f1)
-          python3 - "$v" "$sha" <<'PY'
+          python3 - "$v" "$sha" "${{ github.repository }}" <<'PY'
           import json, sys
-          v, sha = sys.argv[1], sys.argv[2]
+          v, sha, repo = sys.argv[1], sys.argv[2], sys.argv[3]
           p = 'bucket/phonebox.json'
           m = json.load(open(p, encoding='utf-8'))
           m['version'] = v
-          m['architecture']['64bit']['url'] = f'https://github.com/ersinkoc/phonebox/releases/download/v{v}/PhoneBoxAgent-{v}-win-x64.zip'
+          m['architecture']['64bit']['url'] = f'https://github.com/{repo}/releases/download/v{v}/PhoneBoxAgent-{v}-win-x64.zip'
           m['architecture']['64bit']['hash'] = sha
           # the agent is self-contained since 0.9.7: no .NET runtime to suggest
           m.get('suggest', {}).pop('.NET Desktop Runtime 10', None)

@@ -21,7 +21,7 @@
     <!-- no console window; lives in the system tray -->
     <OutputType>WinExe</OutputType>
     <UseWindowsForms>true</UseWindowsForms>
-    <ApplicationIcon>phonebox.ico</ApplicationIcon>
+    <ApplicationIcon>..\..\agent-rs\assets\phonebox.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
@@ -53,13 +53,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="config.default.json" LogicalName="config.default.json" />
-    <EmbeddedResource Include="config.default.linux.json" LogicalName="config.default.linux.json" />
-    <EmbeddedResource Include="config.default.macos.json" LogicalName="config.default.macos.json" />
-    <EmbeddedResource Include="phonebox.ico" LogicalName="phonebox.ico" />
-    <EmbeddedResource Include="settings.html" LogicalName="settings.html" />
-    <EmbeddedResource Include="widgets.json" LogicalName="widgets.json" />
-    <EmbeddedResource Include="templates.json" LogicalName="templates.json" />
+    <EmbeddedResource Include="..\..\agent-rs\assets\config.default.json" LogicalName="config.default.json" />
+    <EmbeddedResource Include="..\..\agent-rs\assets\config.default.linux.json" LogicalName="config.default.linux.json" />
+    <EmbeddedResource Include="..\..\agent-rs\assets\config.default.macos.json" LogicalName="config.default.macos.json" />
+    <EmbeddedResource Include="..\..\agent-rs\assets\phonebox.ico" LogicalName="phonebox.ico" />
+    <EmbeddedResource Include="..\..\agent-rs\assets\settings.html" LogicalName="settings.html" />
+    <EmbeddedResource Include="..\..\agent-rs\assets\widgets.json" LogicalName="widgets.json" />
+    <EmbeddedResource Include="..\..\agent-rs\assets\templates.json" LogicalName="templates.json" />
     <!-- the phone's panel, served at /panel/ for the live preview in the layout editor -->
     <EmbeddedResource Include="..\..\android\app\src\main\assets\www\*.*" LogicalName="www/%(Filename)%(Extension)" />
     <EmbeddedResource Include="..\..\android\app\src\main\assets\www\widgets\*.*" LogicalName="www/widgets/%(Filename)%(Extension)" />

@@ -1,0 +1,182 @@
+[
+  {
+    "name": "state: media, audio and toggles",
+    "path": "/api/state",
+    "wait": 2,
+    "headers": {
+      "X-PhoneBox-App": "0.9.22"
+    },
+    "ignore": [
+      "/ts",
+      "/cfgVersion",
+      "/host",
+      "/pushVersion",
+      "/pc",
+      "/ping"
+    ],
+    "shape": [
+      "/media",
+      "/audio",
+      "/toggles"
+    ]
+  },
+  {
+    "name": "apps",
+    "path": "/api/apps"
+  },
+  {
+    "name": "app icon: unknown id",
+    "path": "/api/apps/icon?id=nope"
+  },
+  {
+    "name": "app icon: missing id",
+    "path": "/api/apps/icon",
+    "compare": "status"
+  },
+  {
+    "name": "open app: unknown id",
+    "method": "POST",
+    "path": "/api/apps/open?id=nope"
+  },
+  {
+    "name": "open app: missing id",
+    "method": "POST",
+    "path": "/api/apps/open",
+    "compare": "status"
+  },
+  {
+    "name": "spectrum",
+    "path": "/api/spectrum",
+    "ignore": [
+      "/active",
+      "/b"
+    ]
+  },
+  {
+    "name": "cover art: none",
+    "path": "/api/art"
+  },
+  {
+    "name": "volume: no arguments",
+    "method": "POST",
+    "path": "/api/volume"
+  },
+  {
+    "name": "volume: level not a number",
+    "method": "POST",
+    "path": "/api/volume?level=x",
+    "compare": "status"
+  },
+  {
+    "name": "volume: empty level",
+    "method": "POST",
+    "path": "/api/volume?level=",
+    "compare": "status"
+  },
+  {
+    "name": "media: unknown action",
+    "method": "POST",
+    "path": "/api/media/bogus"
+  },
+  {
+    "name": "media: seek to a non-number",
+    "method": "POST",
+    "path": "/api/media/seek?ms=x",
+    "compare": "status"
+  },
+  {
+    "name": "run: unknown shortcut",
+    "method": "POST",
+    "path": "/api/run/phonebox-no-such"
+  },
+  {
+    "name": "shortcut test: wrong content type",
+    "method": "POST",
+    "path": "/api/shortcuts/test",
+    "headers": {
+      "Content-Type": "text/plain"
+    },
+    "body": "{}",
+    "compare": "status"
+  },
+  {
+    "name": "shortcut test: empty command",
+    "method": "POST",
+    "path": "/api/shortcuts/test",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"cmd\":\"\"}"
+  },
+  {
+    "name": "shortcut icon: unknown id",
+    "path": "/api/shortcuts/icon?id=nope"
+  },
+  {
+    "name": "shortcut icon: missing id",
+    "path": "/api/shortcuts/icon",
+    "compare": "status"
+  },
+  {
+    "name": "shortcut icon: upload flag not a bool",
+    "path": "/api/shortcuts/icon?id=nope&upload=maybe",
+    "compare": "status"
+  },
+  {
+    "name": "shortcut icon upload: unknown id",
+    "method": "POST",
+    "path": "/api/settings/shortcut-icon?id=nope",
+    "headers": {
+      "Content-Type": "image/png"
+    },
+    "body": "PNG"
+  },
+  {
+    "name": "shortcut icon upload: missing id",
+    "method": "POST",
+    "path": "/api/settings/shortcut-icon",
+    "headers": {
+      "Content-Type": "image/png"
+    },
+    "body": "x",
+    "compare": "status"
+  },
+  {
+    "name": "shortcut icon removal: unknown id",
+    "method": "DELETE",
+    "path": "/api/settings/shortcut-icon?id=nope"
+  },
+  {
+    "name": "dictate: no widget",
+    "method": "POST",
+    "path": "/api/dictate?text=hello",
+    "headers": {
+      "X-PhoneBox-Device": "phonebox-parity"
+    }
+  },
+  {
+    "name": "trackpad: POST without the control option",
+    "method": "POST",
+    "path": "/api/trackpad",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"type\":\"move\",\"dx\":5,\"dy\":5}",
+    "compare": "status"
+  },
+  {
+    "name": "trackpad: GET without the control option",
+    "path": "/api/trackpad",
+    "compare": "status"
+  },
+  {
+    "name": "phone config with icons",
+    "path": "/api/config",
+    "headers": {
+      "X-PhoneBox-App": "0.9.22"
+    },
+    "ignore": [
+      "/version"
+    ]
+  }
+]

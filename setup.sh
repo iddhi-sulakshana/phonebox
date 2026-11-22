@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # PhoneBox setup for Linux and macOS: installs the latest release, everything it needs, and the phone app.
 #
-#   curl -fsSL https://raw.githubusercontent.com/ersinkoc/phonebox/main/setup.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/ersinkoc/phonebox/main/setup.sh | bash -s -- --no-phone
+#   curl -fsSL https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/main/setup.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/main/setup.sh | bash -s -- --no-phone
 #
 # Run it as yourself, not with sudo: it asks for sudo only to install packages, and asks first.
 # Running it again updates PhoneBox or repairs the installation; settings are kept.
@@ -14,15 +14,16 @@
 #   --no-autostart      do not start PhoneBox at login
 #   --no-start          install only; do not start the agent
 #   --no-extras         do not offer the optional helpers (playerctl, xprintidle, nowplaying-cli ...)
-#   --version <x.y.z>   install this release instead of the latest
+#   --version <x.y.z>   install this release instead of the latest (such as 1.0.0)
+#   --pre               install the newest release, pre-releases included
 #   --dry-run           download and check everything, show what would happen, change nothing
 set -euo pipefail
 
-repo="ersinkoc/phonebox"
+repo="iddhi-sulakshana/phonebox"
 package="net.oxog.phonebox.deskpanel"
 settings_url="http://127.0.0.1:8765"
 
-yes=0; phone=1; serial=""; autostart=1; start=1; extras=1; version=""; dry=0
+yes=0; phone=1; serial=""; autostart=1; start=1; extras=1; version=""; pre=0; dry=0
 tmp=""
 
 if [ -t 1 ]; then c_step=$'\033[36m'; c_ok=$'\033[32m'; c_warn=$'\033[33m'; c_err=$'\033[31m'; c_off=$'\033[0m'
@@ -147,6 +148,18 @@ latest_version() {
   # the API allows 60 requests an hour per address; the release page redirects to the newest tag as well
   if [ -z "$v" ] && have curl; then
     v="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$repo/releases/latest" 2>/dev/null | sed -n 's#.*/tag/##p')" || v=""
+  fi
+  printf '%s' "$v"
+}
+
+newest_release() { # the newest published release, pre-releases included (the API lists the newest first, no drafts)
+  local v=""
+  v="$(download_text "https://api.github.com/repos/$repo/releases?per_page=1" 2>/dev/null \
+    | grep -o '"tag_name"[[:space:]]*:[[:space:]]*"[^"]*"' | head -n1 | sed 's/.*"\([^"]*\)"$/\1/')" || v=""
+  # the API allows 60 requests an hour per address; the releases feed lists the newest first too, pre-releases included
+  if [ -z "$v" ]; then
+    v="$(download_text "https://github.com/$repo/releases.atom" 2>/dev/null \
+      | grep -o '/releases/tag/[^"<?#]*' | head -n1 | sed 's#.*/tag/##')" || v=""
   fi
   printf '%s' "$v"
 }
@@ -454,8 +467,9 @@ main() {
       --no-start) start=0 ;;
       --no-extras) extras=0 ;;
       --version) [[ $# -ge 2 && -n $2 && $2 != -* ]] || die "--version needs a value"; version="$2"; shift ;;
+      --pre) pre=1 ;;
       --dry-run) dry=1 ;;
-      -h|--help) sed -n '2,19p' "$0" 2>/dev/null || echo "See https://github.com/$repo#quick-start"; exit 0 ;;
+      -h|--help) sed -n '2,22p' "$0" 2>/dev/null || echo "See https://github.com/$repo#quick-start"; exit 0 ;;
       *) die "unknown option: $1 (see --help)" ;;
     esac
     shift
@@ -492,10 +506,16 @@ main() {
 
   step 'Finding the release'
   local tag ver base
-  tag="${version:-$(latest_version)}"
-  [ -n "$tag" ] || die "could not find the latest release on GitHub. Check the internet connection, or pass --version 0.9.8."
+  if [ -n "$version" ]; then tag="$version"
+  elif [ "$pre" = 1 ]; then
+    tag="$(newest_release)"
+    [ -n "$tag" ] || die "could not find a release on GitHub. Check the internet connection, or pass --version <version>."
+  else
+    tag="$(latest_version)"
+    [ -n "$tag" ] || die "could not find the latest release on GitHub. Check the internet connection, or pass --pre to take the newest pre-release."
+  fi
   ver="${tag#v}"
-  printf '%s' "$ver" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || die "unexpected version '$tag'."
+  printf '%s' "$ver" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$' || die "unexpected version '$tag'."
   base="https://github.com/$repo/releases/download/v$ver"
   ok "PhoneBox $ver ($rid)"
 
@@ -506,7 +526,7 @@ main() {
   local zip_name="PhoneBoxAgent-$ver-$rid.zip" sums
   sums="$tmp/SHA256SUMS-$ver.txt"
   download "$base/SHA256SUMS-$ver.txt" "$sums" || die "release $ver was not found ($base)."
-  info "$zip_name (about 45 MB) ..."
+  info "$zip_name (about 6 MB) ..."
   download "$base/$zip_name" "$tmp/$zip_name" || die "the download failed: $base/$zip_name"
   check_sum "$tmp/$zip_name" "$sums" || die "the agent download could not be verified. Nothing was installed."
   check_provenance "$tmp/$zip_name"

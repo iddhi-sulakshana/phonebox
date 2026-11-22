@@ -1,0 +1,498 @@
+//! The network adapters as .NET's `NetworkInterface.GetAllNetworkInterfaces()` reports them to the C# agent:
+//! Linux `/sys/class/net` + `getifaddrs` + `/proc/net/route`, macOS `getifaddrs` (link-level `if_data`), Windows
+//! `GetAdaptersAddresses` + `GetIfEntry2`.
+
+use std::net::Ipv4Addr;
+
+/// The `NetworkInterfaceType` values the C# code tells apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AdapterKind {
+    Ethernet,
+    GigabitEthernet,
+    Wireless80211,
+    Loopback,
+    Tunnel,
+    Ppp,
+    Unknown,
+}
+
+/// One adapter: `Id` (the counters' key), `Name`, `Description` (the name on Linux and macOS), type, whether it is
+/// `OperationalStatus.Up`, its byte counters (None when they cannot be read), IPv4 unicast addresses and whether it has
+/// an IPv4 gateway.
+#[derive(Debug, Clone)]
+pub struct NetAdapter {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub kind: AdapterKind,
+    pub up: bool,
+    pub bytes: Option<(i64, i64)>,
+    pub ipv4: Vec<Ipv4Addr>,
+    pub has_ipv4_gateway: bool,
+}
+
+pub fn all() -> Vec<NetAdapter> {
+    os::all()
+}
+
+/// What `SIOCGIFMEDIA` said about a macOS interface: no media (virtual interfaces), an error, or its current media
+/// word and status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) enum Media {
+    Unsupported,
+    Failed,
+    Read { current: i32, status: i32 },
+}
+
+/// .NET's `OperationalStatus.Up` on macOS (`GetNativeIPInterfaceStatistics`): administratively up (`IFF_UP`) with a
+/// link: an active media, or no media at all (loopback, tunnels).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) fn mac_up(flags: u32, media: Media) -> bool {
+    const IFF_UP: u32 = 0x1;
+    const IFM_AVALID: i32 = 0x1;
+    const IFM_ACTIVE: i32 = 0x2;
+    flags & IFF_UP != 0
+        && match media {
+            Media::Unsupported => true,
+            Media::Failed => false,
+            Media::Read { status, .. } => status & IFM_AVALID != 0 && status & IFM_ACTIVE != 0,
+        }
+}
+
+/// .NET's `NetworkInterfaceType` on macOS: the link-level `sdl_type` (if_types.h), with Ethernet whose media is
+/// 802.11 reported as Wi-Fi.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) fn mac_kind(sdl_type: u8, media: Media) -> AdapterKind {
+    const IFM_NMASK: i32 = 0xe0;
+    const IFM_IEEE80211: i32 = 0x80;
+    match sdl_type {
+        6 => match media {
+            Media::Read { current, .. } if current & IFM_NMASK == IFM_IEEE80211 => {
+                AdapterKind::Wireless80211
+            }
+            _ => AdapterKind::Ethernet,
+        },
+        24 => AdapterKind::Loopback,
+        55 | 57 => AdapterKind::Tunnel,
+        23 => AdapterKind::Ppp,
+        _ => AdapterKind::Unknown,
+    }
+}
+
+/// The `GetAdaptersAddresses` flags .NET passes (`SystemNetworkInterface.GetNetworkInterfaces`): gateways, WINS and
+/// all interfaces, so filter and hidden interfaces are listed as C# listed them.
+#[cfg_attr(not(windows), allow(dead_code))]
+const GAA_FLAGS: u32 = 0x0040 | 0x0080 | 0x0100;
+
+/// `struct ifmediareq` (net/if.h, inside `#pragma pack(4)`).
+#[cfg(unix)]
+#[repr(C, packed(4))]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+struct IfMediaReq {
+    ifm_name: [libc::c_char; libc::IFNAMSIZ],
+    ifm_current: i32,
+    ifm_mask: i32,
+    ifm_status: i32,
+    ifm_active: i32,
+    ifm_count: i32,
+    ifm_ulist: *mut i32,
+}
+
+/// `_IOWR('i', 56, struct ifmediareq)`.
+#[cfg(unix)]
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+const SIOCGIFMEDIA: libc::c_ulong = 0xc02c_6938;
+
+/// Name, then for each address family entry: IPv4 address, link-level type/flags/counters (macOS).
+#[cfg(unix)]
+struct IfAddr {
+    name: String,
+    ipv4: Option<Ipv4Addr>,
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    link: Option<(u8, u32, i64, i64)>, // (sdl_type, flags, rx, tx)
+}
+
+/// getifaddrs in its own order: the order .NET lists the interfaces in.
+#[cfg(unix)]
+fn if_addrs() -> Vec<IfAddr> {
+    let mut list: *mut libc::ifaddrs = std::ptr::null_mut();
+    // SAFETY: getifaddrs fills `list` with a linked list we free with freeifaddrs below.
+    if unsafe { libc::getifaddrs(&mut list) } != 0 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let mut p = list;
+    while !p.is_null() {
+        // SAFETY: `p` walks the list getifaddrs returned; every field is valid until freeifaddrs.
+        let ifa = unsafe { &*p };
+        let name = unsafe { std::ffi::CStr::from_ptr(ifa.ifa_name) }
+            .to_string_lossy()
+            .into_owned();
+        let mut entry = IfAddr {
+            name,
+            ipv4: None,
+            link: None,
+        };
+        if !ifa.ifa_addr.is_null() {
+            let family = i32::from(unsafe { (*ifa.ifa_addr).sa_family });
+            if family == libc::AF_INET {
+                // SAFETY: an AF_INET address is a sockaddr_in.
+                let sin = unsafe { &*(ifa.ifa_addr as *const libc::sockaddr_in) };
+                entry.ipv4 = Some(Ipv4Addr::from(u32::from_be(sin.sin_addr.s_addr)));
+            }
+            #[cfg(target_os = "macos")]
+            if family == libc::AF_LINK && !ifa.ifa_data.is_null() {
+                // SAFETY: an AF_LINK address is a sockaddr_dl and its ifa_data an if_data.
+                let dl = unsafe { &*(ifa.ifa_addr as *const libc::sockaddr_dl) };
+                let data = unsafe { &*(ifa.ifa_data as *const libc::if_data) };
+                entry.link = Some((
+                    dl.sdl_type,
+                    ifa.ifa_flags,
+                    i64::from(data.ifi_ibytes),
+                    i64::from(data.ifi_obytes),
+                ));
+            }
+        }
+        out.push(entry);
+        p = ifa.ifa_next;
+    }
+    // SAFETY: frees the list getifaddrs allocated, once.
+    unsafe { libc::freeifaddrs(list) };
+    out
+}
+
+/// Interface names in first-appearance order with their IPv4 addresses.
+#[cfg(unix)]
+fn group(entries: &[IfAddr]) -> Vec<(String, Vec<Ipv4Addr>)> {
+    let mut out: Vec<(String, Vec<Ipv4Addr>)> = Vec::new();
+    for e in entries {
+        let i = match out.iter().position(|(n, _)| *n == e.name) {
+            Some(i) => i,
+            None => {
+                out.push((e.name.clone(), Vec::new()));
+                out.len() - 1
+            }
+        };
+        if let Some(ip) = e.ipv4
+            && !out[i].1.contains(&ip)
+        {
+            out[i].1.push(ip);
+        }
+    }
+    out
+}
+
+#[cfg(target_os = "linux")]
+mod os {
+    use super::*;
+
+    /// .NET's mapping of the ARPHRD hardware type.
+    pub fn kind_of(arphrd: u32) -> AdapterKind {
+        match arphrd {
+            1 => AdapterKind::Ethernet,
+            772 => AdapterKind::Loopback,
+            801..=803 => AdapterKind::Wireless80211,
+            768 | 769 => AdapterKind::Tunnel,
+            512 => AdapterKind::Ppp,
+            _ => AdapterKind::Unknown,
+        }
+    }
+
+    /// Interfaces with an IPv4 gateway in /proc/net/route (RTF_GATEWAY set, gateway not 0.0.0.0).
+    pub fn gateway_interfaces(route: &str) -> Vec<String> {
+        route
+            .lines()
+            .skip(1)
+            .filter_map(|l| {
+                let f: Vec<&str> = l.split_whitespace().collect();
+                let flags = u32::from_str_radix(f.get(3)?, 16).ok()?;
+                (flags & 0x2 != 0 && *f.get(2)? != "00000000").then(|| f[0].to_string())
+            })
+            .collect()
+    }
+
+    pub fn all() -> Vec<NetAdapter> {
+        let gateways =
+            gateway_interfaces(&std::fs::read_to_string("/proc/net/route").unwrap_or_default());
+        group(&if_addrs())
+            .into_iter()
+            .map(|(name, ipv4)| {
+                let sys = std::path::Path::new("/sys/class/net").join(&name);
+                let read = |f: &str| {
+                    std::fs::read_to_string(sys.join(f))
+                        .ok()
+                        .map(|s| s.trim().to_string())
+                };
+                let num = |f: &str| read(f).and_then(|s| s.parse::<i64>().ok());
+                let bytes = num("statistics/rx_bytes").zip(num("statistics/tx_bytes"));
+                NetAdapter {
+                    id: name.clone(),
+                    description: name.clone(),
+                    kind: read("type")
+                        .and_then(|t| t.parse().ok())
+                        .map_or(AdapterKind::Unknown, kind_of),
+                    up: read("operstate").as_deref() == Some("up"),
+                    bytes,
+                    has_ipv4_gateway: gateways.contains(&name),
+                    ipv4,
+                    name,
+                }
+            })
+            .collect()
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod os {
+    use super::*;
+
+    /// `SIOCGIFMEDIA` for `name`, as .NET asks it.
+    fn media(name: &str) -> Media {
+        // SAFETY: a plain datagram socket, closed below.
+        let fd = unsafe { libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0) };
+        if fd < 0 {
+            return Media::Failed;
+        }
+        // SAFETY: all-zero is a valid ifmediareq (no list asked for).
+        let mut request: IfMediaReq = unsafe { std::mem::zeroed() };
+        for (dst, src) in request
+            .ifm_name
+            .iter_mut()
+            .zip(name.bytes().take(libc::IFNAMSIZ - 1))
+        {
+            *dst = src as libc::c_char;
+        }
+        // SAFETY: `request` is a valid ifmediareq the call fills; `fd` is open.
+        let rc = unsafe { libc::ioctl(fd, SIOCGIFMEDIA, &mut request as *mut IfMediaReq) };
+        let errno = std::io::Error::last_os_error().raw_os_error();
+        // SAFETY: closes the socket opened above, once.
+        unsafe { libc::close(fd) };
+        if rc == 0 {
+            let (current, status) = (request.ifm_current, request.ifm_status);
+            Media::Read { current, status }
+        } else if errno == Some(libc::EOPNOTSUPP) || errno == Some(libc::EINVAL) {
+            Media::Unsupported
+        } else {
+            Media::Failed
+        }
+    }
+
+    pub fn all() -> Vec<NetAdapter> {
+        let entries = if_addrs();
+        group(&entries)
+            .into_iter()
+            .map(|(name, ipv4)| {
+                let link = entries
+                    .iter()
+                    .filter(|e| e.name == name)
+                    .find_map(|e| e.link);
+                let media = media(&name);
+                NetAdapter {
+                    id: name.clone(),
+                    description: name.clone(),
+                    kind: link.map_or(AdapterKind::Unknown, |l| mac_kind(l.0, media)),
+                    up: link.is_some_and(|l| mac_up(l.1, media)),
+                    bytes: link.map(|l| (l.2, l.3)),
+                    has_ipv4_gateway: false,
+                    ipv4,
+                    name,
+                }
+            })
+            .collect()
+    }
+}
+
+#[cfg(windows)]
+mod os {
+    use super::*;
+    use windows::Win32::NetworkManagement::IpHelper::{
+        GET_ADAPTERS_ADDRESSES_FLAGS as Flags, GetAdaptersAddresses, GetIfEntry2,
+        IP_ADAPTER_ADDRESSES_LH, MIB_IF_ROW2,
+    };
+    use windows::Win32::Networking::WinSock::{AF_INET, AF_UNSPEC, SOCKADDR_IN};
+
+    /// `NetworkInterfaceType` is the IANA ifType itself.
+    pub fn kind_of(if_type: u32) -> AdapterKind {
+        match if_type {
+            6 => AdapterKind::Ethernet,
+            117 => AdapterKind::GigabitEthernet,
+            71 => AdapterKind::Wireless80211,
+            24 => AdapterKind::Loopback,
+            131 => AdapterKind::Tunnel,
+            23 => AdapterKind::Ppp,
+            _ => AdapterKind::Unknown,
+        }
+    }
+
+    pub fn all() -> Vec<NetAdapter> {
+        let mut size = 16 * 1024u32;
+        let mut buf: Vec<u64> = Vec::new();
+        for _ in 0..3 {
+            buf = vec![0u64; (size as usize).div_ceil(8)];
+            // SAFETY: `buf` holds `size` bytes, 8-byte aligned as IP_ADAPTER_ADDRESSES requires.
+            let rc = unsafe {
+                GetAdaptersAddresses(
+                    u32::from(AF_UNSPEC.0),
+                    Flags(super::GAA_FLAGS),
+                    None,
+                    Some(buf.as_mut_ptr().cast()),
+                    &mut size,
+                )
+            };
+            match rc {
+                0 => break,
+                111 => continue, // ERROR_BUFFER_OVERFLOW: `size` now says how much is needed
+                _ => return Vec::new(),
+            }
+        }
+        let mut out = Vec::new();
+        let mut p = buf.as_ptr() as *const IP_ADAPTER_ADDRESSES_LH;
+        while !p.is_null() {
+            // SAFETY: `p` walks the list GetAdaptersAddresses wrote into `buf`, which outlives this loop.
+            let a = unsafe { &*p };
+            let wide = |w: windows::core::PWSTR| unsafe { w.to_string() }.unwrap_or_default();
+            let mut ipv4 = Vec::new();
+            let mut u = a.FirstUnicastAddress;
+            while !u.is_null() {
+                let ua = unsafe { &*u };
+                let sa = ua.Address.lpSockaddr;
+                if !sa.is_null() && unsafe { (*sa).sa_family } == AF_INET {
+                    let sin = unsafe { &*(sa as *const SOCKADDR_IN) };
+                    ipv4.push(Ipv4Addr::from(u32::from_be(unsafe {
+                        sin.sin_addr.S_un.S_addr
+                    })));
+                }
+                u = ua.Next;
+            }
+            let mut has_gateway = false;
+            let mut g = a.FirstGatewayAddress;
+            while !g.is_null() {
+                let ga = unsafe { &*g };
+                let sa = ga.Address.lpSockaddr;
+                has_gateway |= !sa.is_null() && unsafe { (*sa).sa_family } == AF_INET;
+                g = ga.Next;
+            }
+            let mut row = MIB_IF_ROW2 {
+                InterfaceLuid: a.Luid,
+                ..Default::default()
+            };
+            // SAFETY: `row` names the adapter by its LUID, as GetIfEntry2 requires.
+            let bytes = (unsafe { GetIfEntry2(&mut row) }.0 == 0)
+                .then_some((row.InOctets as i64, row.OutOctets as i64));
+            out.push(NetAdapter {
+                id: unsafe { a.AdapterName.to_string() }.unwrap_or_default(),
+                name: wide(a.FriendlyName),
+                description: wide(a.Description),
+                kind: kind_of(a.IfType),
+                up: a.OperStatus.0 == 1,
+                bytes,
+                ipv4,
+                has_ipv4_gateway: has_gateway,
+            });
+            p = a.Next;
+        }
+        out
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+mod os {
+    use super::*;
+
+    pub fn all() -> Vec<NetAdapter> {
+        Vec::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const IFF_UP: u32 = 0x1;
+    const IFF_RUNNING: u32 = 0x40;
+    const ETHER: i32 = 0x20;
+    const WIFI: i32 = 0x80;
+    const VALID: i32 = 0x1;
+    const ACTIVE: i32 = 0x2;
+
+    #[test]
+    fn a_mac_interface_is_up_as_dotnet_says() {
+        let read = |current, status| Media::Read { current, status };
+        // loopback and tunnels have no media: up when the administrator enabled them
+        assert!(mac_up(IFF_UP | IFF_RUNNING, Media::Unsupported));
+        assert!(!mac_up(IFF_RUNNING, Media::Unsupported));
+        // Ethernet and Wi-Fi: an active link
+        assert!(mac_up(IFF_UP | IFF_RUNNING, read(ETHER, VALID | ACTIVE)));
+        assert!(!mac_up(IFF_UP | IFF_RUNNING, read(ETHER, VALID)));
+        // no valid media status, or the question failed: not up (.NET says Unknown or Down)
+        assert!(!mac_up(IFF_UP | IFF_RUNNING, read(ETHER, 0)));
+        assert!(!mac_up(IFF_UP | IFF_RUNNING, read(WIFI, 0)));
+        assert!(!mac_up(IFF_UP | IFF_RUNNING, Media::Failed));
+    }
+
+    #[test]
+    fn windows_lists_adapters_with_dotnets_flags() {
+        // IncludeWins 0x40 | IncludeGateways 0x80 | IncludeAllInterfaces 0x100
+        assert_eq!(GAA_FLAGS, 0x01c0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_media_request_is_the_sdks() {
+        // net/if.h wraps it in #pragma pack(4): the list pointer follows the five ints with no padding
+        assert_eq!(std::mem::size_of::<IfMediaReq>(), 44);
+        let iowr = |group: u8, number: u8, size: usize| {
+            0xc000_0000
+                | ((size as libc::c_ulong & 0x1fff) << 16)
+                | (libc::c_ulong::from(group) << 8)
+                | libc::c_ulong::from(number)
+        };
+        assert_eq!(
+            SIOCGIFMEDIA,
+            iowr(b'i', 56, std::mem::size_of::<IfMediaReq>())
+        );
+        assert_eq!(SIOCGIFMEDIA, 0xc02c_6938);
+    }
+
+    #[test]
+    fn a_mac_interface_type_is_dotnets() {
+        let wifi = Media::Read {
+            current: WIFI,
+            status: VALID | ACTIVE,
+        };
+        let wired = Media::Read {
+            current: ETHER,
+            status: VALID | ACTIVE,
+        };
+        assert_eq!(mac_kind(6, wifi), AdapterKind::Wireless80211);
+        assert_eq!(mac_kind(6, wired), AdapterKind::Ethernet);
+        assert_eq!(mac_kind(6, Media::Failed), AdapterKind::Ethernet);
+        assert_eq!(mac_kind(71, Media::Unsupported), AdapterKind::Unknown);
+        assert_eq!(mac_kind(24, Media::Unsupported), AdapterKind::Loopback);
+        assert_eq!(mac_kind(55, Media::Unsupported), AdapterKind::Tunnel);
+        assert_eq!(mac_kind(57, Media::Unsupported), AdapterKind::Tunnel);
+        assert_eq!(mac_kind(23, Media::Unsupported), AdapterKind::Ppp);
+        assert_eq!(mac_kind(209, Media::Unsupported), AdapterKind::Unknown);
+    }
+
+    #[test]
+    fn the_machine_has_a_loopback_and_named_adapters() {
+        let list = all();
+        assert!(
+            list.iter().any(|a| a.kind == AdapterKind::Loopback),
+            "{list:?}"
+        );
+        for a in &list {
+            assert!(!a.id.is_empty() && !a.name.is_empty(), "{a:?}");
+            if !cfg!(windows) {
+                assert_eq!(a.description, a.name);
+            }
+        }
+        assert!(
+            list.iter()
+                .any(|a| a.up && a.kind != AdapterKind::Loopback && !a.ipv4.is_empty()),
+            "{list:?}"
+        );
+    }
+}

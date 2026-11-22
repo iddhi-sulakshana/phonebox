@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
 """Assembles the static web demo (GitHub Pages) from the real panel and settings page:  python tools/pages/build.py _site"""
-import re, shutil, sys
+import shutil, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 WWW = ROOT / 'android' / 'app' / 'src' / 'main' / 'assets' / 'www'
-AGENT = ROOT / 'agent' / 'PhoneBox.Agent'
+# the settings page, catalogs and icon the agent embeds
+AGENT = ROOT / 'agent-rs' / 'assets'
 PAGES = Path(__file__).resolve().parent
 
 
 def version():
-    """The agent's version: the demo reports it as the installed one, and the landing page shows it."""
-    return re.search(r'<Version>([^<]+)</Version>', (AGENT / 'PhoneBox.Agent.csproj').read_text(encoding='utf-8'))[1]
+    """The agent's version (agent-rs/Cargo.toml's, the release version): the demo reports it as the installed one, and
+    the landing page shows it."""
+    import tomllib
+    cargo = tomllib.loads((ROOT / 'agent-rs' / 'Cargo.toml').read_text(encoding='utf-8'))
+    return cargo['workspace']['package']['version']
 
 
 def demo_tag(panel=False, relay=False):

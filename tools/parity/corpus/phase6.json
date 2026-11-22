@@ -1,0 +1,881 @@
+[
+  {
+    "name": "push: empty",
+    "path": "/api/push",
+    "ignore": [
+      "/version"
+    ]
+  },
+  {
+    "name": "push: unknown key",
+    "path": "/api/push/nope",
+    "compare": "bytes"
+  },
+  {
+    "name": "push: set from the query",
+    "method": "POST",
+    "path": "/api/push/temp?value=21",
+    "ignore": [
+      "/version"
+    ]
+  },
+  {
+    "name": "push: one value listed",
+    "path": "/api/push",
+    "ignore": [
+      "/version",
+      "/items/temp/at"
+    ]
+  },
+  {
+    "name": "push: set from a JSON body",
+    "method": "PUT",
+    "path": "/api/push/mood",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"text\":\"ok\",\"n\":2}",
+    "ignore": [
+      "/version"
+    ]
+  },
+  {
+    "name": "push: a ttl that does not parse",
+    "method": "POST",
+    "path": "/api/push/temp?value=1&ttl=abc",
+    "compare": "bytes"
+  },
+  {
+    "name": "push: with a ttl",
+    "method": "POST",
+    "path": "/api/push/brief?value=x&ttl=60",
+    "ignore": [
+      "/version"
+    ]
+  },
+  {
+    "name": "push: one value",
+    "path": "/api/push/temp",
+    "ignore": [
+      "/at"
+    ]
+  },
+  {
+    "name": "push: a JSON value",
+    "path": "/api/push/mood",
+    "ignore": [
+      "/at"
+    ]
+  },
+  {
+    "name": "push: a value with a ttl",
+    "path": "/api/push/brief",
+    "ignore": [
+      "/at",
+      "/expiresAt"
+    ]
+  },
+  {
+    "name": "push: delete one",
+    "method": "DELETE",
+    "path": "/api/push/temp",
+    "compare": "bytes"
+  },
+  {
+    "name": "push: delete it again",
+    "method": "DELETE",
+    "path": "/api/push/temp",
+    "compare": "bytes"
+  },
+  {
+    "name": "push: clear",
+    "method": "DELETE",
+    "path": "/api/push",
+    "compare": "bytes"
+  },
+  {
+    "name": "push: cleared",
+    "path": "/api/push",
+    "ignore": [
+      "/version"
+    ]
+  },
+  {
+    "name": "notify: a title",
+    "method": "POST",
+    "path": "/api/notify",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"title\":\"Build\",\"text\":\"done\",\"level\":\"ok\"}",
+    "ignore": [
+      "/at",
+      "/seq"
+    ]
+  },
+  {
+    "name": "notify: nothing to say",
+    "method": "POST",
+    "path": "/api/notify",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"level\":\"ok\"}"
+  },
+  {
+    "name": "notify: plain text",
+    "method": "POST",
+    "path": "/api/notify?value=hello",
+    "ignore": [
+      "/at",
+      "/seq"
+    ]
+  },
+  {
+    "name": "goto: a page with a countdown",
+    "method": "POST",
+    "path": "/api/goto/work?countdown=5",
+    "ignore": [
+      "/at",
+      "/seq"
+    ]
+  },
+  {
+    "name": "goto: a countdown that does not parse",
+    "method": "POST",
+    "path": "/api/goto/work?countdown=abc",
+    "compare": "bytes"
+  },
+  {
+    "name": "refresh",
+    "method": "POST",
+    "path": "/api/refresh",
+    "ignore": [
+      "/at",
+      "/seq"
+    ]
+  },
+  {
+    "name": "refresh: reload",
+    "method": "POST",
+    "path": "/api/refresh?reload=true",
+    "ignore": [
+      "/at",
+      "/seq"
+    ]
+  },
+  {
+    "name": "refresh: reload=1 does not bind",
+    "method": "POST",
+    "path": "/api/refresh?reload=1",
+    "compare": "bytes"
+  },
+  {
+    "name": "note: an unknown widget",
+    "method": "POST",
+    "path": "/api/widget/p/w/note?text=hi"
+  },
+  {
+    "name": "console: no widget",
+    "path": "/api/console"
+  },
+  {
+    "name": "console: an unknown profile",
+    "method": "POST",
+    "path": "/api/console/ps/0"
+  },
+  {
+    "name": "console: times that do not parse",
+    "method": "POST",
+    "path": "/api/console/ps/0?times=x",
+    "compare": "bytes"
+  },
+  {
+    "name": "rules: test an unknown action",
+    "method": "POST",
+    "path": "/api/rules/test",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"then\":\"bogus\"}"
+  },
+  {
+    "name": "rules: test with a text body",
+    "method": "POST",
+    "path": "/api/rules/test",
+    "headers": {
+      "Content-Type": "text/plain"
+    },
+    "body": "x",
+    "compare": "status"
+  },
+  {
+    "name": "rules: test with broken JSON",
+    "method": "POST",
+    "path": "/api/rules/test",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{",
+    "compare": "status"
+  },
+  {
+    "name": "rules: pause, minutes that do not parse",
+    "method": "POST",
+    "path": "/api/rules/pause?minutes=abc",
+    "compare": "bytes"
+  },
+  {
+    "name": "rules: resume",
+    "method": "POST",
+    "path": "/api/rules/pause?minutes=0"
+  },
+  {
+    "name": "battery: level missing",
+    "method": "POST",
+    "path": "/api/phone/battery?plugged=true",
+    "compare": "bytes"
+  },
+  {
+    "name": "battery: a temperature that does not parse",
+    "method": "POST",
+    "path": "/api/phone/battery?level=50&plugged=true&temp=hot",
+    "compare": "bytes"
+  },
+  {
+    "name": "battery: a report",
+    "method": "POST",
+    "path": "/api/phone/battery?level=50&plugged=true&temp=31.5&source=parity&usb=ok",
+    "compare": "bytes"
+  },
+  {
+    "name": "charge: after the report",
+    "path": "/api/charge",
+    "ignore": [
+      "/phone/at"
+    ]
+  },
+  {
+    "name": "charge test: no action",
+    "method": "POST",
+    "path": "/api/charge/test",
+    "compare": "bytes"
+  },
+  {
+    "name": "charge test: an unknown action",
+    "method": "POST",
+    "path": "/api/charge/test?action=bogus"
+  },
+  {
+    "name": "charge test: on without Home Assistant",
+    "method": "POST",
+    "path": "/api/charge/test?action=on"
+  },
+  {
+    "name": "phones: none",
+    "path": "/api/phones"
+  },
+  {
+    "name": "ha: states, not configured",
+    "path": "/api/ha/states"
+  },
+  {
+    "name": "ha: states by id, not configured",
+    "path": "/api/ha/states?ids=light.a,,light.b"
+  },
+  {
+    "name": "ha: toggle, not configured",
+    "method": "POST",
+    "path": "/api/ha/toggle/light.a"
+  },
+  {
+    "name": "ha: entities, not configured",
+    "path": "/api/ha/entities"
+  },
+  {
+    "name": "ha: test with a text body",
+    "method": "POST",
+    "path": "/api/ha/test",
+    "headers": {
+      "Content-Type": "text/plain"
+    },
+    "body": "x",
+    "compare": "status"
+  },
+  {
+    "name": "ha: test with broken JSON",
+    "method": "POST",
+    "path": "/api/ha/test",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{",
+    "compare": "status"
+  },
+  {
+    "name": "obs: off",
+    "path": "/api/obs"
+  },
+  {
+    "name": "obs: an action while off",
+    "method": "POST",
+    "path": "/api/obs/start-stream"
+  },
+  {
+    "name": "obs-test with a text body",
+    "method": "POST",
+    "path": "/api/obs-test",
+    "headers": {
+      "Content-Type": "text/plain"
+    },
+    "body": "x",
+    "compare": "status"
+  },
+  {
+    "name": "obs-test with broken JSON",
+    "method": "POST",
+    "path": "/api/obs-test",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{",
+    "compare": "status"
+  },
+  {
+    "name": "deck obs: off",
+    "path": "/api/controls/obs"
+  },
+  {
+    "name": "deck obs: a value that does not parse",
+    "method": "POST",
+    "path": "/api/controls/obs/volume?id=Mic&value=abc",
+    "compare": "bytes"
+  },
+  {
+    "name": "deck obs: enabled that does not parse",
+    "method": "POST",
+    "path": "/api/controls/obs/source?id=7&enabled=maybe",
+    "compare": "bytes"
+  },
+  {
+    "name": "deck obs: an action while off",
+    "method": "POST",
+    "path": "/api/controls/obs/scene?id=Desk"
+  },
+  {
+    "name": "discord: off",
+    "path": "/api/discord"
+  },
+  {
+    "name": "discord: image without its parameters",
+    "path": "/api/discord/img",
+    "compare": "bytes"
+  },
+  {
+    "name": "discord: image of an unknown kind",
+    "path": "/api/discord/img?kind=bogus&id=1&hash=abc",
+    "compare": "bytes"
+  },
+  {
+    "name": "discord: an action while off",
+    "method": "POST",
+    "path": "/api/discord/mute"
+  },
+  {
+    "name": "spotify: state, not set up",
+    "path": "/api/controls/spotify/state"
+  },
+  {
+    "name": "spotify: an action, not set up",
+    "method": "POST",
+    "path": "/api/controls/spotify/action/next"
+  },
+  {
+    "name": "spotify: play queued, not set up",
+    "method": "POST",
+    "path": "/api/controls/spotify/action/play-queued?id=spotify:track:x"
+  },
+  {
+    "name": "spotify: connect without a client id",
+    "path": "/api/controls/spotify/connect"
+  },
+  {
+    "name": "spotify: callback without state",
+    "path": "/api/controls/spotify/callback",
+    "compare": "bytes"
+  },
+  {
+    "name": "spotify: callback with an unknown state",
+    "path": "/api/controls/spotify/callback?state=x&code=y",
+    "compare": "bytes"
+  },
+  {
+    "name": "spotify: disconnect",
+    "method": "POST",
+    "path": "/api/controls/spotify/disconnect",
+    "compare": "bytes",
+    "config_file": true
+  },
+  {
+    "name": "calendar: none configured",
+    "path": "/api/calendar",
+    "wait": 1,
+    "ignore": [
+      "/updated"
+    ]
+  },
+  {
+    "name": "feeds: none configured",
+    "path": "/api/feeds",
+    "ignore": [
+      "/updated"
+    ]
+  },
+  {
+    "name": "feeds: open without an id",
+    "method": "POST",
+    "path": "/api/feeds/open"
+  },
+  {
+    "name": "feeds: open an unknown id",
+    "method": "POST",
+    "path": "/api/feeds/open?id=x"
+  },
+  {
+    "name": "photos: none",
+    "path": "/api/photos"
+  },
+  {
+    "name": "photos: one without a widget",
+    "path": "/api/photos/abc"
+  },
+  {
+    "name": "camera: no widget",
+    "path": "/api/camera"
+  },
+  {
+    "name": "camera: an unknown widget",
+    "path": "/api/camera?widget=p/w&fresh=1"
+  },
+  {
+    "name": "proxy: no url",
+    "path": "/api/proxy"
+  },
+  {
+    "name": "proxy: a host off the list",
+    "path": "/api/proxy?url=https://example.com/x"
+  },
+  {
+    "name": "proxy: plain http",
+    "path": "/api/proxy?url=http://api.open-meteo.com/v1/forecast"
+  },
+  {
+    "name": "proxy: another port",
+    "path": "/api/proxy?url=https://api.open-meteo.com:8443/x"
+  },
+  {
+    "name": "deck: state",
+    "path": "/api/controls/state",
+    "ignore": [
+      "/media",
+      "/hardwareLoading"
+    ],
+    "ignore_on": {
+      "darwin": [
+        "/audio"
+      ]
+    }
+  },
+  {
+    "name": "deck: unknown kind",
+    "method": "POST",
+    "path": "/api/controls/command/foo"
+  },
+  {
+    "name": "deck: an id too long",
+    "method": "POST",
+    "path": "/api/controls/command/action?id=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  {
+    "name": "deck: a missing action",
+    "method": "POST",
+    "path": "/api/controls/command/action?id=missing"
+  },
+  {
+    "name": "deck: a disabled action",
+    "method": "POST",
+    "path": "/api/controls/command/action?id=sound-off"
+  },
+  {
+    "name": "deck: a sound file that is not there",
+    "method": "POST",
+    "path": "/api/controls/command/action?id=sound-missing"
+  },
+  {
+    "name": "deck: the mixer without its DLL",
+    "method": "POST",
+    "path": "/api/controls/command/action?id=mixer-gain&value=3"
+  },
+  {
+    "name": "deck: power without allowPower",
+    "method": "POST",
+    "path": "/api/controls/command/power-arm?id=sleep"
+  },
+  {
+    "name": "deck: sleep without a player",
+    "method": "POST",
+    "path": "/api/controls/command/sleep?id=x&value=5"
+  },
+  {
+    "name": "deck: ducking off",
+    "method": "POST",
+    "path": "/api/controls/command/duck?op=off"
+  },
+  {
+    "name": "deck: an unknown device",
+    "method": "POST",
+    "path": "/api/controls/command/device?id=nope&value=5"
+  },
+  {
+    "name": "deck: a bogus default role",
+    "method": "POST",
+    "path": "/api/controls/command/default?id=nope&op=bogus"
+  },
+  {
+    "name": "deck: a value that does not parse",
+    "method": "POST",
+    "path": "/api/controls/command/action?id=radio-parity&value=abc",
+    "compare": "bytes"
+  },
+  {
+    "name": "deck: muted that does not parse",
+    "method": "POST",
+    "path": "/api/controls/command/session?id=x&muted=maybe",
+    "compare": "bytes"
+  },
+  {
+    "name": "deck: task output of an unknown task",
+    "path": "/api/controls/task-output/unknown",
+    "compare": "bytes"
+  },
+  {
+    "name": "deck: radio logo without an id",
+    "path": "/api/controls/radio-logo",
+    "compare": "bytes"
+  },
+  {
+    "name": "deck: radio logo of an unknown id",
+    "path": "/api/controls/radio-logo?id=nope",
+    "compare": "bytes"
+  },
+  {
+    "name": "deck: radio logo of a station without an icon",
+    "path": "/api/controls/radio-logo?id=radio-parity&v=1",
+    "compare": "bytes"
+  },
+  {
+    "name": "deck: check stations without the network",
+    "method": "POST",
+    "path": "/api/controls/radio-directory/check",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "{\"stations\":[{\"id\":\"a\",\"streamUrl\":\"ftp://x\"},{\"id\":\"b\",\"streamUrl\":\"http://127.0.0.1/\"},{\"id\":\"c\",\"streamUrl\":\"\"}]}"
+  },
+  {
+    "name": "deck: check a null body",
+    "method": "POST",
+    "path": "/api/controls/radio-directory/check",
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "body": "null"
+  },
+  {
+    "name": "deck: check with a text body",
+    "method": "POST",
+    "path": "/api/controls/radio-directory/check",
+    "headers": {
+      "Content-Type": "text/plain"
+    },
+    "body": "x",
+    "compare": "status"
+  },
+  {
+    "name": "deck: stations of an invalid country",
+    "path": "/api/controls/radio-directory/stations?country=1"
+  },
+  {
+    "name": "deck: stations with a limit that does not parse",
+    "path": "/api/controls/radio-directory/stations?limit=x",
+    "compare": "bytes"
+  },
+  {
+    "name": "deck: listening is off",
+    "path": "/api/controls/listen",
+    "compare": "bytes"
+  },
+  {
+    "name": "deck: capture",
+    "method": "POST",
+    "path": "/api/controls/capture",
+    "compare": "status"
+  },
+  {
+    "name": "wifi: push with the webhook key",
+    "path": "/api/push",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityWebhookKey000000000000000000000000000"
+    },
+    "ignore": [
+      "/version"
+    ]
+  },
+  {
+    "name": "wifi: notify with ?token=",
+    "method": "POST",
+    "path": "/api/notify?token=parityWebhookKey000000000000000000000000000&value=hi",
+    "wifi": true,
+    "ignore": [
+      "/at",
+      "/seq"
+    ]
+  },
+  {
+    "name": "wifi: push without a key",
+    "path": "/api/push",
+    "wifi": true,
+    "compare": "status"
+  },
+  {
+    "name": "wifi: deck state with the phone key",
+    "path": "/api/controls/state",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    },
+    "ignore": [
+      "/media",
+      "/hardwareLoading"
+    ],
+    "ignore_on": {
+      "darwin": [
+        "/audio"
+      ]
+    }
+  },
+  {
+    "name": "wifi: deck command with the phone key",
+    "method": "POST",
+    "path": "/api/controls/command/foo",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    }
+  },
+  {
+    "name": "wifi: deck command with the webhook key",
+    "method": "POST",
+    "path": "/api/controls/command/foo",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityWebhookKey000000000000000000000000000"
+    },
+    "compare": "status"
+  },
+  {
+    "name": "wifi: capture stays local",
+    "method": "POST",
+    "path": "/api/controls/capture",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    },
+    "compare": "status"
+  },
+  {
+    "name": "wifi: task output stays local",
+    "path": "/api/controls/task-output/unknown",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    },
+    "compare": "status"
+  },
+  {
+    "name": "wifi: radio directory stays local",
+    "path": "/api/controls/radio-directory/stations?country=1",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    },
+    "compare": "status"
+  },
+  {
+    "name": "wifi: radio logo",
+    "path": "/api/controls/radio-logo?id=radio-parity",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    },
+    "compare": "bytes"
+  },
+  {
+    "name": "wifi: rule test stays local",
+    "method": "POST",
+    "path": "/api/rules/test",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A",
+      "Content-Type": "application/json"
+    },
+    "body": "{\"then\":\"bogus\"}",
+    "compare": "status"
+  },
+  {
+    "name": "wifi: rules pause",
+    "method": "POST",
+    "path": "/api/rules/pause?minutes=0",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    }
+  },
+  {
+    "name": "wifi: charge stays local",
+    "path": "/api/charge",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    },
+    "compare": "status"
+  },
+  {
+    "name": "wifi: battery report",
+    "method": "POST",
+    "path": "/api/phone/battery?level=40&plugged=false",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    },
+    "compare": "bytes"
+  },
+  {
+    "name": "wifi: phones stay local",
+    "path": "/api/phones",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    },
+    "compare": "status"
+  },
+  {
+    "name": "wifi: proxy stays local",
+    "path": "/api/proxy?url=https://example.com/x",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    },
+    "compare": "status"
+  },
+  {
+    "name": "wifi: camera",
+    "path": "/api/camera",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    }
+  },
+  {
+    "name": "wifi: camera sources stay local",
+    "path": "/api/camera/sources",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    },
+    "compare": "status"
+  },
+  {
+    "name": "wifi: ha entities stay local",
+    "path": "/api/ha/entities",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    },
+    "compare": "status"
+  },
+  {
+    "name": "wifi: ha states",
+    "path": "/api/ha/states",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    }
+  },
+  {
+    "name": "wifi: obs-test stays local",
+    "method": "POST",
+    "path": "/api/obs-test",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A",
+      "Content-Type": "application/json"
+    },
+    "body": "{}",
+    "compare": "status"
+  },
+  {
+    "name": "wifi: spotify connect stays local",
+    "path": "/api/controls/spotify/connect",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    },
+    "compare": "status"
+  },
+  {
+    "name": "wifi: spotify state",
+    "path": "/api/controls/spotify/state",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    }
+  },
+  {
+    "name": "wifi: discord",
+    "path": "/api/discord",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    }
+  },
+  {
+    "name": "wifi: feeds",
+    "path": "/api/feeds",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    },
+    "ignore": [
+      "/updated"
+    ]
+  },
+  {
+    "name": "wifi: console",
+    "path": "/api/console",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    }
+  },
+  {
+    "name": "wifi: note on an unknown widget",
+    "method": "POST",
+    "path": "/api/widget/p/w/note?text=hi",
+    "wifi": true,
+    "headers": {
+      "Authorization": "Bearer parityPhoneKey0000000000000000000000000000A"
+    }
+  }
+]

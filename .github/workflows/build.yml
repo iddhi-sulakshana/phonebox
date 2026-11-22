@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: |
-          python3 tools/check-release.py
+          python3 tools/check-release.py --final
           python3 tools/test-winget-manifests.py
 
   android:
@@ -67,6 +67,34 @@ jobs:
             ui-test-report/
             tools/ui-tests/test-results/
 
+  # The source installers and scripts/build.ps1 build the Rust agent with cargo; these checks stub cargo (and fail on
+  # any dotnet call), so they need neither toolchain.
+  installers:
+    name: Installers (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Local packaging staging cleanup
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tools/test-build-staging.ps1
+      - name: Windows installer regression checks
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./tools/test-install-apk.ps1
+          ./tools/test-windows-source-publish.ps1
+      - name: Unix installer regression checks with the system Bash
+        if: runner.os != 'Windows'
+        run: |
+          python3 tools/test-unix-installer.py --bash /bin/bash
+          python3 tools/test-unix-autostart.py /bin/bash
+          python3 tools/test-unix-uninstall.py
+
   agent:
     name: Agent (${{ matrix.rid }})
     strategy:
@@ -84,22 +112,6 @@ jobs:
           dotnet-version: 10.0.x
       - name: Unit tests
         run: dotnet test agent/PhoneBox.Agent.Tests --nologo
-      - name: Local packaging staging cleanup
-        if: matrix.rid == 'win-x64'
-        shell: pwsh
-        run: ./tools/test-build-staging.ps1
-      - name: Windows installer regression checks
-        if: matrix.rid == 'win-x64'
-        shell: pwsh
-        run: |
-          ./tools/test-install-apk.ps1
-          ./tools/test-windows-source-publish.ps1
-      - name: Unix installer regression checks with the system Bash
-        if: matrix.rid != 'win-x64'
-        run: |
-          python3 tools/test-unix-installer.py --bash /bin/bash
-          python3 tools/test-unix-autostart.py /bin/bash
-          python3 tools/test-unix-uninstall.py
       # the same build as the release (release.yml), so a pull request runs what ships
       - name: Publish agent (self-contained, single file)
         run: dotnet publish agent/PhoneBox.Agent -c Release -f ${{ matrix.tfm }} -r ${{ matrix.rid }} --self-contained true -p:PublishSingleFile=true -o out --nologo

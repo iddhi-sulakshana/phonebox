@@ -5,11 +5,11 @@
 .DESCRIPTION
   Run it from a normal PowerShell window (not "Run as administrator"):
 
-    irm https://raw.githubusercontent.com/ersinkoc/phonebox/main/setup.ps1 | iex
+    irm https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/main/setup.ps1 | iex
 
   With options:
 
-    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/ersinkoc/phonebox/main/setup.ps1))) -NoPhone
+    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/main/setup.ps1))) -NoPhone
 
   What it does, asking first before anything outside the PhoneBox folders:
     1. Checks this PC (Windows 10/11, x64) and finds the latest PhoneBox release.
@@ -31,7 +31,9 @@
 .PARAMETER NoStart
   Install only; do not start the agent.
 .PARAMETER Version
-  Install this release (for example 0.9.8) instead of the latest.
+  Install this release (for example 1.0.0) instead of the latest.
+.PARAMETER Pre
+  Install the newest release, pre-releases included.
 .PARAMETER DryRun
   Download and check everything, show what would happen, and change nothing.
 .PARAMETER AllowAdministrator
@@ -44,11 +46,14 @@ param(
     [switch]$NoAutostart,
     [switch]$NoStart,
     [string]$Version,
+    [switch]$Pre,
     [switch]$DryRun,
     [switch]$AllowAdministrator
 )
 
-$Repo = 'ersinkoc/phonebox'
+$Repo = 'iddhi-sulakshana/phonebox'
+# the original project, whose issues explain Smart App Control (#56) and antivirus removals (#69)
+$Upstream = 'ersinkoc/phonebox'
 $Package = 'net.oxog.phonebox.deskpanel'
 $SettingsUrl = 'http://127.0.0.1:8765'
 
@@ -106,7 +111,24 @@ function Get-LatestVersion {
     $response = $request.GetResponse()
     try { $location = [string]$response.Headers['Location'] } finally { $response.Close() }
     if ($location -match '/tag/([^/?#]+)$') { return $Matches[1] }
-    throw 'Could not find the latest release on GitHub. Check the internet connection, or pass -Version (for example -Version 0.9.8).'
+    throw 'Could not find the latest release on GitHub. Check the internet connection, or pass -Pre to take the newest pre-release.'
+}
+
+function Get-NewestRelease {
+    # the newest published release, pre-releases included (the API lists the newest first, without drafts)
+    try {
+        $releases = Invoke-RestMethod -UseBasicParsing -Uri "https://api.github.com/repos/$Repo/releases?per_page=1" `
+            -Headers @{ 'User-Agent' = 'phonebox-setup'; 'Accept' = 'application/vnd.github+json' } -TimeoutSec 30
+        $newest = @($releases) | Select-Object -First 1
+        if ($newest -and $newest.tag_name) { return [string]$newest.tag_name }
+    } catch { }
+    # The API allows 60 requests an hour per address; the releases feed lists the newest first too, pre-releases included.
+    try {
+        $feed = Invoke-WebRequest -UseBasicParsing -Uri "https://github.com/$Repo/releases.atom" `
+            -Headers @{ 'User-Agent' = 'phonebox-setup' } -TimeoutSec 30
+        if ([string]$feed.Content -match '/releases/tag/([^"<?#/]+)') { return $Matches[1] }
+    } catch { }
+    throw 'Could not find a release on GitHub. Check the internet connection, or pass -Version.'
 }
 
 function Assert-Checksum([string]$File, [string]$SumsFile) {
@@ -320,18 +342,18 @@ function Install-PhoneBox {
     try { $smartAppControl = [int](Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy' -ErrorAction Stop).VerifiedAndReputablePolicyState } catch { }
     if ($smartAppControl -eq 1) {
         Write-Caution 'Smart App Control is on. It blocks programs that are neither signed nor known to Microsoft, and'
-        Write-Caution 'PhoneBoxAgent.exe is not code-signed yet (signing through SignPath Foundation is pending:'
-        Write-Caution "https://github.com/$Repo/issues/56), so Windows will probably refuse to start it. Setup still installs it."
+        Write-Caution "PhoneBoxAgent.exe is not code-signed (see https://github.com/$Upstream/issues/56), so Windows"
+        Write-Caution 'will probably refuse to start it. Setup still installs it.'
         Write-Caution 'Please keep Smart App Control on: on older Windows builds it cannot be turned back on without resetting Windows.'
     } elseif ($smartAppControl -eq 2) {
         Write-Caution 'Smart App Control is in evaluation mode: it blocks nothing yet. If Windows turns it on later, it will block'
-        Write-Caution "PhoneBoxAgent.exe until the agent is code-signed (pending: https://github.com/$Repo/issues/56)."
+        Write-Caution "PhoneBoxAgent.exe, which is not code-signed (see https://github.com/$Upstream/issues/56)."
     }
 
     Write-Step 'Finding the release'
-    $tag = if ($Version) { $Version } else { Get-LatestVersion }
+    $tag = if ($Version) { $Version } elseif ($Pre) { Get-NewestRelease } else { Get-LatestVersion }
     $ver = $tag.Trim().TrimStart('v')
-    if ($ver -notmatch '^\d+\.\d+\.\d+$') { throw "Unexpected version '$tag'." }
+    if ($ver -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$') { throw "Unexpected version '$tag'." }
     $base = "https://github.com/$Repo/releases/download/v$ver"
     if ($installed -eq $ver) { Write-Ok "PhoneBox $ver (already installed; it will be reinstalled, settings stay)" }
     elseif ($installed) { Write-Ok "PhoneBox $ver (updating from $installed; settings stay)" }
@@ -345,19 +367,19 @@ function Install-PhoneBox {
         $sums = Join-Path $temp "SHA256SUMS-$ver.txt"
         $zip = Join-Path $temp $zipName
         try { Get-Download "$base/SHA256SUMS-$ver.txt" $sums } catch { throw "Release $ver was not found ($base). $($_.Exception.Message)" }
-        Write-Info "$zipName (about 65 MB) ..."
+        Write-Info "$zipName (about 6 MB) ..."
         Get-Download "$base/$zipName" $zip
         Assert-Checksum $zip $sums
         Test-Provenance $zip
-        Write-Info 'The agent is not code-signed yet (the SignPath Foundation application is pending). Windows SmartScreen'
+        Write-Info 'The agent is not code-signed. Windows SmartScreen'
         Write-Info 'or an antivirus can warn about new unsigned programs; the checksum above shows that this is the file'
-        Write-Info "GitHub built from the public source. Details: https://github.com/$Repo/issues/69"
+        Write-Info "GitHub built from the public source. Details: https://github.com/$Upstream/issues/69"
 
         $extract = Join-Path $temp 'agent'
         Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
         Get-ChildItem $extract -Recurse -File | Unblock-File
         if (-not (Test-Path (Join-Path $extract 'PhoneBoxAgent.exe'))) {
-            throw "PhoneBoxAgent.exe is missing from the download: an antivirus probably removed it. See https://github.com/$Repo/issues/69 and restore it from quarantine, or add an exclusion, then run setup again."
+            throw "PhoneBoxAgent.exe is missing from the download: an antivirus probably removed it. See https://github.com/$Upstream/issues/69 and restore it from quarantine, or add an exclusion, then run setup again."
         }
 
         Write-Step 'Checking adb (needed for the USB connection to the phone)'
@@ -476,8 +498,8 @@ function Install-PhoneBox {
                 $blocked = $true
                 Write-Caution "Windows did not let PhoneBoxAgent.exe start: $why"
                 if ($appControl -and $smartAppControl -eq 1) {
-                    Write-Caution 'PhoneBox is installed, but Smart App Control will not run it until the agent is code-signed.'
-                    Write-Caution "Signing is pending: https://github.com/$Repo/issues/56. Please keep Smart App Control on."
+                    Write-Caution 'PhoneBox is installed, but Smart App Control does not run programs that are not code-signed.'
+                    Write-Caution "See https://github.com/$Upstream/issues/56. Please keep Smart App Control on."
                 } else {
                     Write-Caution 'PhoneBox is installed, but a policy on this computer does not allow it to run. On a work or school'
                     Write-Caution 'computer, ask its administrator to allow PhoneBoxAgent.exe.'
@@ -494,7 +516,7 @@ function Install-PhoneBox {
             } elseif ($blocked) {
                 # explained above
             } elseif (-not (Test-Path $exe)) {
-                Write-Caution "PhoneBoxAgent.exe was removed, probably by an antivirus. See https://github.com/$Repo/issues/69."
+                Write-Caution "PhoneBoxAgent.exe was removed, probably by an antivirus. See https://github.com/$Upstream/issues/69."
             } else {
                 Write-Caution "The agent did not answer. Its log: $env:LOCALAPPDATA\PhoneBox\agent.log"
                 if ($smartAppControl -eq 1) {

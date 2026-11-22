@@ -1,0 +1,13 @@
+{
+  "update": null,
+  "pc": null,
+  "media": null,
+  "audio": null,
+  "ping": null,
+  "rules": [],
+  "rulesPaused": null,
+  "privacy": { "mic": false, "camera": false, "micApps": [], "cameraApps": [] },
+  "obs": null,
+  "toggles": null,
+  "work": { "sessions": [], "github": null }
+}

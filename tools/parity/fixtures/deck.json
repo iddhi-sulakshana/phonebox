@@ -1,0 +1,23 @@
+{
+  "deviceSerial": "parity-none",
+  "updates": { "auto": false, "repo": "iddhi-sulakshana/phonebox" },
+  "lan": {
+    "enabled": true,
+    "port": 8766,
+    "token": "parityPhoneKey0000000000000000000000000000A",
+    "webhookToken": "parityWebhookKey000000000000000000000000000"
+  },
+  "weather": { "city": "Colombo", "lat": 6.9271, "lon": 79.8612, "unit": "celsius" },
+  "controls": {
+    "allowListening": false,
+    "allowPower": false,
+    "allowOnlineRadioLogos": false,
+    "actions": [
+      { "id": "radio-parity", "label": "Parity FM", "kind": "radio", "target": "http://127.0.0.1:9/stream", "value": 50 },
+      { "id": "sound-off", "label": "Off", "kind": "sound", "target": "/nonexistent/off.wav", "value": 80, "enabled": false },
+      { "id": "sound-missing", "label": "Chime", "kind": "sound", "target": "/nonexistent/chime.wav", "value": 80 },
+      { "id": "mixer-gain", "label": "Mic gain", "kind": "mixer", "target": "Strip[0].Gain" },
+      { "id": "service-spooler", "label": "Spooler", "kind": "service", "target": "spooler", "argument": "start" }
+    ]
+  }
+}

@@ -1,4 +1,4 @@
-<p align="center"><img src="agent/PhoneBox.Agent/phonebox.ico" width="72" alt="PhoneBox icon"></p>
+<p align="center"><img src="agent-rs/assets/phonebox.ico" width="72" alt="PhoneBox icon"></p>
 
 <h1 align="center">PhoneBox</h1>
 
@@ -24,14 +24,14 @@ Windows, Linux and macOS. No root, PhoneBox account or cloud service required.</
 
 <p align="center">
   <a href="https://ersinkoc.github.io/phonebox/"><b>Try the live demo</b></a> ·
-  <a href="https://github.com/ersinkoc/phonebox/releases/latest"><b>Download</b></a> ·
+  <a href="https://github.com/iddhi-sulakshana/phonebox/releases/latest"><b>Download</b></a> ·
   <a href="#quick-start"><b>Quick start</b></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/ersinkoc/phonebox/actions/workflows/build.yml"><img src="https://github.com/ersinkoc/phonebox/actions/workflows/build.yml/badge.svg" alt="Build status"></a>
-  <a href="https://github.com/ersinkoc/phonebox/releases/latest"><img src="https://img.shields.io/github/v/release/ersinkoc/phonebox?label=release" alt="Latest release"></a>
-  <img src="https://img.shields.io/badge/Windows%20%C2%B7%20Linux%20%C2%B7%20macOS-.NET%2010-512bd4" alt="Windows, Linux, macOS; .NET 10">
+  <a href="https://github.com/iddhi-sulakshana/phonebox/actions/workflows/build.yml"><img src="https://github.com/iddhi-sulakshana/phonebox/actions/workflows/build.yml/badge.svg" alt="Build status"></a>
+  <a href="https://github.com/iddhi-sulakshana/phonebox/releases/latest"><img src="https://img.shields.io/github/v/release/iddhi-sulakshana/phonebox?label=release" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/Windows%20%C2%B7%20Linux%20%C2%B7%20macOS-Rust-b7410e" alt="Windows, Linux, macOS; Rust">
   <img src="https://img.shields.io/badge/Android-5%2B-3ddc84" alt="Android 5+">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
 </p>
@@ -63,28 +63,31 @@ and a cost overview.
 ## Quick start
 
 You need an **Android 5+ phone** (Android 6 or later recommended) and a supported computer. USB uses a data cable and USB debugging; Wi-Fi pairing
-works without either. Release agents include .NET, so you do not need to install the runtime.
+works without either. The agent is one program with no runtime to install.
 
 ### 1. Install the desktop agent
 
 **Windows 10/11 x64** — paste into a normal PowerShell window:
 
 ```powershell
-irm https://raw.githubusercontent.com/ersinkoc/phonebox/main/setup.ps1 | iex
+irm https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/main/setup.ps1 | iex
 ```
 
 **Linux or macOS** — run as your own user:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/ersinkoc/phonebox/main/setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/iddhi-sulakshana/phonebox/main/setup.sh | bash
 ```
+
+Until 1.0.0 there are only pre-releases (`1.0.0-alpha.N`): take the script from the `rust-agent` branch instead of
+`main` and add `-Pre` (Windows) or `--pre` (Linux/macOS), as the [installation guide](docs/SETUP.md#quick-start) shows.
 
 Setup downloads the latest release, checks its SHA-256 checksum, offers missing dependencies and start-at-login,
 and opens the settings at <http://127.0.0.1:8765>. It can also install the Android app over USB.
 Run setup again to update or repair the installation while keeping settings and pairings.
 
-> **Windows signing:** release agents are currently unsigned while the SignPath Foundation application is pending.
-> SmartScreen or antivirus software may warn or block them. See the [code signing policy](#code-signing-policy)
+> **Windows signing:** the Windows agent is not code-signed.
+> SmartScreen or antivirus software may warn or block it. See the [code signing policy](#code-signing-policy)
 > and [installation warnings](docs/SETUP.md#quick-start). USB debugging should be authorized only on computers you trust.
 
 Read the scripts before running them: [Windows](setup.ps1) · [Linux/macOS](setup.sh).
@@ -94,7 +97,7 @@ The [installation guide](docs/SETUP.md) covers options, dependencies, install pa
 
 | USB | Wi-Fi only |
 |---|---|
-| Enable **Developer options → USB debugging**, connect a data cable and accept the phone's authorization prompt. Let setup install the app, or use **Settings → General → Install the phone app**. | Install the APK from the [latest release](https://github.com/ersinkoc/phonebox/releases/latest). Wi-Fi is off by default: open the settings page (tray icon, or `http://127.0.0.1:8765`), turn on **General → Wi-Fi & Tailscale → Let the phone connect without the USB cable**, click **Save**, then **Restart to apply** at the top. Choose **Pair a phone over Wi-Fi**, scan the pairing QR code and confirm the matching check code. |
+| Enable **Developer options → USB debugging**, connect a data cable and accept the phone's authorization prompt. Let setup install the app, or use **Settings → General → Install the phone app**. | Install the APK from the [latest release](https://github.com/iddhi-sulakshana/phonebox/releases/latest). Wi-Fi is off by default: open the settings page (tray icon, or `http://127.0.0.1:8765`), turn on **General → Wi-Fi & Tailscale → Let the phone connect without the USB cable**, click **Save**, then **Restart to apply** at the top. Choose **Pair a phone over Wi-Fi**, scan the pairing QR code and confirm the matching check code. |
 | Wakes and opens the panel on connection; supports app updates over adb. | No adb or developer options needed; install app updates manually unless you later configure USB. |
 
 The phone app is not in any app store; it comes only from this repository's releases. It runs on Android 5.0 and
@@ -112,12 +115,12 @@ Swipe, tap the page dots or use the phone's volume keys to move between pages.
 <details>
 <summary><b>Other installation methods</b></summary>
 
-- **Manual download:** unzip the agent for your system from the [release page](https://github.com/ersinkoc/phonebox/releases/latest)
+- **Manual download:** unzip the agent for your system from the [release page](https://github.com/iddhi-sulakshana/phonebox/releases/latest)
   and run it. Install the APK on the phone. Checksums and build provenance accompany the release assets.
 - **Scoop (Windows):**
 
   ```powershell
-  scoop bucket add phonebox https://github.com/ersinkoc/phonebox
+  scoop bucket add phonebox https://github.com/iddhi-sulakshana/phonebox
   scoop install main/adb phonebox/phonebox
   ```
 
@@ -185,7 +188,8 @@ Read the [security details](docs/GUIDE.md#security--privacy). To report a vulner
 
 ## Development
 
-The agent uses **.NET 10**; the Android app uses **Kotlin and a WebView** with plain JavaScript widgets.
+The agent is written in **Rust** and builds to one program with no runtime; the Android app uses **Kotlin and a
+WebView** with plain JavaScript widgets.
 For Android builds, install **JDK 17** and **Android SDK Platform 35** (the SDK the app is built with; the app itself
 runs on Android 5.0, API 21, and later).
 Preview the panel and editor from source with Python 3, using simulated data:
@@ -200,16 +204,18 @@ Contributions are welcome; start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Code signing policy
 
-Free code signing provided by [SignPath.io](https://about.signpath.io/), certificate by
-[SignPath Foundation](https://signpath.org/).
-
-- **Windows agent:** the SignPath Foundation application is pending; releases are unsigned until approved.
-  The intended signing target is `PhoneBoxAgent.exe` in the `win-x64` release zip, built by the
-  [release workflow](.github/workflows/release.yml). Every signing request requires manual approval.
-  Bundled runtime and library notices are in [THIRD-PARTY-NOTICES.txt](agent/PhoneBox.Agent/THIRD-PARTY-NOTICES.txt).
-- **Android app:** release APKs use the project's own signing key, independently of SignPath.
-- **Team roles:** committer, reviewer and signing approver: [ersinkoc](https://github.com/ersinkoc).
-  Pull requests from other contributors are reviewed before merging.
+- **Windows agent:** not code-signed. `PhoneBoxAgent.exe` in the `win-x64` release zip is built by the
+  [release workflow](.github/workflows/release.yml), with a SHA-256 checksum that setup checks and build provenance.
+  Library notices are in [THIRD-PARTY-NOTICES.txt](agent-rs/THIRD-PARTY-NOTICES.txt).
+- **macOS agent:** signed with this fork's own certificate (identifier `net.oxog.phonebox.agent`), not an Apple
+  Developer ID, so macOS keeps the Accessibility and Automation permissions across updates. After switching from the
+  original project's agent, allow them once more.
+- **Android app:** release APKs are signed with this fork's own key. Android refuses an update signed with another
+  key, so a phone with the original project's app uninstalls it once and then installs this fork's APK; later updates
+  install normally.
+- **Team roles:** committer, reviewer and release signer: [iddhi-sulakshana](https://github.com/iddhi-sulakshana).
+  PhoneBox was created by [ersinkoc](https://github.com/ersinkoc) ([ersinkoc/phonebox](https://github.com/ersinkoc/phonebox));
+  this fork replaces its C# agent with a Rust one. Pull requests from other contributors are reviewed before merging.
 - **Privacy:** see the [privacy policy](PRIVACY.md).
 
 ## Thanks

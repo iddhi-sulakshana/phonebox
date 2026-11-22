@@ -1,0 +1,31 @@
+[package]
+name = "phonebox-agent"
+description = "PhoneBox desktop agent (the PhoneBoxAgent program)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = ["tls"]
+tls = ["phonebox/tls"]
+
+[[bin]]
+name = "PhoneBoxAgent"
+path = "src/main.rs"
+
+[dependencies]
+axum = "0.8"
+phonebox = { path = "../phonebox", default-features = false }
+tokio = { version = "1", features = ["full"] }
+
+# the exe's icon and version information (build.rs; Windows builds on Windows only)
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,17 @@
+PhoneBox agent: third-party notices
+===================================
+
+PhoneBoxAgent is built from the Rust crates below. Each section names a license, the crates released under it, and
+its text.
+{{#each licenses}}
+
+--------------------------------------------------------------------------------
+{{{name}}} ({{{id}}})
+
+Used by:
+{{#each used_by}}
+- {{{crate.name}}} {{{crate.version}}}{{#if crate.repository}} ({{{crate.repository}}}){{/if}}
+{{/each}}
+
+{{{text}}}
+{{/each}}

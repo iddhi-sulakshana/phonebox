@@ -1,13 +1,14 @@
 name: setup
 
-# Runs the one-step installers (setup.ps1, setup.sh) for real against the published release:
-# download, checksum, dependencies, install, start, and a second run that updates a running agent.
+# Runs the one-step installers (setup.ps1, setup.sh) for real against the latest release, the way users run them (no
+# -Pre / --pre; the lint job tests -Pre without the API): download, checksum, dependencies, install, start, and a second
+# run that updates a running agent. While the repository has no published final release the jobs skip with a notice.
 on:
   pull_request:
-    paths: [setup.ps1, setup.sh, tools/test-unix-setup-phone.py, .github/workflows/setup.yml]
+    paths: [setup.ps1, setup.sh, tools/test-unix-setup-phone.py, tools/test-setup-pre.ps1, .github/workflows/setup.yml]
   push:
     branches: [main]
-    paths: [setup.ps1, setup.sh, tools/test-unix-setup-phone.py, .github/workflows/setup.yml]
+    paths: [setup.ps1, setup.sh, tools/test-unix-setup-phone.py, tools/test-setup-pre.ps1, .github/workflows/setup.yml]
   schedule:
     - cron: '17 6 * * 1'   # weekly: the latest release against current winget, Homebrew and distribution packages
   workflow_dispatch:
@@ -36,6 +37,9 @@ jobs:
           $issues = Invoke-ScriptAnalyzer -Path setup.ps1 -Severity Error, ParseError
           $issues | Format-Table -AutoSize | Out-String -Width 200
           if ($issues) { throw "PSScriptAnalyzer: $($issues.Count) error(s)" }
+      - name: setup.ps1 -Pre without the API
+        shell: pwsh
+        run: ./tools/test-setup-pre.ps1
 
   windows:
     name: setup.ps1 (Windows PowerShell 5.1)
@@ -44,10 +48,23 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false   # the jobs run downloaded programs and need no Git access
+      # The latest release, as the installers take it by default (pre-releases are not "latest"); none yet: skip
+      - name: Latest release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/${{ github.repository }}/releases/latest" 2>/dev/null \
+            | python3 -c 'import json, sys; print(json.load(sys.stdin).get("tag_name", ""))' 2>/dev/null || true)
+          if [ -z "$tag" ]; then echo "::notice::${{ github.repository }} has no published release yet: nothing to install"; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - name: First install
+        if: steps.release.outputs.tag != ''
         shell: powershell
         run: '& ([scriptblock]::Create((Get-Content -Raw .\setup.ps1))) -Yes -NoPhone -AllowAdministrator'
       - name: Check the running agent
+        if: steps.release.outputs.tag != ''
         shell: powershell
         run: |
           $info = Invoke-RestMethod http://127.0.0.1:8765/api/info
@@ -56,6 +73,7 @@ jobs:
           if (-not (Test-Path "$env:LOCALAPPDATA\PhoneBox\app\PhoneBoxAgent.exe")) { throw 'agent not in the install folder' }
           if (-not (Test-Path ([Environment]::GetFolderPath('Startup') + '\PhoneBox.lnk'))) { throw 'no Startup shortcut' }
       - name: Second run replaces a running agent
+        if: steps.release.outputs.tag != ''
         shell: powershell
         run: |
           & ([scriptblock]::Create((Get-Content -Raw .\setup.ps1))) -Yes -NoPhone -AllowAdministrator
@@ -78,13 +96,27 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false   # the jobs run downloaded programs and need no Git access
+      # The latest release, as the installers take it by default (pre-releases are not "latest"); none yet: skip
+      - name: Latest release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/${{ github.repository }}/releases/latest" 2>/dev/null \
+            | python3 -c 'import json, sys; print(json.load(sys.stdin).get("tag_name", ""))' 2>/dev/null || true)
+          if [ -z "$tag" ]; then echo "::notice::${{ github.repository }} has no published release yet: nothing to install"; fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - name: First install (piped, as with curl | bash)
+        if: steps.release.outputs.tag != ''
         run: cat setup.sh | bash -s -- --yes --no-phone
       - name: Check the running agent
+        if: steps.release.outputs.tag != ''
         run: |
           curl -fsS http://127.0.0.1:8765/api/info | tee /tmp/info.json; echo
           python3 -c 'import json; i = json.load(open("/tmp/info.json")); assert i["adb"], "setup did not install adb"'
       - name: Second run replaces a running agent
+        if: steps.release.outputs.tag != ''
         run: |
           bash setup.sh --yes --no-phone --no-extras
           curl -fsS http://127.0.0.1:8765/api/info >/dev/null
