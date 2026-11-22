@@ -394,13 +394,15 @@ impl ControlDeck {
         let (native, hardware) = (self.native.clone(), self.hardware.clone());
         job.job = std::thread::Builder::new()
             .name("deck-hardware".into())
+            // each part shows as soon as it is found (C# set _monitors, _plans and _midi in turn): powercfg can take
+            // seconds and must not hide the monitors
             .spawn(move || {
-                let found = Hardware {
-                    monitors: native.monitors(),
-                    plans: native.power_plans(),
-                    midi: native.midi_ports(),
-                };
-                *lock(&hardware) = found;
+                let monitors = native.monitors();
+                lock(&hardware).monitors = monitors;
+                let plans = native.power_plans();
+                lock(&hardware).plans = plans;
+                let midi = native.midi_ports();
+                lock(&hardware).midi = midi;
             })
             .ok();
     }

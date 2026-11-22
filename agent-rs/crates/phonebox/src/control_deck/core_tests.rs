@@ -1122,6 +1122,9 @@ struct PanicNative {
     hold_speaker_mute: bool,
     speaker_mute_entered: Event,
     release_speaker_mute: Event,
+    /// One monitor, and power plans that take until `release_plans` (powercfg can take seconds).
+    slow_plans: bool,
+    release_plans: Event,
 }
 
 impl PanicNative {
@@ -1133,6 +1136,8 @@ impl PanicNative {
             hold_speaker_mute,
             speaker_mute_entered: Event::default(),
             release_speaker_mute: Event::default(),
+            slow_plans: false,
+            release_plans: Event::default(),
         }
     }
     fn mic_muted(&self) -> bool {
@@ -1194,12 +1199,25 @@ impl DeckNative for PanicNative {
         false
     }
     fn monitors(&self) -> Vec<DeckMonitor> {
-        vec![]
+        if !self.slow_plans {
+            return vec![];
+        }
+        vec![DeckMonitor {
+            id: r"\\.\DISPLAY1".into(),
+            name: r"\\.\DISPLAY1 (primary)".into(),
+            brightness: None,
+            width: 1024,
+            height: 768,
+            hz: 64,
+        }]
     }
     fn brightness(&self, _: &str, _: i32) -> bool {
         false
     }
     fn power_plans(&self) -> Vec<DeckItem> {
+        if self.slow_plans {
+            self.release_plans.wait(Duration::from_secs(10));
+        }
         vec![]
     }
     fn platform_action<'a>(
@@ -1234,6 +1252,27 @@ fn panic_deck(native: &Arc<PanicNative>) -> (tempfile::TempDir, Arc<ControlDeck>
     let cfg = store(&dir, "{}");
     let deck = ControlDeck::new(cfg, native.clone(), DeckOptions::default());
     (dir, deck)
+}
+
+// C#'s RefreshHardware sets _monitors, _plans and _midi one after the other: slow power plans do not hide the monitors
+#[tokio::test]
+async fn monitors_show_while_power_plans_are_still_being_read() {
+    let native = Arc::new(PanicNative {
+        slow_plans: true,
+        ..PanicNative::new(false, false)
+    });
+    let (_dir, deck) = panic_deck(&native);
+    let mut snapshot = deck.snapshot().await.unwrap();
+    let end = std::time::Instant::now() + Duration::from_secs(3);
+    while snapshot["monitors"].as_array().is_none_or(|m| m.is_empty())
+        && std::time::Instant::now() < end
+    {
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        snapshot = deck.snapshot().await.unwrap();
+    }
+    native.release_plans.set();
+    assert_eq!(snapshot["monitors"][0]["width"], 1024);
+    assert_eq!(snapshot["hardwareLoading"], true);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
