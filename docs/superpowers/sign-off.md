@@ -4,12 +4,13 @@ The record for owner gate 1 (release 1.0.0) and owner gate 2 (removing `agent/`)
 spec and every roadmap exit check, with its status and evidence or the step still pending; the accepted risks the
 1.0.0 release notes must list; and the decisions still open for the owner.
 
-State: branch `rust-agent`, 2026-11-22, after plan 8 Tasks 1–12 (Stage A, CI, the alphas and the phone checks),
-ready for owner gate 1. Updated at each gate.
+State: `main`, 2026-11-22, after plan 8 Task 13: owner gate 1 passed, 1.0.0 published from `main` and installed on
+the owner's MacBook in place of the C# agent. Owner gate 2 (Task 14, removing `agent/`) is still open. Updated at
+each gate.
 
 - **Spec:** `docs/superpowers/specs/2026-11-20-rust-agent-design.md` ("Verification", "Switch-over").
 - **Roadmap:** `docs/superpowers/plans/2026-11-20-rust-agent-roadmap.md`.
-- **Plan 8:** `docs/superpowers/plans/2026-11-22-rust-agent-plan-8-sign-off.md` (Tasks 10–14 are the pending steps
+- **Plan 8:** `docs/superpowers/plans/2026-11-22-rust-agent-plan-8-sign-off.md` (Task 14 is the pending step
   named below).
 - **Evidence** cited as "plan N, Task M" is that task's entry in the plan's ledger
   (`.superpowers/sdd/<date>-rust-agent-plan-<N>-*/progress.md`, kept out of git on the owner's machine). Plan 1 has no
@@ -27,7 +28,7 @@ ready for owner gate 1. Updated at each gate.
 | S3 | The new browser suite passes against the Rust agent | met | Plan 8 Task 7: the live-agent suite (settings load and save, the `X-Config-Version` conflict, the live preview, the pairing dialog and QR codes, shortcut icon upload and removal) against C# first, then Rust; CI job `ui-live` green on every run since the push (Task 10). | — |
 | S4 | The macOS real-device and hardware checks pass | met | MacBook hardware comparisons of the two agents: `pc` and `ping` (plan 2, Task 14), desk controls (plan 3, Task 12), the Wi-Fi certificate and pairing (plan 4, Task 8), sessions, quotas and a permission prompt (plan 5, Task 14), integrations (plan 6, Task 32). The phone checks P1–P7 on the owner's phone (plan 8, Task 12; section 3). | — |
 | S5 | The Rust agent is lighter on every measured axis on the owner's MacBook | met | Plan 8, Task 13: `agent-rs/scripts/mac-resources.sh`, two 34-minute runs side by side with the owner's config, C# 0.9.23 against the 1.0.0 build (CI package of ffd89b6): CPU idle / phone / pages 12.2 / 12.1 / 14.1 % -> 6.4 / 5.8 / 7.4 %, memory 230.9 -> 13.6 MB, threads 35 -> 22, idle wake-ups 3.5 -> 3.1 per second, installed 113.6 -> 13.6 MB, download 44.3 -> 5.8 MB, disk writes 0 on both. The first run (alpha.2) failed on wake-ups (12.5 vs 3.9); fixed in ffd89b6 (tools waited for with poll(2), the media thread with one timed wait). | — |
-| S6 | 1.0.0 carries settings, pairings, icons and pushed values over | partly | The Rust agent uses the same folders and files; it read the installed C# agent's `lan-cert.pfx` with the same fingerprint (plan 4, Task 8; again with the phone, P2); `config.json` byte parity (PR1); `setup.sh` and `setup.ps1` installed 1.0.0-alpha.2 on macOS, Ubuntu x64 and arm64 and Windows and replaced a running agent (`setup.yml`); an installed alpha.1 updated itself to alpha.2 from the releases (`lifecycle.yml`; plan 8, Task 11). | A real switch on the MacBook with the fork's setup script (Task 13, with the owner's consent to replace the install). |
+| S6 | 1.0.0 carries settings, pairings, icons and pushed values over | met | The switch on the owner's MacBook (plan 8, Task 13): `main`'s `setup.sh` (dry run, then `--yes`) replaced the running C# 0.9.23 with 1.0.0 in place under the same launchd job; `lan-cert.pfx`, `data.json` and `icons/` byte-identical to the backup taken before, `config.json` kept with only the designed normalizations on its first save (`updates.repo` to the fork, the `display.openOnConnect` default); the phone came back over Wi-Fi with its existing pairing, no re-pair, and the agent updated the phone app to 1.0.0 over adb by itself 30 s after start. Before that: the same folders and files, the C# agent's `lan-cert.pfx` read with the same fingerprint (plan 4, Task 8; P2), `config.json` byte parity (PR1), `setup.yml` and `lifecycle.yml` (plan 8, Task 11; and on `main` against the published 1.0.0, Task 13). | — |
 | S7 | `agent/` and its tests are removed after the switch | pending | — | Owner gate 2 (Task 14): a final C#↔Rust parity run on every OS and `port-status.py --check` as evidence, then the removal. |
 
 ## 2. Roadmap exit checks (plans 1–7)
@@ -40,7 +41,7 @@ ready for owner gate 1. Updated at each gate.
 | 4 | The phone switches USB ⇄ Wi-Fi with an existing pairing, no re-pair | met | Plan 4, Task 8: the Rust agent read the installed agent's `lan-cert.pfx` (same fingerprint), `/api/pair` matched, the served certificate matched. P2 (plan 8, Task 12): the phone came over Wi-Fi to the Rust agent with the pairing it made with C#, TLS on Android 8 included; again with the fork's app after it paired once. | — |
 | 5 | Sessions, quotas and a Claude Code permission prompt round-trip on the MacBook | met | Plan 5, Task 14 (through a stand-in for the phone). P4 (plan 8, Task 12): the installed hook's prompt showed on the real phone and Allow there reached the hook; sessions, the GitHub user and quotas the same as C#. | — |
 | 6 | The full route corpus passes on all platforms | met | Linux phases 1–7, 0 differences (plans 6–8); macOS and Windows phases 1–7 on CI (plan 8, Task 10); MacBook integrations match (plan 6, Task 32). P5 (plan 8, Task 12): locking the Mac put the phone to sleep within a second and unlocking woke it; with a secure lock screen on the phone the panel shows after the phone's own unlock, as with C#. | — |
-| 7 | A `1.0.0-alpha.N` pre-release installs with `setup.sh` on the MacBook and updates itself to the next alpha | partly | `remote-update-check.sh` on the test server (plan 7, Task 13). Published: 1.0.0-alpha.1 and 1.0.0-alpha.2 (pre-releases). `lifecycle.yml` on `macos-latest`: `setup.sh` installed alpha.1, which updated itself to alpha.2 by check and apply. `setup.yml`: `setup.sh` (macOS, Ubuntu x64 and arm64) and `setup.ps1` installed alpha.2 and replaced a running agent (plan 8, Task 11). | The owner's MacBook itself still runs the C# agent: replacing it is the real switch at gate 1 (S6). |
+| 7 | A `1.0.0-alpha.N` pre-release installs with `setup.sh` on the MacBook and updates itself to the next alpha | met | `remote-update-check.sh` on the test server (plan 7, Task 13). Published: 1.0.0-alpha.1 and 1.0.0-alpha.2 (pre-releases), then 1.0.0. `lifecycle.yml` on `macos-latest`: `setup.sh` installed alpha.1, which updated itself to alpha.2 by check and apply (plan 8, Task 11); from `main`, alpha.2 updated itself to the published 1.0.0 (Task 13). `setup.yml` installed alpha.2, and from `main` the latest release, 1.0.0, replacing a running agent. The owner's MacBook went from C# 0.9.23 straight to 1.0.0 with `setup.sh` (S6): the alpha-to-alpha step ran on CI's Macs, not on the MacBook (a ruling, Task 13). | — |
 
 ## 3. Steps since Stage A, and what gate 1 still runs
 
@@ -59,18 +60,21 @@ the fork's app then paired once over Wi-Fi.
 
 **Releases (Task 11), done:** 1.0.0-alpha.1 and 1.0.0-alpha.2 built, reviewed (assets, checksums, zip contents,
 architectures, macOS signatures) and published as pre-releases; `setup.yml` and `lifecycle.yml` (alpha.1 → alpha.2)
-green. `lifecycle.yml` can be dispatched only once it is on `main`; until then it runs from a throwaway branch.
+green. `lifecycle.yml` ran from a throwaway branch until the merge; it is on `main` now.
 
 **Found by P7, for the switch procedure:** the agent looks for a missing app only while its own `adb reverse` rule is
 absent (as C# does), so after uninstalling the old app the user unplugs the phone and plugs it back in (or restarts
 the agent) before Settings › Install the phone app offers the install.
 
-**In the 1.0.0 bump (Task 13):** `build.yml`'s metadata job runs `check-release.py --final`; the
-`crate_version_is_alpha` test changes; the Scoop bucket's `homepage` and `autoupdate.url` move to the fork; the winget
-manifests take the identifier the owner picks; `remote-update-check.sh` runs alpha → 1.0.0; the setup headers,
-`setup.yml` and `RELEASING.md` drop the pre-release wording; the CHANGELOG carries the switch procedure (with the
-replug step above) and section 4. Then the MacBook resource run (S5), a draft, the merge to `main`, publishing from
-`main`, and `lifecycle.yml` alpha → 1.0.0.
+**Gate 1 (Task 13), done:** the owner consented to 1.0.0 and to switching the MacBook, picked the winget identifier
+`iddhi-sulakshana.PhoneBox`, kept the original project's pairing page and accepted the two config-null divergences.
+The 1.0.0 bump: `build.yml`'s metadata job runs `check-release.py --final`; the `crate_version_is_alpha` test is gone;
+the Scoop bucket and the winget manifests point at the fork; `remote-update-check.sh` runs alpha → 1.0.0; the setup
+scripts, `setup.yml` and `RELEASING.md` drop the pre-release wording; the CHANGELOG carries the switch procedure (with
+the replug step above), the resource table and section 4. The resource run (S5) failed once on idle wake-ups and
+passed after the fix. Two drafts were reviewed and deleted, PR #1 merged (c49d459), 1.0.0 published from `main` as the
+latest release (the bot committed the Scoop and winget manifests, 554bfae), `lifecycle.yml` (alpha.2 → 1.0.0) and
+`setup.yml` green from `main`, and the MacBook switched (S6).
 
 **Fixed in plan 8 Stage A:** the push-store deadlock when a value expires before the 2 s save (Task 1); the panic on a
 non-ASCII app name, and a null `night.start` / `night.end` in a save refused as in C# (Task 2); a BOM before
@@ -106,7 +110,7 @@ From the ledgers and PR #1 (user-visible):
 5. **Claude quota behind a proxy or a TLS-inspecting CA:** the client ignores the system proxy, follows no redirects
    and trusts the webpki roots, not the system store; the quota then shows "Could not reach Anthropic".
 6. **Pairing goes through the original project's page** (`ersinkoc.github.io/phonebox/pair/`), whose "Download the
-   app" offers that project's APK, signed with the other key (unless the owner moves the host, section 5).
+   app" offers that project's APK, signed with the other key (the owner kept that page at gate 1).
 7. **Wi-Fi details:** ALPN offers HTTP/1.1 only; a percent-encoded API path gets 403 over Wi-Fi (TLS on Android 8 is
    proven on the owner's phone, P2).
 8. **Feed read state may not carry over:** item ids keyed by link come from the WHATWG URL parser.
@@ -120,37 +124,30 @@ From the ledgers and PR #1 (user-visible):
 15. **`setup.sh --pre` / `setup.ps1 -Pre` take the newest published release**, not the highest version.
 16. **Minor visible behavior:** SVG uploads accept internal-DTD entities and refuse non-UTF SVGs; a typing tool can
     stay running after a dictation hang-up; ping caps DNS at 5 s; the macOS network rate dips every 4 GiB.
-17. **The two config-null divergences of plan 8 Task 3**, if the owner accepts them (section 5, item 7).
+17. **The two config-null divergences of plan 8 Task 3**, accepted by the owner at gate 1 (section 5).
 
-## 5. Open owner decisions
+## 5. Owner decisions
 
-1. **The pairing host and the fork's GitHub Pages.** Keep the original project's page
-   (`ersinkoc.github.io/phonebox/pair/`: works today, including direct app-open on Android below 12; its download
-   link serves the other key's APK; another person's host), or switch on the fork's Pages and move pairing to
-   `iddhi-sulakshana.github.io/phonebox/pair/` (edits to `pair.html`, `panel.spec.js` and `PRIVACY.md`; Android
-   below 12 then goes through the page with one extra tap, unless the app also accepts the new host, which is an app
-   change the spec rules out). The live-demo links in the READMEs, `docs/DEVELOPMENT.md` and the issue template
-   point at the original project's Pages until then.
-2. **The winget identifier and publisher.** `packaging/winget/make-manifests.py` still uses `ersinkoc.PhoneBox`, and
-   its `PortableCommandAlias: phonebox` collides with that package on a machine that has both. Submitting to
-   winget-pkgs is a manual step.
-3. **Issues and private vulnerability reporting on the fork** (both off). `setup.sh` and `setup.ps1` link the
+Settled at gate 1 (plan 8, Task 13):
+
+- **The pairing host:** the original project's page (`ersinkoc.github.io/phonebox/pair/`) stays; the fork's Pages
+  workflow is disabled. The live-demo links in the READMEs, `docs/DEVELOPMENT.md` and the issue template point there.
+- **The winget identifier:** `iddhi-sulakshana.PhoneBox` (publisher `iddhi-sulakshana`). The release workflow commits
+  the manifests to `main`; submitting them to winget-pkgs is a manual step.
+- **The two config-null divergences ruled in plan 8 Task 3** (both reached only by hand-written API calls, both
+  leaving a valid config): accepted as departures (section 4, item 17).
+  - a saved null for a value field of a nested element type (`cameras.sources[].fps`, a deck action's `value`,
+    `levels[].volume` / `muted`, `photos.subfolders`, `controls.allow*`) is dropped to the default, where C# refuses
+    the save;
+  - a null for a name that is a value field elsewhere but unknown to its containing type
+    (`{"weather":{"ENABLED":null}}`) is refused, where C# ignores it.
+- **The release secrets, the MacBook resource run and replacing the MacBook install:** done (S5, S6).
+- **Consent to 1.0.0:** given.
+
+Still open:
+
+1. **Issues and private vulnerability reporting on the fork** (both off). `setup.sh` and `setup.ps1` link the
    fork's issues and `CONTRIBUTING.md` asks for an issue first; `SECURITY.md` and the issue template still link the
    original project's advisories, and `PRIVACY.md` its issues. Enable them and point those texts at the fork, or
    have them reworded.
-4. ~~The six release secrets~~ — set by the owner; both alphas were signed with them.
-5. **The MacBook resource run:** about 70 minutes of two agents beside the installed one on spare ports, possibly
-   with one-time Automation or Local Network prompts; it is S5's measurement.
-6. **Replacing the MacBook install with an alpha** (plan 7's exit check and S6).
-7. **The two config-null divergences ruled in plan 8 Task 3**, both reached only by hand-written API calls (the
-   settings page never sends these nulls), both leaving a valid config:
-   - a saved null for a value field of a nested element type (`cameras.sources[].fps`, a deck action's `value`,
-     `levels[].volume` / `muted`, `photos.subfolders`, `controls.allow*`) is dropped to the default, where C# refuses
-     the save;
-   - a null for a name that is a value field elsewhere but unknown to its containing type
-     (`{"weather":{"ENABLED":null}}`) is refused, where C# ignores it.
-
-   Accept them as departures (item 17 of section 4), or have them fixed, which needs the reader to know each field's
-   containing type.
-8. **The gates themselves:** consent to 1.0.0 (Task 13) and, after it has run a while, to removing `agent/`
-   (Task 14). (The phone checks and the upstream app's uninstall, Task 12, are done.)
+2. **Owner gate 2 (Task 14):** after 1.0.0 has run a while, consent to removing `agent/` and its tests (S7).
