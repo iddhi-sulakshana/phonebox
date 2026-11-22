@@ -817,7 +817,7 @@ export const mediaHtml = () => `
     <span data-i18n="panel.offlineHelp">${t('panel.offlineHelp')}</span></div>`;
 
 // ---------------------------------------------------------------- quotas
-export const Q_STYLE = { antigravity: { color: '#38bdf8', logo: '✦' }, claude: { color: '#d97757', logo: '✳' }, codex: { color: '#e5e7eb', logo: '◎' }, cursor: { color: '#67e8f9', logo: '◆' }, grok: { color: '#f8fafc', logo: '✶' } };
+export const Q_STYLE = { antigravity: { color: '#38bdf8', logo: '✦' }, claude: { color: '#d97757', logo: '✳' }, codex: { color: '#e5e7eb', logo: '◎' }, cursor: { color: '#67e8f9', logo: '◆' }, grok: { color: '#f8fafc', logo: '✶' }, teamclaude: { color: '#a78bfa', logo: '◈' } };
 
 export function fmtReset(ts) {
   if (!ts) return '';

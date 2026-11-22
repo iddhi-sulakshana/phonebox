@@ -437,6 +437,40 @@ body.offline .offline-msg { display: flex; }
 .q-ov-lbl { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .q-ov-val { font-size: clamp(18px, 8cqh, 26px); font-weight: 600; color: var(--text); white-space: nowrap; }
 @container (max-height: 200px) { .q-reset, .q-pace, .q-foot, .q-details { display: none; } .q-dial { width: min(58cqh, 124px); } }
+/* TeamClaude: the team pool — the day's tokens, the weekly forecast, the top users */
+.q-tc-verdict.ok { color: #86efac; background: color-mix(in srgb, #86efac 14%, transparent); }
+.q-tc-verdict.over { color: #f87171; background: color-mix(in srgb, #f87171 14%, transparent); }
+.q-tc-verdict.under { color: #fbbf24; background: color-mix(in srgb, #fbbf24 14%, transparent); }
+.q-tc-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1.35fr 1.15fr; gap: 14px; padding-top: 8px; }
+.q-tc-sec { display: flex; flex-direction: column; gap: 3px; min-width: 0; min-height: 0; }
+.q-tc-lbl { font-size: 10.5px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.q-tc-big { font-size: clamp(22px, 13cqh, 40px); font-weight: 600; letter-spacing: -0.02em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.q-tc-sub { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.q-tc-bars, .q-tc-chart { position: relative; flex: 1; min-height: 28px; }
+.q-tc-bars svg, .q-tc-chart svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.q-tc-bars rect { fill: var(--q); opacity: .55; }
+.q-tc-bars rect.now { opacity: 1; }
+.q-tc-chart path, .q-tc-chart line { fill: none; vector-effect: non-scaling-stroke; }
+.q-tc-chart .area { fill: color-mix(in srgb, var(--q) 20%, transparent); stroke: none; }
+.q-tc-chart .past { stroke: var(--q); stroke-width: 2; }
+.q-tc-chart .proj { stroke: var(--q); stroke-width: 1.6; stroke-dasharray: 4 3; opacity: .75; }
+.q-tc-chart .thr { stroke: #f87171; stroke-width: 1; stroke-dasharray: 2 3; opacity: .8; }
+.q-tc-chart .now { stroke: rgba(255, 255, 255, .22); stroke-width: 1; }
+.q-tc-users { gap: 5px; }
+.q-tc-user { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 12px; }
+.q-tc-uname { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.q-tc-utrack { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .07); overflow: hidden; }
+.q-tc-ubar { display: block; height: 100%; border-radius: 3px; background: var(--q); }
+.q-tc-uval { font-size: 11px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.q-tc-others .q-tc-uname { font-weight: 500; color: var(--muted); }
+.q-tc-none { font-size: 11.5px; color: var(--muted); }
+@container (max-width: 560px) {
+  .q-tc-body { grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr) auto; gap: 8px 12px; }
+  .q-tc-users { grid-column: 1 / -1; }
+  .q-tc-user:nth-child(n+5) { display: none; }
+}
+@container (max-height: 200px) { .q-tc-bars, .q-tc-sub, .q-tc-users { display: none; } .q-tc-body { grid-template-columns: 1fr 1.4fr; } }
+
 @container (max-width: 420px) { .q-grid { flex-direction: column; } }
 
 /* ---------- sessions & GitHub ---------- */

@@ -467,6 +467,7 @@ W.quotas = {
     const getItems = () => {
       const want = getProviders();
       const items = quotaProviders().filter((p) => want.includes(p.id));
+      if (want.includes('teamclaude') && D.quotas?.teamclaude) items.unshift({ id: 'teamclaude', isTeam: true, team: D.quotas.teamclaude });
       if (isOverviewEnabled() && D.quotas?.overview) {
         return [{ id: '__overview__', isOverview: true, overview: D.quotas.overview }, ...items];
       }
@@ -517,6 +518,90 @@ W.quotas = {
       return card;
     };
 
+    // ------------------------------------------------ TeamClaude: the team pool (tokens, forecast, top users)
+    const big = (n) => n == null ? '—' : n >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(n);
+
+    /** The day's tokens per hour as bars, oldest first (numbers only). */
+    const teamBars = (vals) => {
+      const box = h('div', 'q-tc-bars');
+      if (!vals.length) return box;
+      const max = Math.max(1, ...vals);
+      const w = 100 / vals.length;
+      box.innerHTML = `<svg viewBox="0 0 100 30" preserveAspectRatio="none">${vals.map((v, i) => {
+        const bh = v > 0 ? Math.max(1.2, (v / max) * 30) : 0.5;
+        return `<rect${i === vals.length - 1 ? ' class="now"' : ''} x="${(i * w + w * 0.14).toFixed(2)}" y="${(30 - bh).toFixed(2)}" width="${(w * 0.72).toFixed(2)}" height="${bh.toFixed(2)}"/>`;
+      }).join('')}</svg>`;
+      return box;
+    };
+
+    /** The pool's weekly use (0–1) over the last day, solid, and its projection to the refills, dashed, under the dry line. */
+    const teamChart = (f) => {
+      const box = h('div', 'q-tc-chart');
+      const past = f?.past || [];
+      const proj = f?.projected || [];
+      const all = past.concat(proj);
+      if (all.length < 2) return box;
+      const t0 = all[0][0];
+      const span = Math.max(1, all[all.length - 1][0] - t0);
+      const X = (ts) => (((ts - t0) / span) * 100).toFixed(2);
+      const Y = (u) => (40 - Math.max(0, Math.min(1, u)) * 40).toFixed(2);
+      const path = (pts) => pts.map((pt, i) => `${i ? 'L' : 'M'}${X(pt[0])},${Y(pt[1])}`).join('');
+      const last = past[past.length - 1];
+      box.innerHTML = `<svg viewBox="0 0 100 40" preserveAspectRatio="none">`
+        + (f.threshold != null ? `<line class="thr" x1="0" x2="100" y1="${Y(f.threshold)}" y2="${Y(f.threshold)}"/>` : '')
+        + (past.length > 1 ? `<path class="area" d="${path(past)}L${X(last[0])},40L${X(past[0][0])},40Z"/><path class="past" d="${path(past)}"/>` : '')
+        + (proj.length > 1 ? `<path class="proj" d="${path(proj)}"/>` : '')
+        + (last ? `<line class="now" x1="${X(last[0])}" x2="${X(last[0])}" y1="0" y2="40"/>` : '')
+        + '</svg>';
+      return box;
+    };
+
+    const teamForecastLine = (f) => {
+      if (!f || !f.verdict) return f?.reason ? `${t('q.tc.noForecast')} (${f.reason})` : t('q.tc.noForecast');
+      const parts = [];
+      const last = f.past?.[f.past.length - 1];
+      if (last) parts.push(t('q.tc.used', { pct: Math.round(last[1] * 100) }));
+      if (f.poolDryAt) parts.push(t('q.tc.dryIn', { dur: fmtDur(f.poolDryAt - Date.now()) }));
+      else if (f.unusedPct > 0) parts.push(t('q.tc.unused', { pct: f.unusedPct < 10 ? f.unusedPct.toFixed(1) : Math.round(f.unusedPct) }));
+      return parts.join(' · ');
+    };
+
+    const renderTeamCard = (tc, flexVal) => {
+      const st = Q_STYLE.teamclaude;
+      const card = h('div', 'q-card q-team');
+      card.style.setProperty('--q', st.color);
+      card.style.flex = flexVal;
+      const f = tc.forecast;
+      const verdict = { 'on-pace': ['ok', 'q.tc.onPace'], overusing: ['over', 'q.tc.overusing'], underusing: ['under', 'q.tc.underusing'] }[f?.verdict];
+      const age = tc.updatedAt ? fmtDur(Date.now() - tc.updatedAt) + ' ago' : '';
+      card.appendChild(h('div', 'q-head',
+        h('span', 'q-logo', st.logo),
+        h('span', 'q-name', tc.name || 'TeamClaude'),
+        verdict ? h('span', 'q-plan q-tc-verdict ' + verdict[0], `${t(verdict[1])} · ${(f.pace || 0).toFixed(2)}×`) : null,
+        h('span', 'q-upd', [tc.host, age].filter(Boolean).join(' · '))));
+      const tok = tc.tokens;
+      const users = h('div', 'q-tc-sec q-tc-users', h('div', 'q-tc-lbl', t('q.tc.users')));
+      const list = tc.users || [];
+      if (!list.length) users.appendChild(h('div', 'q-tc-none', t('q.tc.noUsers')));
+      const top = Math.max(1, list[0]?.tokens || 1);
+      for (const u of list) {
+        const bar = h('span', 'q-tc-ubar');
+        bar.style.width = `${Math.max(3, (u.tokens / top) * 100)}%`;
+        users.appendChild(h('div', 'q-tc-user', h('span', 'q-tc-uname', u.name), h('span', 'q-tc-utrack', bar), h('span', 'q-tc-uval', big(u.tokens))));
+      }
+      if (tc.others) users.appendChild(h('div', 'q-tc-user q-tc-others', h('span', 'q-tc-uname', t('q.tc.others', { n: tc.others.count })), h('span', 'q-tc-utrack'), h('span', 'q-tc-uval', big(tc.others.tokens))));
+      card.appendChild(h('div', 'q-tc-body',
+        h('div', 'q-tc-sec q-tc-tokens',
+          h('div', 'q-tc-lbl', t('q.tc.tokens')),
+          h('div', 'q-tc-big', big(tok?.total)),
+          tok ? h('div', 'q-tc-sub', t('q.tc.split', { in: big(tok.input), out: big(tok.output) })) : null,
+          teamBars(tc.hourly || [])),
+        h('div', 'q-tc-sec q-tc-fc', h('div', 'q-tc-lbl', t('q.tc.pool')), teamChart(f), h('div', 'q-tc-sub', teamForecastLine(f))),
+        users));
+      if (tc.error) card.appendChild(h('div', 'q-foot', h('span'), h('span', 'q-err', tc.error)));
+      return card;
+    };
+
     const render = () => {
       if (!D.quotas) return;
       const want = getProviders();
@@ -532,13 +617,21 @@ W.quotas = {
       if (needsPaging) {
         visible = [];
         for (let i = 0; i < ps; i++) {
-          visible.push(list[(offset + i) % list.length]);
+          const item = list[(offset + i) % list.length];
+          // the TeamClaude card takes a page of its own
+          if (item.isTeam && i > 0) break;
+          visible.push(item);
+          if (item.isTeam) break;
         }
       }
 
       for (const p of visible) {
         if (p.isOverview) {
           grid.appendChild(renderOverviewCard(p.overview, needsPaging && ps === 2 ? '1 1 0' : '1.5'));
+          continue;
+        }
+        if (p.isTeam) {
+          grid.appendChild(renderTeamCard(p.team, needsPaging ? '1 1 0' : '2.4'));
           continue;
         }
         const st = Q_STYLE[p.id] || { color: '#94a3b8', logo: '●' };
