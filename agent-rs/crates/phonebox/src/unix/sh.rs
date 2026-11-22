@@ -277,25 +277,13 @@ mod tests {
         assert!(!done_early, "the run waited for the child");
     }
 
+    // the Linux and macOS helper: nothing on Windows runs it
+    #[cfg(unix)]
     #[test]
     fn a_tool_that_finishes_returns_its_output_and_a_failing_one_none() {
-        if cfg!(windows) {
-            // Sh takes a tool with a '/' as a path, else looks it up on a ':'-separated PATH (it is the Unix helper)
-            let cmd = std::env::var("ComSpec")
-                .unwrap_or_else(|_| "C:/Windows/System32/cmd.exe".into())
-                .replace('\\', "/");
-            assert_eq!(
-                run(&cmd, &["/d", "/c", "echo hi"])
-                    .as_deref()
-                    .map(str::trim),
-                Some("hi")
-            );
-            assert_eq!(run(&cmd, &["/d", "/c", "exit 3"]), None);
-        } else {
-            assert_eq!(run("sh", &["-c", "printf hi"]).as_deref(), Some("hi"));
-            assert_eq!(run("sh", &["-c", "printf hi; exit 3"]), None);
-            assert!(which("sh").is_some());
-        }
+        assert_eq!(run("sh", &["-c", "printf hi"]).as_deref(), Some("hi"));
+        assert_eq!(run("sh", &["-c", "printf hi; exit 3"]), None);
+        assert!(which("sh").is_some());
         assert_eq!(run("phonebox-no-such-tool", &[]), None);
     }
 }

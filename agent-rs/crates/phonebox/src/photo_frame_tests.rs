@@ -174,7 +174,8 @@ fn linked_folders_are_never_entered() {
     let outside = f.path("outside");
     std::fs::create_dir_all(&outside).unwrap();
     std::fs::write(outside.join("secret.jpg"), JPEG).unwrap();
-    let link = f.path("photos/jn");
+    // joined part by part: cmd.exe would read a "/jn" as a switch
+    let link = f.path("photos").join("jn");
     #[cfg(windows)]
     {
         // a junction needs no special rights

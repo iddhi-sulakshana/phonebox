@@ -102,7 +102,8 @@
       "/host",
       "/pushVersion",
       "/pc",
-      "/ping"
+      "/ping",
+      "/audio"
     ]
   },
   {
@@ -119,7 +120,8 @@
       "/host",
       "/pushVersion",
       "/pc",
-      "/ping"
+      "/ping",
+      "/audio"
     ]
   },
   {

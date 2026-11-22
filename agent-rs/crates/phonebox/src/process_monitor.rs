@@ -1156,6 +1156,8 @@ mod tests {
         let mut parent = spawn("sh", &["-c", "sleep 60 & wait"]);
         let pid = parent.id();
         wait_until("the child sleep", || !descendants(pid).is_empty());
+        // on macOS the owner comes from ps, read at most every 2 s (C#'s cache too): wait until it lists the process
+        wait_until("ps lists the process", || mine(pid));
         let kids = descendants(pid);
         let r = procs.kill_pid(pid);
         assert_eq!(

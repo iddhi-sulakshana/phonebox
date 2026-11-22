@@ -471,12 +471,13 @@ pub(crate) mod tests {
             Some(b.path().join("tool.exe"))
         );
         // the Homebrew and system folders come after PATH, outside Windows
+        // (env: /usr/bin on Linux and macOS alike; macOS keeps sh in /bin)
         #[cfg(unix)]
         assert!(
-            find_in("sh", "", false)
+            find_in("env", "", false)
                 .is_some_and(|p| p.starts_with("/usr") || p.starts_with("/opt"))
         );
-        assert_eq!(find_in("sh", "", true), None);
+        assert_eq!(find_in("env", "", true), None);
     }
 
     #[test]

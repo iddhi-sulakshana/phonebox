@@ -153,9 +153,10 @@ mod tests {
         let pid: u32 = out
             .lines()
             .map_while(Result::ok)
+            // libtest writes "test <name> ... " before the test's own output, on the same line
             .find_map(|l| {
-                l.strip_prefix("sleeper ")
-                    .and_then(|p| p.trim().parse().ok())
+                l.rsplit_once("sleeper ")
+                    .and_then(|(_, p)| p.trim().parse().ok())
             })
             .expect("the helper names its sleeper");
         // SAFETY: the sleeper's handle is waited on, then closed
