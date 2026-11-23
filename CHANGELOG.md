@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.3 — 2026-11-23
 
 - **Growatt and TCL widgets.** Two new widgets for pages of their own. **Growatt inverter** shows your growatt-server's
   live power flow (solar, battery, load, grid) with a Live / Stale / Cloud badge and today's energy, and changes the
