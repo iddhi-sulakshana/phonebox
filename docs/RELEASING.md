@@ -22,6 +22,33 @@ Then check, on the test server (`ssh` after `agent-rs/scripts/_sync.sh`'s `sync_
 `python3 tools/check-release.py --final` (without `--final` it refuses a final version), `python3 tools/check-notices.py`, `python3 tools/test-release-metadata.py`, and
 `agent-rs/scripts/remote-check.sh` for the Rust tests.
 
+## Release from the Mac (GitHub Actions off)
+
+Since 2026-11-23 GitHub Actions is turned off on the fork (it used up the Actions minutes), and releases are built on
+the maintainer's Mac (Apple silicon) with `tools/release-local.sh`. After the version bump is committed and pushed to
+the fork's `main`:
+
+```bash
+tools/release-local.sh            # builds dist-local/ and dist-local.notes.md, publishes nothing
+tools/release-local.sh --publish  # the same, then gh release create v<version> (latest) from main's HEAD
+```
+
+It builds the macOS agents (`osx-arm64`, and `osx-x64` cross-compiled), signs both with PhoneBox's own certificate in
+a throwaway keychain (the same designated requirement as every release, so macOS keeps the Accessibility permission),
+builds the release APK signed with the fork's key (its certificate fingerprint is checked), and writes
+`SHA256SUMS-<version>.txt` and the notes from `CHANGELOG.md`. The secrets come from `/Volumes/storage/Secrets/phonebox`
+(`PHONEBOX_SECRETS`) and are never printed; the Android build uses a JDK 17-21 (`PHONEBOX_JAVA_HOME`, default
+`/Volumes/storage/Runtimes/jdk21`), whatever `JAVA_HOME` the shell has.
+
+What such a release does not have: the Linux and Windows agents, the Scoop and winget manifest update, and a GitHub
+build attestation (only Actions can make one). Installed agents update themselves from it as usual; `setup.sh` and
+`setup.ps1` refuse its downloads while a signed-in GitHub CLI cannot verify the attestation. Nothing runs the agent on
+the Mac (it would start a server): the tests and the checks below still run on the test server
+(`agent-rs/scripts/remote-check.sh`, `remote-update-check.sh`) before the bump is pushed.
+
+To turn Actions back on: `gh api -X PUT repos/iddhi-sulakshana/phonebox/actions/permissions -F enabled=true`, then
+the workflow below applies again.
+
 ## Run the release
 
 Push the branch and wait for the **rust** and **build** workflows to pass, then dispatch **release** on that branch:

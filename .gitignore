@@ -57,3 +57,6 @@ tools/ui-tests/test-results/
 # Python bytecode (tools/parity)
 __pycache__/
 *.pyc
+# tools/release-local.sh
+/dist-local/
+/dist-local.notes.md
