@@ -60,6 +60,8 @@ roxmltree = "0.20"
 p256 = { version = "0.13", features = ["ecdsa", "pkcs8"] }
 sha1 = "0.10"
 hmac = "0.12"
+# TCL's sign-in and device list (the password and request signatures are MD5, as TCL's app sends them)
+md-5 = "0.10"
 des = "0.8"
 rc2 = "0.8"
 aes = "0.8"
