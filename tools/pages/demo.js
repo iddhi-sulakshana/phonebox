@@ -114,6 +114,15 @@
       imported: { today: 1.5, total: 300 }, load: { today: 7.9, total: 2100.7 }, exported: { today: 0, total: 0 } },
     ...(window.PB_DEMO_GROWATT || {}),
   });
+  // The TCL air conditioners: actions change the demo's units; window.PB_DEMO_TCL overrides parts of the view.
+  const TCL_MODES = { cool: [1, 26], fan: [3, 31], dry: [2, 16], heat: [4, 31], auto: [0, 0] };
+  const tclUnits = [
+    { id: 'ac1', name: 'Shop front', online: true, power: true, mode: 1, fan: 2, generator: 0, target: 26, inside: 29.5, outside: 34 },
+    { id: 'ac2', name: 'Back room', online: true, power: false, mode: 3, fan: 7, generator: 0, target: 31, inside: 31.2, outside: 34 },
+    { id: 'ac3', name: 'Office', online: false, power: null, mode: null, fan: null, generator: null, target: null, inside: null, outside: null },
+  ];
+  const tclView = (c) => ({ configured: true, error: null, control: allows(c, (t) => t === 'tcl'), units: tclUnits.map((u) => ({ ...u })),
+    ...(window.PB_DEMO_TCL || {}) });
   const feedsCanOpen = (c) => shownWidgets(c).some((w) => w.type === 'feeds' && w.options?.open === true);
 
   // What the agent sends to a phone (AgentConfig.ToPublic): no commands, keys, tokens or what a rule matches on.
@@ -591,6 +600,23 @@
     }
     if (path === '/api/growatt/relogin' && method === 'POST') return json({ ok: true, connected: true });
     if (path === '/api/growatt-test' && method === 'POST') return json({ result: 'Connected' });
+    if (path === '/api/tcl') return json(tclView(await config()));
+    if (path.startsWith('/api/tcl/') && method === 'POST') {
+      const [unit, action] = path.slice(9).split('/').map(decodeURIComponent);
+      const value = q.get('value') || '';
+      const targets = unit === 'all' ? tclUnits.filter((u) => u.online) : tclUnits.filter((u) => u.id === unit && u.online);
+      const n = Number(value);
+      const change = action === 'power' && (value === 'on' || value === 'off') ? (value === 'on' ? { power: true, target: 26 } : { power: false })
+        : action === 'mode' && value in TCL_MODES ? { mode: TCL_MODES[value][0], ...(TCL_MODES[value][1] ? { target: TCL_MODES[value][1] } : {}) }
+          : action === 'temp' && Number.isInteger(n) && n >= 16 && n <= 31 ? { target: n }
+            : action === 'fan' && Number.isInteger(n) && n >= 0 && n <= 7 ? { fan: n }
+              : action === 'generator' && Number.isInteger(n) && n >= 0 && n <= 3 ? { generator: n } : null;
+      if (!targets.length) return json({ error: 'There is no such unit' }, 400);
+      if (!change) return json({ error: 'There is no such action' }, 400);
+      for (const u of targets) Object.assign(u, change);
+      return json({ ok: true, sent: targets.length });
+    }
+    if (path === '/api/tcl-test' && method === 'POST') return json({ result: 'Connected · 3 units' });
     if (path === '/api/docker') return json({ ...docker(), control: allows(await config(), (t) => t === 'docker') });
     if (path === '/api/obs') { const c = await config(); return json({ ...obsState(), enabled: c.obs?.enabled !== false, control: widgets(c).some((w) => w.type === 'obs' && w.options?.control === true) }); }
     if (path === '/api/discord') {

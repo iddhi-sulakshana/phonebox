@@ -1397,3 +1397,42 @@ body.controls-top .ap-foot { order: -1; margin-bottom: 4px; }
 @container (max-height: 300px) { .w-growatt .gw-today { display: none; } .gw-act { padding: 4px 8px; } }
 @container (max-height: 230px) { .w-growatt .gw-acts, .w-growatt .gw-sub, .w-growatt .gw-bar { display: none; } .gw-tile { padding: 3px 8px; } }
 @container (max-height: 150px) { .w-growatt .gw-age { display: none; } .w-growatt .gw-lbl { font-size: 9.5px; } }
+
+/* TCL air conditioners (widgets/tcl.js): a card per unit and the all-units bar */
+.w-tcl { padding: 9px 12px; display: flex; flex-direction: column; gap: 6px; --tc-cool: #67e8f9; }
+.w-tcl .w-title { color: var(--tc-cool); }
+.tc-head { display: flex; align-items: baseline; gap: 8px; }
+.tc-count { margin-left: auto; font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.tc-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+.tc-all { display: flex; flex-wrap: wrap; gap: 6px 12px; }
+.tc-group { display: flex; align-items: center; gap: 4px; }
+.tc-glabel { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-right: 2px; }
+.tc-btn, .tc-chip { padding: 5px 10px; border-radius: 9px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--text);
+  background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12); white-space: nowrap; }
+.tc-btn.cur, .tc-chip.cur { color: #cffafe; background: rgba(103, 232, 249, .16); border-color: rgba(103, 232, 249, .5); }
+.tc-btn:active, .tc-chip:active, .tc-pwr:active, .tc-minus:active, .tc-plus:active { transform: scale(.96); }
+.tc-units { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr));
+  grid-auto-rows: min-content; gap: 6px; }
+.tc-unit { min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, .045); border: 1px solid var(--line); }
+.tc-unit.on { border-color: rgba(103, 232, 249, .35); background: rgba(103, 232, 249, .06); }
+.tc-unit.offline { opacity: .5; }
+.tc-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.tc-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-dot { width: 8px; height: 8px; border-radius: 50%; background: #4b5563; flex: none; }
+.tc-unit.on .tc-dot { background: var(--tc-cool); box-shadow: 0 0 6px rgba(103, 232, 249, .6); }
+.tc-offline { font-size: 12px; color: var(--muted); }
+.tc-temps { display: flex; align-items: baseline; gap: 10px; }
+.tc-in { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tc-out { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.tc-row { display: flex; align-items: center; gap: 8px; }
+.tc-pwr { width: 36px; height: 36px; border-radius: 50%; font: inherit; font-size: 16px; color: var(--muted); background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .14); flex: none; }
+.tc-pwr.on { color: #0b1215; background: var(--tc-cool); border-color: var(--tc-cool); }
+.tc-state { font-size: 12px; color: var(--muted); }
+.tc-temp { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.tc-minus, .tc-plus { width: 32px; height: 32px; border-radius: 9px; font: inherit; font-size: 18px; color: var(--text); background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12); }
+.tc-target { min-width: 3ch; text-align: center; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tc-opts { display: flex; flex-wrap: wrap; gap: 6px 10px; }
+.tc-chips { display: flex; gap: 4px; }
+.tc-err { font-size: 12px; color: #f59e0b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@container (max-height: 260px) { .w-tcl .tc-all { display: none; } }
+@container (max-width: 360px) { .tc-in { font-size: 20px; } .tc-chip { padding: 4px 7px; } }

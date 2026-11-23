@@ -49,6 +49,7 @@ EVERY = {
     "apps": ("/api/apps", 60),             # pc.js:467
     "feeds": ("/api/feeds", 60),           # widgets/web.js:101
     "growatt": ("/api/growatt", 3),        # widgets/growatt.js (every 3000)
+    "tcl": ("/api/tcl", 5),                # widgets/tcl.js (every 5000)
 }
 HA_SECONDS = 4                             # pc.js:320, /api/ha/states?ids=
 COMMAND_SECONDS = 5                        # widgets/basic.js:1290 (2 s while running)
