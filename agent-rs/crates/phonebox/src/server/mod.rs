@@ -7,6 +7,7 @@ mod routes_console;
 mod routes_controls;
 mod routes_desk;
 mod routes_dev;
+mod routes_devices;
 pub mod routes_info;
 mod routes_integrations;
 pub mod routes_pair;
@@ -116,6 +117,7 @@ fn all_routes() -> axum::Router<AppState> {
         .merge(routes_dev::routes())
         .merge(routes_push::routes())
         .merge(routes_integrations::routes())
+        .merge(routes_devices::routes())
         .merge(routes_widgets::routes())
         .merge(routes_phones::routes())
         .merge(routes_rules::routes())
@@ -350,6 +352,8 @@ pub struct AppState {
     /// Run after every successful settings save, before the page gets its answer.
     pub settings_hooks: Arc<crate::settings_hooks::SettingsHooks>,
     pub ha: Arc<crate::home_assistant::HomeAssistant>,
+    /// The shop inverter through the owner's growatt-server (`/api/growatt*`).
+    pub growatt: Arc<crate::growatt::Growatt>,
     pub obs: Arc<crate::obs_monitor::ObsMonitor>,
     pub discord: Arc<crate::discord_monitor::DiscordMonitor>,
     pub spotify: Arc<crate::spotify_control::SpotifyControl>,
@@ -471,6 +475,7 @@ impl AppState {
                 Arc::new(crate::usb_doctor::last_report),
             )),
             ha,
+            growatt: Arc::new(crate::growatt::Growatt::new(cfg.clone())),
             obs: Arc::new(crate::obs_monitor::ObsMonitor::new(cfg.clone())),
             discord: Arc::new(crate::discord_monitor::DiscordMonitor::new(cfg.clone())),
             feeds: Arc::new(crate::feeds::FeedMonitor::new(cfg.clone())),
