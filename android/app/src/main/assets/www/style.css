@@ -1342,3 +1342,58 @@ body.controls-top .ap-foot { order: -1; margin-bottom: 4px; }
 
 /* text for screen readers only (an icon-only element keeps its meaning) */
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* Growatt inverter (widgets/growatt.js): the live flow, today's energy, the inverter's settings */
+.w-growatt { padding: 9px 12px; display: flex; flex-direction: column; gap: 6px; --gw-solar: #fbbf24; --gw-bat: #22c55e; --gw-load: #38bdf8; --gw-grid: #a78bfa; }
+.w-growatt .w-title { color: var(--gw-solar); }
+.gw-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.gw-badge { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 1px 7px; border-radius: 999px; color: var(--muted); background: rgba(255, 255, 255, .06); }
+.gw-badge:empty { display: none; }
+.gw-badge.live { color: #86efac; background: rgba(34, 197, 94, .14); }
+.gw-badge.stale { color: #fcd34d; background: rgba(245, 158, 11, .14); }
+.gw-badge.cloud { color: #93c5fd; background: rgba(96, 165, 250, .14); }
+.gw-age { margin-left: auto; font-size: 11px; color: var(--dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.gw-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+.gw-flow { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 6px; }
+.gw-tile { min-width: 0; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 6px 10px; border-radius: 12px;
+  background: rgba(255, 255, 255, .045); border: 1px solid var(--line); border-top: 2px solid var(--gw-c); overflow: hidden; }
+.gw-tile.solar { --gw-c: var(--gw-solar); }
+.gw-tile.battery { --gw-c: var(--gw-bat); }
+.gw-tile.battery.discharging { --gw-c: #f59e0b; }
+.gw-tile.load { --gw-c: var(--gw-load); }
+.gw-tile.grid { --gw-c: var(--gw-grid); }
+.gw-lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; white-space: nowrap; }
+.gw-big { font-size: clamp(16px, 9cqh, 30px); font-weight: 700; color: var(--gw-c); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.gw-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.gw-bar { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .08); overflow: hidden; margin-top: 2px; }
+.gw-bar i { display: block; height: 100%; background: var(--gw-c); border-radius: 2px; }
+.gw-today { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.gw-kwh { min-width: 0; display: flex; flex-direction: column; padding: 2px 4px; }
+.gw-kwh span { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gw-kwh b { font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gw-kwh small { font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gw-acts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.gw-act { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 10px; border-radius: 10px; font: inherit; color: var(--text);
+  background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12); text-align: left; }
+.gw-act:active { transform: scale(.98); }
+.gw-act.busy { opacity: .55; }
+.gw-act-l { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+.gw-act b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.gw-act:last-child { justify-content: center; align-items: center; }
+.gw-act:last-child .gw-act-l { font-size: 13px; color: var(--text); text-transform: none; letter-spacing: 0; font-weight: 600; }
+.gw-err { font-size: 12px; color: #f59e0b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gw-sheet { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; padding: 8px; background: rgba(6, 8, 11, .82); }
+.gw-panel { width: min(100%, 440px); max-height: 100%; overflow-y: auto; scrollbar-width: none; padding: 10px 12px; border-radius: 14px; background: #11151b; border: 1px solid rgba(255, 255, 255, .12); }
+.gw-ptitle { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.gw-close { border: 0; background: none; color: var(--muted); font: inherit; font-size: 16px; padding: 0 4px; }
+.gw-choices { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+.gw-choice { padding: 9px 6px; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 600; color: var(--text); background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12); }
+.gw-choice.cur { color: #fde68a; background: rgba(251, 191, 36, .14); border-color: rgba(251, 191, 36, .45); }
+.gw-own { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.gw-num { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 10px; font: inherit; color: var(--text); background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .14); }
+.gw-unit { color: var(--muted); font-size: 13px; }
+.gw-set { padding: 8px 14px; border-radius: 10px; font: inherit; font-weight: 700; color: #111; background: var(--gw-solar); border: 0; }
+@container (max-width: 560px) { .gw-flow, .gw-today, .gw-acts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-height: 300px) { .w-growatt .gw-today { display: none; } .gw-act { padding: 4px 8px; } }
+@container (max-height: 230px) { .w-growatt .gw-acts, .w-growatt .gw-sub, .w-growatt .gw-bar { display: none; } .gw-tile { padding: 3px 8px; } }
+@container (max-height: 150px) { .w-growatt .gw-age { display: none; } .w-growatt .gw-lbl { font-size: 9.5px; } }

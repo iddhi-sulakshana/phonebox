@@ -103,6 +103,17 @@
   const isObs = (type) => type === 'obs' || type.startsWith('obs-');
   // like AgentConfig.Widgets(enabledPagesOnly: true): what may control the computer comes from enabled pages only
   const shownWidgets = (c) => widgets({ ...c, pages: (c.pages || []).filter((p) => p.enabled !== false) });
+  // The Growatt inverter: fixed readings (the UI tests read them); window.PB_DEMO_GROWATT overrides parts of the view.
+  const growattSettings = { acOutputSource: 1, chargeSource: 0, maxChargeCurrent: 30 };
+  const growattView = (c) => ({
+    configured: true, error: null, control: allows(c, (t) => t === 'growatt'), host: 'growatt.lan',
+    status: { pvW: 1264, pv1W: 604, pv2W: 660, pv1V: 185.5, pv2V: 198, batteryW: -43, batteryV: 54.38, batteryPct: 75, gridW: 0,
+      gridV: 232.2, gridHz: 50.08, loadW: 1270, loadVa: 1389, loadPct: 23.1, outputV: 230.1, outputHz: 50.13, status: '12',
+      source: 'grobro', updatedAt: now() - 2000 },
+    totals: { solar: { today: 5.2, total: 1234.5 }, discharged: { today: 3.1, total: 800 }, charged: { today: 2.4, total: 760.2 },
+      imported: { today: 1.5, total: 300 }, load: { today: 7.9, total: 2100.7 }, exported: { today: 0, total: 0 } },
+    ...(window.PB_DEMO_GROWATT || {}),
+  });
   const feedsCanOpen = (c) => shownWidgets(c).some((w) => w.type === 'feeds' && w.options?.open === true);
 
   // What the agent sends to a phone (AgentConfig.ToPublic): no commands, keys, tokens or what a rule matches on.
@@ -568,6 +579,18 @@
         ] });
     }
     if (path === '/api/calendar') return json(calendar());
+    if (path === '/api/growatt') return json(growattView(await config()));
+    if (path === '/api/growatt/settings') return json({ error: null, ...growattSettings });
+    if (path.startsWith('/api/growatt/settings/') && method === 'POST') {
+      const range = { 'ac-output-source': ['acOutputSource', 3], 'charge-source': ['chargeSource', 2], 'max-charge-current': ['maxChargeCurrent', 100] }[path.slice(22)];
+      const v = Number(q.get('value'));
+      if (!range) return json({ error: 'There is no such Growatt setting' }, 400);
+      if (!Number.isInteger(v) || v < 0 || v > range[1]) return json({ error: `The value must be 0 to ${range[1]}` }, 400);
+      growattSettings[range[0]] = v;
+      return json({ ok: true });
+    }
+    if (path === '/api/growatt/relogin' && method === 'POST') return json({ ok: true, connected: true });
+    if (path === '/api/growatt-test' && method === 'POST') return json({ result: 'Connected' });
     if (path === '/api/docker') return json({ ...docker(), control: allows(await config(), (t) => t === 'docker') });
     if (path === '/api/obs') { const c = await config(); return json({ ...obsState(), enabled: c.obs?.enabled !== false, control: widgets(c).some((w) => w.type === 'obs' && w.options?.control === true) }); }
     if (path === '/api/discord') {
