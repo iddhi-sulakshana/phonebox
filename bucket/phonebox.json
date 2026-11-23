@@ -1,5 +1,5 @@
 {
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "PhoneBox agent: turns an old Android phone into a desk panel for this PC (widgets, AI coding sessions, music, webhooks).",
     "homepage": "https://github.com/iddhi-sulakshana/phonebox",
     "license": "MIT",
@@ -13,8 +13,8 @@
     },
     "architecture": {
         "64bit": {
-            "url": "https://github.com/iddhi-sulakshana/phonebox/releases/download/v1.0.1/PhoneBoxAgent-1.0.1-win-x64.zip",
-            "hash": "65b2ee24c4204639306db714bee6964a49f0f452173d0a5fa8932fe387e13172"
+            "url": "https://github.com/iddhi-sulakshana/phonebox/releases/download/v1.0.2/PhoneBoxAgent-1.0.2-win-x64.zip",
+            "hash": "6d8cf3fa3147036c0cb5d9682096ac5825c4280d2e3f829a304da8f924c41bcd"
         }
     },
     "bin": [

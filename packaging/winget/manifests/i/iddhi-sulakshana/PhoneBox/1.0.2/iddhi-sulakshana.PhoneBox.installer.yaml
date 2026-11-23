@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+PackageIdentifier: iddhi-sulakshana.PhoneBox
+PackageVersion: 1.0.2
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+- RelativeFilePath: PhoneBoxAgent.exe
+  PortableCommandAlias: phonebox
+Dependencies:
+  PackageDependencies:
+  - PackageIdentifier: Google.PlatformTools
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/iddhi-sulakshana/phonebox/releases/download/v1.0.2/PhoneBoxAgent-1.0.2-win-x64.zip
+  InstallerSha256: 6D8CF3FA3147036C0CB5D9682096AC5825C4280D2E3F829A304DA8F924C41BCD
+ManifestType: installer
+ManifestVersion: 1.6.0
