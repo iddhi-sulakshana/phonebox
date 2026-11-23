@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.2 — 2026-11-23
 
 - **The TeamClaude card, redrawn.** The graphs now stand one under another: the day's tokens as TeamClaude's own two
   line panels (input with the cache, and output, each on its own scale with its busiest hour marked and the hours
