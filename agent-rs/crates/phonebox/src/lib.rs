@@ -34,6 +34,7 @@ pub mod file_limit;
 pub mod file_logger;
 pub mod github_monitor;
 pub mod gpus;
+pub mod growatt;
 pub mod home_assistant;
 pub mod icon_text;
 pub mod idle;
