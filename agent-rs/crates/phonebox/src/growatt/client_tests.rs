@@ -396,3 +396,17 @@ async fn signing_in_now_checks_the_password() {
     client.device_status().await.unwrap();
     assert_eq!(srv.logins(), 2); // the refused one and this one: the read reused the token
 }
+
+#[tokio::test]
+async fn a_server_error_keeps_the_token() {
+    let srv = Server::start().await;
+    let client = srv.client("sun");
+    srv.fail_status.store(true, Ordering::SeqCst);
+    assert_eq!(
+        client.device_status().await.unwrap_err(),
+        "The Growatt server answered 500: Growatt not connected"
+    );
+    srv.fail_status.store(false, Ordering::SeqCst);
+    client.device_status().await.unwrap();
+    assert_eq!(srv.logins(), 1);
+}
