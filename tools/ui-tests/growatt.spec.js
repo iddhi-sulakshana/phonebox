@@ -152,3 +152,30 @@ test('the settings page tests the typed values', async ({ page }) => {
     ['/api/tcl-test', { username: 'me@example.com', password: 'pw' }],
   ]);
 });
+
+// final review: a re-render every few seconds rebuilt the open sheet and wiped what was typed
+test('the max charge field keeps what is typed while the readings refresh', async ({ page }) => {
+  await open(page, { control: true });
+  await act(page, 'Max charge').click();
+  const input = page.locator('.gw-sheet input[type=number]');
+  await input.fill('42');
+  await input.evaluate((e) => { e.dataset.mark = 'typed'; });
+  await page.waitForTimeout(6500); // past the readings' 3 s polls and the 5 s age refresh
+  await expect(page.locator('.gw-sheet input[data-mark="typed"]')).toHaveValue('42');
+  await page.locator('.gw-sheet .gw-set').click();
+  await expect(act(page, 'Max charge')).toContainText('42 A');
+});
+
+// final review: the settings were read once; a failed first read left the labels at "—" for good
+test('the settings labels are read again after a failed read', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-11-23T14:00:00') });
+  await page.addInitScript(() => {
+    window.PB_DEMO_GROWATT_SETTINGS = { error: 'The Growatt server did not answer', acOutputSource: null, chargeSource: null, maxChargeCurrent: null };
+  });
+  await open(page, { control: true });
+  await expect(act(page, 'AC output')).toContainText('—');
+  await page.evaluate(() => { delete window.PB_DEMO_GROWATT_SETTINGS; });
+  await page.clock.runFor(70_000);
+  await expect(act(page, 'AC output')).toContainText('Solar First');
+  await expect(act(page, 'Max charge')).toContainText('30 A');
+});

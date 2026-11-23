@@ -8,6 +8,8 @@ const AC_OUTPUT = ['SBU Priority', 'Solar First', 'Utility First', 'SUB Priority
 const CHARGE = ['Solar First', 'Solar and Utility', 'Only Solar'];
 const PRESETS = [1, 5, 10, 15, 20, 25, 30, 100];
 const LIVE_MS = 30_000; // a GroBro reading older than this is stale, as on the Growatt dashboard
+const SETTINGS_MS = 10 * 60_000; // the settings are read again this often (the agent keeps them as long) …
+const SETTINGS_RETRY_MS = 60_000; // … or this soon after a failed read
 
 const watts = (n) => n == null ? '—' : Math.abs(n) >= 10_000 ? `${(n / 1000).toFixed(1)} kW` : `${Math.round(n)} W`;
 const kwh = (n) => n == null ? '—' : `${n >= 100 ? Math.round(n) : n.toFixed(1)} kWh`;
@@ -22,18 +24,29 @@ function ago(ms) {
 W.growatt = {
   needs: ['tick'],
   create(box, { o }) {
-    let data = null, settings = null, settingsAsked = false, busy = '', sheet = null, lastKey = '';
+    let data = null, settings = null, settingsDue = 0, settingsBusy = false, busy = '', sheet = null, lastKey = '';
     const title = o.title === undefined ? en('Solar') : o.title;
     const head = h('div', 'gw-head', ...(title ? [h('div', 'w-title', title)] : []), h('span', 'gw-badge'), h('span', 'gw-age'));
     const body = h('div', 'gw-body');
-    box.append(head, body);
+    // the open sheet lives apart from the readings, so their refresh never rebuilds it (and what is typed in it)
+    const layer = h('div', 'gw-layer');
+    box.append(head, body, layer);
 
     const load = async () => {
       try { data = await api('/growatt', 'GET', 20_000); } catch (_) { return false; }
-      if (data?.control && !settingsAsked) { settingsAsked = true; loadSettings(); }
+      if (data?.control && !settingsBusy && Date.now() >= settingsDue) loadSettings();
     };
     const loadSettings = async () => {
-      try { settings = await api('/growatt/settings', 'GET', 60_000); } catch (_) {}
+      settingsBusy = true;
+      let ok = false;
+      try {
+        const r = await api('/growatt/settings', 'GET', 60_000);
+        ok = !r.error;
+        // a failed read keeps the values read before, with its error
+        settings = r.error && settings ? { ...settings, error: r.error } : r;
+      } catch (_) { settings = { ...(settings || {}), error: t('panel.pcNoAnswer') }; }
+      settingsBusy = false;
+      settingsDue = Date.now() + (ok ? SETTINGS_MS : SETTINGS_RETRY_MS);
       render(true);
     };
     const post = async (path) => {
@@ -46,7 +59,7 @@ W.growatt = {
     };
     const setSetting = async (name, key, value, label) => {
       haptic();
-      sheet = null; busy = key; render(true);
+      closeSheet(); busy = key; render(true);
       const ok = await post(`settings/${name}?value=${value}`);
       if (ok) { settings = { ...(settings || {}), [key]: value }; toast(`${label} set`, 'ok'); }
       busy = ''; render(true);
@@ -66,7 +79,8 @@ W.growatt = {
         b.addEventListener('click', (e) => { e.stopPropagation(); pick(value, label); });
         return b;
       }));
-    const openSheet = (kind) => { haptic(); sheet = kind; render(true); };
+    const openSheet = (kind) => { haptic(); sheet = kind; layer.replaceChildren(sheetEl()); };
+    const closeSheet = () => { sheet = null; layer.replaceChildren(); };
     const sheetEl = () => {
       const s = settings || {};
       let titleText, content;
@@ -96,11 +110,11 @@ W.growatt = {
           h('div', 'gw-own', input, h('span', 'gw-unit', 'A'), set));
       }
       const close = h('button', 'gw-close', '✕');
-      close.addEventListener('click', (e) => { e.stopPropagation(); sheet = null; render(true); });
+      close.addEventListener('click', (e) => { e.stopPropagation(); closeSheet(); });
       const panel = h('div', 'gw-panel', h('div', 'gw-ptitle', titleText, close), content);
       panel.addEventListener('click', (e) => e.stopPropagation());
       const el = h('div', 'gw-sheet', panel);
-      el.addEventListener('click', () => { sheet = null; render(true); });
+      el.addEventListener('click', closeSheet);
       return el;
     };
 
@@ -108,7 +122,7 @@ W.growatt = {
 
     const render = (force = false) => {
       const st = data?.status;
-      const key = JSON.stringify([data, settings, busy, sheet, Math.floor(Date.now() / 5000)]);
+      const key = JSON.stringify([data, settings, busy, Math.floor(Date.now() / 5000)]);
       if (!force && key === lastKey) return;
       lastKey = key;
       const badge = head.querySelector('.gw-badge'), age = head.querySelector('.gw-age');
@@ -154,7 +168,6 @@ W.growatt = {
           button('↻ Relogin', null, relogin, 'relogin')));
       }
       if (data.error) kids.push(h('div', 'gw-err', data.error));
-      if (sheet) kids.push(sheetEl());
       body.replaceChildren(...kids);
     };
     const tick = every(3000, async () => { await load(); render(); });

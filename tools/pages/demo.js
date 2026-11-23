@@ -589,7 +589,7 @@
     }
     if (path === '/api/calendar') return json(calendar());
     if (path === '/api/growatt') return json(growattView(await config()));
-    if (path === '/api/growatt/settings') return json({ error: null, ...growattSettings });
+    if (path === '/api/growatt/settings') return json(window.PB_DEMO_GROWATT_SETTINGS || { error: null, ...growattSettings });
     if (path.startsWith('/api/growatt/settings/') && method === 'POST') {
       const range = { 'ac-output-source': ['acOutputSource', 3], 'charge-source': ['chargeSource', 2], 'max-charge-current': ['maxChargeCurrent', 100] }[path.slice(22)];
       const v = Number(q.get('value'));

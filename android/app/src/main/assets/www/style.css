@@ -1382,6 +1382,7 @@ body.controls-top .ap-foot { order: -1; margin-bottom: 4px; }
 .gw-act:last-child { justify-content: center; align-items: center; }
 .gw-act:last-child .gw-act-l { font-size: 13px; color: var(--text); text-transform: none; letter-spacing: 0; font-weight: 600; }
 .gw-err { font-size: 12px; color: #f59e0b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gw-layer { display: contents; }
 .gw-sheet { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; padding: 8px; background: rgba(6, 8, 11, .82); }
 .gw-panel { width: min(100%, 440px); max-height: 100%; overflow-y: auto; scrollbar-width: none; padding: 10px 12px; border-radius: 14px; background: #11151b; border: 1px solid rgba(255, 255, 255, .12); }
 .gw-ptitle { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
