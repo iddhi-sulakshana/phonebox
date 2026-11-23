@@ -630,6 +630,27 @@ nav a.on::before { color: var(--accent); }
       </div>
 
       <div class="card">
+        <h3 data-i18n="s.growatt.title">Growatt inverter</h3>
+        <p class="hint" style="margin:0 0 12px" data-i18n="s.growatt.lead">For the Growatt inverter widget: the address of your Growatt server and its admin sign-in. The password stays on this computer.</p>
+        <div class="grid2">
+          <div class="field"><label data-i18n="s.growatt.address">Server address</label><input type="text" data-bind="growatt.url" placeholder="http://growatt.lan" spellcheck="false" autocomplete="off"></div>
+          <div class="field"><label data-i18n="s.growatt.username">Username</label><input type="text" data-bind="growatt.username" placeholder="admin" spellcheck="false" autocomplete="off"></div>
+          <div class="field"><label data-i18n="s.growatt.password">Password</label><input type="password" data-bind="growatt.password" autocomplete="off"></div>
+        </div>
+        <div class="row"><button class="btn sm" id="growattTest" data-i18n="s.test">Test</button><span class="hint" id="growattState"></span></div>
+      </div>
+
+      <div class="card">
+        <h3 data-i18n="s.tcl.title">TCL air conditioners</h3>
+        <p class="hint" style="margin:0 0 12px" data-i18n="s.tcl.lead">For the TCL air conditioners widget: the TCL Home account the units belong to, the same sign-in as the TCL app. This computer talks to TCL's cloud; the password stays here.</p>
+        <div class="grid2">
+          <div class="field"><label data-i18n="s.tcl.account">TCL account (email)</label><input type="text" data-bind="tcl.username" spellcheck="false" autocomplete="off"></div>
+          <div class="field"><label data-i18n="s.tcl.password">Password</label><input type="password" data-bind="tcl.password" autocomplete="off"></div>
+        </div>
+        <div class="row"><button class="btn sm" id="tclTest" data-i18n="s.test">Test</button><span class="hint" id="tclState"></span></div>
+      </div>
+
+      <div class="card">
         <h3 data-i18n="s.discord.title">Discord</h3>
         <div class="row" style="margin-bottom:8px"><label class="switch"><input type="checkbox" data-bind="discord.enabled"><span></span></label> <span data-i18n="s.discord.enable">Connect to the Discord app on this PC (for the Discord widget)</span></div>
         <p class="hint" style="margin:0 0 12px" data-i18n="s.discord.hint">Create an application at discord.com/developers/applications, add the redirect http://127.0.0.1 under OAuth2, and copy its client ID and secret here. Discord asks you to approve PhoneBox once. If it refuses the login, add your account under the application's App Testers. Step by step: docs/DISCORD.md.</p>
@@ -2129,6 +2150,20 @@ $('haTest').onclick = async () => {
     const r = await (await fetch('/api/ha/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg.homeAssistant || {}) })).json();
     $('haState').textContent = r.result;
   } catch (_) { $('haState').textContent = 'Could not check'; }
+};
+$('growattTest').onclick = async () => {
+  $('growattState').textContent = 'checking…';
+  try {
+    const r = await (await fetch('/api/growatt-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg.growatt || {}) })).json();
+    $('growattState').textContent = r.result;
+  } catch (_) { $('growattState').textContent = 'Could not check'; }
+};
+$('tclTest').onclick = async () => {
+  $('tclState').textContent = 'checking…';
+  try {
+    const r = await (await fetch('/api/tcl-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg.tcl || {}) })).json();
+    $('tclState').textContent = r.result;
+  } catch (_) { $('tclState').textContent = 'Could not check'; }
 };
 $('obsTest').onclick = async () => {
   $('obsState').textContent = 'connecting…';

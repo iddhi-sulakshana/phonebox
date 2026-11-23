@@ -122,3 +122,33 @@ test('a small widget stays legible', async ({ page }) => {
   }));
   expect(spill).toBe(false);
 });
+
+// Settings › General: the Growatt and TCL cards' Test buttons send the typed (unsaved) values
+test('the settings page tests the typed values', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 860 });
+  await page.goto('/settings/#general');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.evaluate(() => {
+    window.tests = [];
+    const f = window.fetch;
+    window.fetch = (u, o) => {
+      if (/-test$/.test(String(u))) window.tests.push([String(u).replace(/^.*\/api/, '/api'), JSON.parse(o.body)]);
+      return f(u, o);
+    };
+  });
+  await page.locator('input[data-bind="growatt.url"]').fill('http://growatt.lan');
+  await page.locator('input[data-bind="growatt.password"]').fill('sun');
+  await expect(page.locator('input[data-bind="growatt.password"]')).toHaveAttribute('type', 'password');
+  await page.locator('#growattTest').click();
+  await expect(page.locator('#growattState')).toHaveText('Connected');
+  await page.locator('input[data-bind="tcl.username"]').fill('me@example.com');
+  await page.locator('input[data-bind="tcl.password"]').fill('pw');
+  await expect(page.locator('input[data-bind="tcl.password"]')).toHaveAttribute('type', 'password');
+  await page.locator('#tclTest').click();
+  await expect(page.locator('#tclState')).toHaveText('Connected · 3 units');
+  expect(await page.evaluate(() => window.tests)).toEqual([
+    ['/api/growatt-test', { url: 'http://growatt.lan', password: 'sun' }],
+    ['/api/tcl-test', { username: 'me@example.com', password: 'pw' }],
+  ]);
+});

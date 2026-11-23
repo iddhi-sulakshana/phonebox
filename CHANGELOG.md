@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Growatt and TCL widgets.** Two new widgets for pages of their own. **Growatt inverter** shows your growatt-server's
+  live power flow (solar, battery, load, grid) with a Live / Stale / Cloud badge and today's energy, and changes the
+  inverter's AC output source, charge source and maximum charge current or reconnects the server to Growatt's cloud.
+  **TCL air conditioners** shows each unit's temperatures and switches power, target temperature, mode, fan speed and
+  generator mode, per unit or for every online unit, through TCL's cloud as the TCL app does. Set them up under
+  **Settings › General**; the passwords stay on the computer.
+
 ## 1.0.2 — 2026-11-23
 
 - **The TeamClaude card, redrawn.** The graphs now stand one under another: the day's tokens as TeamClaude's own two

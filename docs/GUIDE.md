@@ -78,7 +78,7 @@ keeps the screen on.
 | **Computer** | **Rules** (which hold, pause) · **Battery care** · On air (microphone / camera / OBS) · OBS Studio (live, recording, scenes) · **Dictation** (speak on the phone, typed on the PC; the app asks for the microphone on first use) · **App console** (Windows: keys and a dial for the app in front, set per app in Settings › General; use the focused app's process name from Task Manager's Details tab; packaged Store apps can all show up as `ApplicationFrameHost` and terminal tabs as `WindowsTerminal`, so a profile for those names covers all of them) · Device batteries (headphones, mice, keyboards) · Docker / Podman (containers, start / stop) · Metric tile · Gauge · Chart · GPU details · Memory & disks · Top processes · Processes · Now playing · Radio · Volume · **Spectrum bars** (Windows: a live spectrum of what the PC is playing, like the classic LED bar visualizers) · Shortcut grid · Big button (optionally filled with the shortcut's uploaded picture) · **Command** (PowerShell / bash / zsh output, refreshed every N seconds) · **Trackpad** (control PC cursor, tap to click, hold to drag, scroll) |
 | **AI & code** | AI quotas · Quota ring · AI sessions (Claude Code, Codex, Cursor) · GitHub |
 | **Personal** | **Agenda** (Google / Outlook / iCloud calendars) · Note (edit it from the phone) · Checklist (resets daily) · Counter · Breathe · Quote · Title · Phone battery · **Computers** (switch between paired computers) · **Photo frame** (a slideshow from a photo folder on the PC) |
-| **Web & data** | **Custom HTML** (your own widget, sandboxed) · **Home Assistant** (entities with their own name and icon, tap to switch) · **Pushed value** · **Notifications** (both fed by [webhooks](#webhooks)) · **News feeds** (your RSS and Atom feeds; with its "Open articles on the PC" option, a tap opens the article on the PC) · Hacker News · Exchange rates (ECB) · Crypto prices · Image / webcam · **Camera** (a live picture from an IP camera over RTSP, pulled by ffmpeg on the PC) |
+| **Web & data** | **Custom HTML** (your own widget, sandboxed) · **Home Assistant** (entities with their own name and icon, tap to switch) · **Growatt inverter** (solar, battery, load and grid from your Growatt server, today's energy, the inverter's settings) · **TCL air conditioners** (each unit's temperatures; power, temperature, mode, fan and generator, per unit or for all of them) · **Pushed value** · **Notifications** (both fed by [webhooks](#webhooks)) · **News feeds** (your RSS and Atom feeds; with its "Open articles on the PC" option, a tap opens the article on the PC) · Hacker News · Exchange rates (ECB) · Crypto prices · Image / webcam · **Camera** (a live picture from an IP camera over RTSP, pulled by ffmpeg on the PC) |
 
 Widgets scale to the size you give them. Weather, air quality, rates, crypto and Hacker News come straight from free
 public APIs ([Open-Meteo](https://open-meteo.com), [Frankfurter](https://frankfurter.dev), [CoinGecko](https://www.coingecko.com),
@@ -135,6 +135,24 @@ dashboard's own (`…/teamclaude/dashboard`). The card shows what to set when so
 last numbers with the error when the server can't be reached or refuses the key. In a widget that pages, the
 TeamClaude card has a page of its own.
 
+### Growatt and TCL
+
+The **Growatt inverter** widget shows a [growatt-server](https://github.com/iddhi-sulakshana/growatt-server): solar
+(PV1 and PV2), the battery (charge, charging or discharging, volts), the load and the grid, with a badge for where the
+reading came from (Live: the GroBro feed in the last 30 seconds; Stale: an older GroBro reading; Cloud: Growatt's
+portal), and today's energy. With **Allow changing inverter settings from the phone** on, it also sets the AC output
+source, the charge source and the maximum charge current, and asks the server to sign in to Growatt's cloud again
+(Relogin). Enter the server's address (`http://growatt.lan` or the `…/api/v1` address) and its admin password under
+**Settings › General › Growatt inverter**.
+
+The **TCL air conditioners** widget reaches your units through TCL's cloud, as the TCL app does: enter the TCL Home
+account (email and password) under **Settings › General › TCL air conditioners**. Each unit shows its inside and
+outside temperature; with **Allow controlling the units from the phone** on, it switches power, sets the target
+temperature (16–31 °C), Cool or Fan, the fan speed and the generator mode (Off, 1, 2, 3), one unit at a time or all
+online units at once. A change shows at once and is confirmed when the unit reports it.
+
+Both read only while an enabled page shows their widget; the passwords stay on the computer.
+
 Tap an AI session to see its model, timing and token details. Token counters describe the local session rather than
 the account allowance. Prompt/response text and tool arguments are not included in this panel data.
 
@@ -153,7 +171,7 @@ Double-click the tray icon on Windows (or open <http://127.0.0.1:8765>):
   combination (`ctrl+shift+m`), types text or runs a macro (keys, text, waits, other shortcuts); on / off keys show
   their state on the phone (mute does by itself, others from a pushed value).
 - **Webhooks**: the webhook key, copy-paste examples, test buttons and the values pushed so far.
-- **General**: weather location search, the temperature unit (°C or °F) and the forecast model; calendars (ICS links from Google, Outlook or iCloud), Home Assistant and OBS
+- **General**: weather location search, the temperature unit (°C or °F) and the forecast model; calendars (ICS links from Google, Outlook or iCloud), Home Assistant, the Growatt server and the TCL account, and OBS
   connections; night mode; theme and accent colour, orientation (landscape, portrait or follow the phone), clock seconds,
   vibration, the message when a session finishes, volume-key paging and the phone's sensors (brightness that follows the room, the night screen when the
   room goes dark, wave to wake it); [OLED burn-in protection](#appearance); [page switching](#rules) (home page, countdown, back home after);
