@@ -85,6 +85,12 @@ pub struct AgentConfig {
     /// A Rust-only setting: absent unless set (the C# agent's settings stay the same), never sent to the phone.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub team_claude: Option<TeamClaudeConfig>,
+    /// Rust-only, as `team_claude`: the owner's Growatt server (growatt-server).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub growatt: Option<GrowattConfig>,
+    /// Rust-only, as `team_claude`: the TCL Home account of the air conditioners.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tcl: Option<TclConfig>,
     #[serde(flatten, skip_serializing_if = "skip_extra")]
     pub extra: Extra,
 }
@@ -115,6 +121,8 @@ defaults!(AgentConfig {
     discord: DiscordConfig::default(),
     console: ConsoleConfig::default(),
     team_claude: None,
+    growatt: None,
+    tcl: None,
 });
 
 impl AgentConfig {
@@ -176,6 +184,18 @@ impl AgentConfig {
         self.widgets(true).iter().any(|w| {
             (w.r#type == "codexbar" || w.r#type == "quotas") && w.bool("showOverview") == Some(true)
         })
+    }
+
+    /// An enabled page (Smart Stack cards included) has a widget of this type.
+    pub fn has_widget(&self, kind: &str) -> bool {
+        self.widgets(true).iter().any(|w| w.r#type == kind)
+    }
+
+    /// One of those widgets allows its actions (`control: true`; a widget without the option does not).
+    pub fn widget_control(&self, kind: &str) -> bool {
+        self.widgets(true)
+            .iter()
+            .any(|w| w.r#type == kind && w.bool("control") == Some(true))
     }
 
     /// True when an enabled page shows an AI quotas widget listing TeamClaude: in its own providers, or (without a
@@ -917,6 +937,59 @@ defaults!(TeamClaudeConfig {
     key: String::new()
 });
 
+/// The owner's Growatt server (growatt-server): its address (`http://growatt.lan` or with `/api/v1`) and its admin
+/// sign-in (the username defaults to `admin`). `Debug` hides the password.
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct GrowattConfig {
+    pub url: String,
+    pub username: String,
+    pub password: String,
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
+    pub extra: Extra,
+}
+defaults!(GrowattConfig {
+    url: String::new(),
+    username: String::new(),
+    password: String::new()
+});
+
+/// The TCL Home account the air conditioners belong to (as the tcl-server dashboard's sign-in). `Debug` hides the
+/// password.
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct TclConfig {
+    pub username: String,
+    pub password: String,
+    #[serde(flatten, skip_serializing_if = "skip_extra")]
+    pub extra: Extra,
+}
+defaults!(TclConfig {
+    username: String::new(),
+    password: String::new()
+});
+
+impl std::fmt::Debug for GrowattConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GrowattConfig")
+            .field("url", &self.url)
+            .field("username", &self.username)
+            .field("password", &"***")
+            .field("extra", &self.extra)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for TclConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TclConfig")
+            .field("username", &self.username)
+            .field("password", &"***")
+            .field("extra", &self.extra)
+            .finish()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PhoneConfig {
@@ -1156,6 +1229,8 @@ defaults!(ConsoleKey {
 pub(crate) const KNOWN_FIELDS: &[&str] = &[
     "codexBar",
     "teamClaude",
+    "growatt",
+    "tcl",
     "controls",
     "deviceSerial",
     "adbPath",
@@ -1856,5 +1931,101 @@ mod tests {
         );
         assert!(fallback.shows_teamclaude());
         assert!(!load("{}").shows_teamclaude());
+    }
+
+    // Growatt and TCL (Rust-only settings): absent unless set, never sent to the phone, passwords kept as typed
+    #[test]
+    fn growatt_and_tcl_are_absent_by_default() {
+        let out = serde_json::to_value(load("{}")).unwrap();
+        assert!(out.get("growatt").is_none(), "{out}");
+        assert!(out.get("tcl").is_none(), "{out}");
+    }
+
+    #[test]
+    fn growatt_and_tcl_round_trip() {
+        let cfg = load(
+            r#"{ "growatt": { "url": "http://growatt.lan", "username": "admin", "password": " p w " },
+                 "tcl": { "username": "me@example.com", "password": "pw" } }"#,
+        );
+        let g = cfg.growatt.as_ref().expect("growatt read");
+        assert_eq!(
+            (g.url.as_str(), g.username.as_str(), g.password.as_str()),
+            ("http://growatt.lan", "admin", " p w ")
+        );
+        let t = cfg.tcl.as_ref().expect("tcl read");
+        assert_eq!(
+            (t.username.as_str(), t.password.as_str()),
+            ("me@example.com", "pw")
+        );
+        let out = serde_json::to_value(&cfg).unwrap();
+        assert_eq!(out["growatt"]["password"], " p w ");
+        assert_eq!(out["tcl"]["username"], "me@example.com");
+    }
+
+    #[test]
+    fn blank_growatt_and_tcl_are_dropped() {
+        let cfg = load(
+            r#"{ "growatt": { "url": " ", "password": "" }, "tcl": { "username": "", "password": "" } }"#,
+        );
+        assert!(cfg.growatt.is_none());
+        assert!(cfg.tcl.is_none());
+        let trimmed = load(
+            r#"{ "growatt": { "url": " http://growatt.lan ", "username": " admin " }, "tcl": { "username": " me@example.com " } }"#,
+        );
+        let g = trimmed.growatt.unwrap();
+        assert_eq!(
+            (g.url.as_str(), g.username.as_str()),
+            ("http://growatt.lan", "admin")
+        );
+        assert_eq!(trimmed.tcl.unwrap().username, "me@example.com");
+    }
+
+    #[test]
+    fn growatt_and_tcl_never_reach_the_phone() {
+        let cfg = load(
+            r#"{ "growatt": { "url": "http://growatt.lan", "password": "gw-secret-1" },
+                 "tcl": { "username": "me@example.com", "password": "tcl-secret-2" } }"#,
+        );
+        let public = serde_json::to_string(&super::public::to_public(&cfg, None, None)).unwrap();
+        for text in [
+            "growatt",
+            "\"tcl\"",
+            "gw-secret-1",
+            "tcl-secret-2",
+            "me@example.com",
+        ] {
+            assert!(!public.contains(text), "{text} in {public}");
+        }
+    }
+
+    #[test]
+    fn debug_never_prints_the_passwords() {
+        let cfg = load(
+            r#"{ "growatt": { "url": "http://growatt.lan", "password": "gw-secret-1" },
+                 "tcl": { "username": "me@example.com", "password": "tcl-secret-2" } }"#,
+        );
+        let text = format!("{cfg:?}");
+        assert!(text.contains("http://growatt.lan"), "{text}");
+        assert!(
+            !text.contains("gw-secret-1") && !text.contains("tcl-secret-2"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn widget_helpers_follow_enabled_pages() {
+        // a second, enabled page: with every page disabled the first one is enabled again
+        let with = |options: &str, enabled: bool| {
+            load(&format!(
+                r#"{{"pages":[{{"id":"solar","enabled":{enabled},"widgets":[{{"id":"g1","type":"growatt","options":{options}}}]}},{{"id":"home","enabled":true,"widgets":[]}}]}}"#
+            ))
+        };
+        let on = with(r#"{"control":true}"#, true);
+        assert!(on.has_widget("growatt") && on.widget_control("growatt"));
+        assert!(!on.has_widget("tcl") && !on.widget_control("tcl"));
+        let plain = with("{}", true);
+        assert!(plain.has_widget("growatt") && !plain.widget_control("growatt"));
+        let off = with(r#"{"control":true}"#, false);
+        assert!(!off.has_widget("growatt") && !off.widget_control("growatt"));
     }
 }

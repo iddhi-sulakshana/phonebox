@@ -90,6 +90,26 @@ pub fn normalize(mut c: AgentConfig, stale_ids: Option<&HashSet<String>>) -> Age
     {
         c.team_claude = None;
     }
+    // Growatt and TCL: address and usernames trimmed (passwords as typed); with nothing set the setting is gone
+    if let Some(g) = c.growatt.as_mut() {
+        g.url = g.url.trim().to_string();
+        g.username = g.username.trim().to_string();
+    }
+    if c.growatt
+        .as_ref()
+        .is_some_and(|g| g.url.is_empty() && g.password.is_empty() && g.extra.is_empty())
+    {
+        c.growatt = None;
+    }
+    if let Some(t) = c.tcl.as_mut() {
+        t.username = t.username.trim().to_string();
+    }
+    if c.tcl
+        .as_ref()
+        .is_some_and(|t| t.username.is_empty() && t.password.is_empty() && t.extra.is_empty())
+    {
+        c.tcl = None;
+    }
     // this fork updates from its own releases, never from upstream's C# agent
     if is_blank(&c.updates.repo) || c.updates.repo == UPSTREAM_REPO {
         c.updates.repo = FORK_REPO.to_string();
