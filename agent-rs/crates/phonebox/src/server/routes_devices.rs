@@ -1,4 +1,5 @@
-//! The owner's devices: the Growatt inverter (`/api/growatt*`). Settings › Test (`/api/growatt-test`) is local only.
+//! The owner's devices: the Growatt inverter (`/api/growatt*`) and the TCL air conditioners (`/api/tcl*`). Their
+//! Settings › Test routes (`/api/growatt-test`, `/api/tcl-test`) are local only.
 
 use axum::Router;
 use axum::body::Bytes;
@@ -20,6 +21,9 @@ pub fn routes() -> Router<AppState> {
         .route("/api/growatt/settings/{name}", post(growatt_set))
         .route("/api/growatt/relogin", post(growatt_relogin))
         .route("/api/growatt-test", post(growatt_test))
+        .route("/api/tcl", get(tcl_view))
+        .route("/api/tcl/{unit}/{action}", post(tcl_act))
+        .route("/api/tcl-test", post(tcl_test))
 }
 
 /// `{"ok":true, …more}` or 400 `{"error"}`.
@@ -81,6 +85,44 @@ async fn growatt_test(State(s): State<AppState>, headers: HeaderMap, body: Bytes
             username.unwrap_or(""),
             password.unwrap_or(""),
         )
+        .await;
+    json_response(StatusCode::OK, &json!({ "result": result }))
+}
+
+async fn tcl_view(State(s): State<AppState>) -> Response {
+    json_response(StatusCode::OK, &s.tcl.view().await)
+}
+
+/// `unit` is a unit's id or `all`.
+async fn tcl_act(
+    State(s): State<AppState>,
+    Path((unit, action)): Path<(String, String)>,
+    Query(q): QueryList,
+) -> Response {
+    let value = query::value(&q, "value").unwrap_or_default();
+    outcome(
+        s.tcl
+            .act(&unit, &action, &value)
+            .await
+            .map(|sent| json!({ "sent": sent })),
+    )
+}
+
+/// Settings › Test with the (maybe unsaved) account: `{"result":"…"}`.
+async fn tcl_test(State(s): State<AppState>, headers: HeaderMap, body: Bytes) -> Response {
+    let body = match query::json_object(&headers, &body) {
+        Ok(body) => body,
+        Err(status) => return status.into_response(),
+    };
+    let (Ok(username), Ok(password)) = (
+        query::json_string(&body, "username"),
+        query::json_string(&body, "password"),
+    ) else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    let result = s
+        .tcl
+        .test(username.unwrap_or(""), password.unwrap_or(""))
         .await;
     json_response(StatusCode::OK, &json!({ "result": result }))
 }
@@ -196,6 +238,96 @@ mod tests {
             .await
             .status(),
             400
+        );
+    }
+
+    #[tokio::test]
+    async fn the_tcl_routes_answer_with_their_shapes() {
+        let cloud = crate::tcl::fake::Cloud::start().await;
+        let (_d, mut s) = test_state();
+        let clock = cloud.clock.clone();
+        s.tcl = std::sync::Arc::new(crate::tcl::Tcl::with_endpoints(
+            s.cfg.clone(),
+            cloud.endpoints(),
+            std::sync::Arc::new(move || clock.load(std::sync::atomic::Ordering::SeqCst)),
+        ));
+        let app = crate::server::build_router(s.clone());
+        let r = json_of(send(&app, "GET", "/api/tcl", &[LOCAL]).await).await;
+        assert_eq!(
+            r,
+            json!({"configured": false, "error": crate::tcl::NOT_CONFIGURED, "control": false, "units": []})
+        );
+        s.cfg
+            .save(
+                &json!({
+                    "tcl": {"username": crate::tcl::fake::ACCOUNT, "password": crate::tcl::fake::PASSWORD},
+                    "pages": [{"id": "ac", "widgets": [{"type": "tcl", "options": {"control": true}}]}],
+                })
+                .to_string(),
+                None,
+            )
+            .unwrap();
+        let r = json_of(send(&app, "GET", "/api/tcl", &[LOCAL]).await).await;
+        assert_eq!(r["error"], Value::Null);
+        assert_eq!(r["control"], json!(true));
+        assert_eq!(r["units"].as_array().unwrap().len(), 3);
+        assert_eq!(r["units"][0]["name"], json!("Shop front"));
+        assert_eq!(r["units"][0]["inside"].as_f64(), Some(29.5));
+        let res = send(&app, "POST", "/api/tcl/all/generator?value=2", &[LOCAL]).await;
+        assert_eq!(res.status(), 200);
+        assert_eq!(json_of(res).await, json!({"ok": true, "sent": 2}));
+        let res = send(&app, "POST", "/api/tcl/ac1/temp?value=40", &[LOCAL]).await;
+        assert_eq!(res.status(), 400);
+        assert_eq!(
+            json_of(res).await,
+            json!({"error": "The temperature must be a whole number from 16 to 31"})
+        );
+        // Settings › Test with the typed account
+        let body =
+            json!({"Username": crate::tcl::fake::ACCOUNT, "password": crate::tcl::fake::PASSWORD})
+                .to_string();
+        let res = post(&app, "/api/tcl-test", "application/json", &body).await;
+        assert_eq!(json_of(res).await, json!({"result": "Connected · 3 units"}));
+        assert_eq!(
+            post(&app, "/api/tcl-test", "text/plain", &body)
+                .await
+                .status(),
+            415
+        );
+        assert_eq!(
+            post(
+                &app,
+                "/api/tcl-test",
+                "application/json",
+                r#"{"username":1}"#
+            )
+            .await
+            .status(),
+            400
+        );
+    }
+
+    #[tokio::test]
+    async fn only_the_phones_tcl_routes_are_served_over_wifi() {
+        let (_d, s) = test_state();
+        s.cfg
+            .save(
+                r#"{"lan":{"enabled":true,"port":8766,"token":"phone-key"}}"#,
+                None,
+            )
+            .unwrap();
+        let wifi = crate::server::build_wifi_router(s);
+        let key = ("authorization", "Bearer phone-key");
+        assert_eq!(send(&wifi, "GET", "/api/tcl", &[key]).await.status(), 200);
+        assert_eq!(
+            send(&wifi, "POST", "/api/tcl/all/power?value=on", &[key])
+                .await
+                .status(),
+            400
+        );
+        assert_eq!(
+            send(&wifi, "POST", "/api/tcl-test", &[key]).await.status(),
+            403
         );
     }
 

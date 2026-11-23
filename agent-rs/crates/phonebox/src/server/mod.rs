@@ -354,6 +354,8 @@ pub struct AppState {
     pub ha: Arc<crate::home_assistant::HomeAssistant>,
     /// The shop inverter through the owner's growatt-server (`/api/growatt*`).
     pub growatt: Arc<crate::growatt::Growatt>,
+    /// The air conditioners through TCL's cloud (`/api/tcl*`).
+    pub tcl: Arc<crate::tcl::Tcl>,
     pub obs: Arc<crate::obs_monitor::ObsMonitor>,
     pub discord: Arc<crate::discord_monitor::DiscordMonitor>,
     pub spotify: Arc<crate::spotify_control::SpotifyControl>,
@@ -476,6 +478,7 @@ impl AppState {
             )),
             ha,
             growatt: Arc::new(crate::growatt::Growatt::new(cfg.clone())),
+            tcl: Arc::new(crate::tcl::Tcl::new(cfg.clone())),
             obs: Arc::new(crate::obs_monitor::ObsMonitor::new(cfg.clone())),
             discord: Arc::new(crate::discord_monitor::DiscordMonitor::new(cfg.clone())),
             feeds: Arc::new(crate::feeds::FeedMonitor::new(cfg.clone())),

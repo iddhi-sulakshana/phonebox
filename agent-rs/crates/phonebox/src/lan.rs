@@ -127,7 +127,7 @@ const EXACT: [&str; 7] = [
 ];
 
 /// … and with `path.StartsWithSegments("…")`.
-const SEGMENTS: [&str; 32] = [
+const SEGMENTS: [&str; 33] = [
     "/api/controls/spotify/action",
     "/api/controls/radio-logo",
     "/api/controls/command",
@@ -155,6 +155,7 @@ const SEGMENTS: [&str; 32] = [
     "/api/ha/states",
     "/api/ha/toggle",
     "/api/growatt",
+    "/api/tcl",
     "/api/approvals",
     "/api/rules/pause",
     "/api/phone/battery",
@@ -301,6 +302,9 @@ mod tests {
             ("/api/growatt/settings/charge-source", true),
             ("/api/growatt/relogin", true),
             ("/api/growatt-test", false),
+            ("/api/tcl", true),
+            ("/api/tcl/all/power", true),
+            ("/api/tcl-test", false),
             ("/api/phones", false),
             ("/api/rules/test", false),
             ("/api/update", false),

@@ -26,6 +26,7 @@ const BAD_ID: &str = "Not a TCL unit id";
 const JSON: &str = "application/json; charset=UTF-8";
 
 /// Where the chain's requests go: TCL's own hosts, or a test server.
+#[derive(Clone)]
 pub struct TclEndpoints {
     pub login: String,
     pub cloud_urls: String,
