@@ -297,3 +297,43 @@ async fn a_unit_without_a_shadow_says_so() {
         "TCL has no state for this unit yet"
     );
 }
+
+// final review: a wrong or revoked password must not sign in again on every poll (TCL locks accounts)
+#[tokio::test]
+async fn a_refused_sign_in_waits_before_trying_again() {
+    let cloud = Cloud::start().await;
+    let client = cloud.client("nope");
+    for _ in 0..3 {
+        assert_eq!(
+            client.devices().await.unwrap_err(),
+            "TCL refused the sign-in: password error"
+        );
+        assert_eq!(
+            client.reported("ac1").await.unwrap_err(),
+            "TCL refused the sign-in: password error"
+        );
+    }
+    assert_eq!(cloud.count("/account/login"), 1);
+    cloud.advance(9 * 60_000);
+    client.devices().await.unwrap_err();
+    assert_eq!(cloud.count("/account/login"), 1);
+    cloud.advance(2 * 60_000);
+    client.devices().await.unwrap_err();
+    assert_eq!(cloud.count("/account/login"), 2);
+}
+
+#[tokio::test]
+async fn a_failure_after_signing_in_does_not_sign_in_again() {
+    let cloud = Cloud::start().await;
+    *cloud.s.region.lock().unwrap() = Some("evil.example.com/x".into());
+    let client = cloud.client(PASSWORD);
+    for _ in 0..3 {
+        assert_eq!(
+            client.devices().await.unwrap_err(),
+            "TCL's cloud answered an unexpected region"
+        );
+    }
+    // the base token is kept: the session is tried again from it, never with the password
+    assert_eq!(cloud.count("/account/login"), 1);
+    assert_eq!(cloud.count("/v3/global/cloud_url_get"), 3);
+}

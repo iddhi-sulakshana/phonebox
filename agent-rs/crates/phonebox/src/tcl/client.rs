@@ -21,6 +21,10 @@ const TIMEOUT: Duration = Duration::from_secs(20);
 const SESSION_FOR_MS: i64 = 25 * 60_000;
 /// … or this long before the AWS credentials end.
 const CREDS_MARGIN_MS: i64 = 5 * 60_000;
+/// After TCL refuses the password, no new sign-in for this long: TCL locks accounts that keep failing.
+const REFUSED_WAIT_MS: i64 = 10 * 60_000;
+/// After a sign-in that got no answer (or a session that could not be made from it), this long.
+const FAILED_WAIT_MS: i64 = 30_000;
 const NO_ANSWER: &str = "TCL did not answer";
 const BAD_ID: &str = "Not a TCL unit id";
 const JSON: &str = "application/json; charset=UTF-8";
@@ -79,7 +83,13 @@ struct Session {
 struct State {
     base: Option<Base>,
     session: Option<Arc<Session>>,
+    /// No password sign-in before this (Unix ms), with `wait_error` the answer meanwhile.
+    wait_until: i64,
+    wait_error: Option<String>,
 }
+
+/// Why a sign-in or a session failed, and whether TCL refused it (rather than not answering).
+type Failure = (String, bool);
 
 /// One TCL account. No `Debug`: it holds the password and the tokens.
 pub struct TclClient {
@@ -136,6 +146,17 @@ fn nonce() -> String {
         .iter()
         .map(|b| char::from_digit(u32::from(*b % 36), 36).unwrap_or('0'))
         .collect()
+}
+
+/// After a failed password sign-in: none again until the wait is over, answering `error` meanwhile.
+fn hold(st: &mut State, now: i64, error: &str, refused: bool) {
+    st.wait_until = now
+        + if refused {
+            REFUSED_WAIT_MS
+        } else {
+            FAILED_WAIT_MS
+        };
+    st.wait_error = Some(error.to_string());
 }
 
 /// A request without an answer: "did not answer" on a timeout, else what failed (never the URL).
@@ -261,20 +282,46 @@ impl TclClient {
                     st.session = Some(s.clone());
                     return Ok(s);
                 }
-                Err(error) => {
+                // TCL no longer takes the base token: sign in with the password
+                Err((error, true)) => {
                     crate::log::debug(
                         CATEGORY,
-                        &format!("tcl: renewal failed, signing in: {error}"),
+                        &format!("tcl: renewal refused, signing in: {error}"),
                     );
                     st.base = None;
                 }
+                // no answer, or an answer it could not use: the base token stays, the password is not sent again
+                Err((error, false)) => return Err(error),
             }
         }
-        let base = self.login().await?;
-        let s = Arc::new(self.mint(&base, now).await?);
-        st.base = Some(base);
-        st.session = Some(s.clone());
-        Ok(s)
+        if now < st.wait_until {
+            return Err(st.wait_error.clone().unwrap_or_else(|| NO_ANSWER.into()));
+        }
+        let base = match self.login().await {
+            Ok(base) => base,
+            Err((error, refused)) => {
+                hold(&mut st, now, &error, refused);
+                return Err(error);
+            }
+        };
+        st.wait_until = 0;
+        st.wait_error = None;
+        match self.mint(&base, now).await {
+            Ok(s) => {
+                let s = Arc::new(s);
+                st.base = Some(base);
+                st.session = Some(s.clone());
+                Ok(s)
+            }
+            Err((error, refused)) => {
+                // a session that cannot be made even from a fresh sign-in: no new sign-in for a while either
+                if !refused {
+                    st.base = Some(base);
+                }
+                hold(&mut st, now, &error, refused);
+                Err(error)
+            }
+        }
     }
 
     async fn post(
@@ -294,7 +341,7 @@ impl TclClient {
     }
 
     /// The account sign-in, as TCL's Android app sends it.
-    async fn login(&self) -> Result<Base, String> {
+    async fn login(&self) -> Result<Base, Failure> {
         let body = json!({
             "username": self.username,
             "password": md5_hex(&self.password),
@@ -315,7 +362,8 @@ impl TclClient {
         ];
         let (status, v) = self
             .post(&self.endpoints.login, &headers, body.to_string())
-            .await?;
+            .await
+            .map_err(|e| (e, false))?;
         let user = v.get("user").cloned().unwrap_or(Value::Null);
         let base = Base {
             token: text(&v, "token"),
@@ -323,17 +371,20 @@ impl TclClient {
             country: text(&user, "countryAbbr"),
         };
         if status != 200 || v.get("status").and_then(Value::as_i64) != Some(1) {
-            return Err(format!("TCL refused the sign-in: {}", reason(status, &v)));
+            return Err((
+                format!("TCL refused the sign-in: {}", reason(status, &v)),
+                true,
+            ));
         }
         if base.token.is_empty() || base.sso.is_empty() {
-            return Err("TCL's sign-in reply had no token".into());
+            return Err(("TCL's sign-in reply had no token".into(), true));
         }
         crate::log::info(CATEGORY, "tcl: signed in");
         Ok(base)
     }
 
     /// The short-lived part from the base token: cloud URLs, SaaS and Cognito tokens, AWS credentials.
-    async fn mint(&self, base: &Base, now: i64) -> Result<Session, String> {
+    async fn mint(&self, base: &Base, now: i64) -> Result<Session, Failure> {
         let refused = |status: u16, v: &Value| {
             format!("TCL's cloud refused the session: {}", reason(status, v))
         };
@@ -344,9 +395,10 @@ impl TclClient {
                 &json_type,
                 json!({ "ssoId": base.sso, "ssoToken": base.token, "appId": APP_ID }).to_string(),
             )
-            .await?;
+            .await
+            .map_err(|e| (e, false))?;
         if v.get("code").and_then(Value::as_i64) != Some(0) {
-            return Err(refused(status, &v));
+            return Err((refused(status, &v), true));
         }
         let data = v.get("data").cloned().unwrap_or(Value::Null);
         let (cloud_url, device_url, region) = (
@@ -355,10 +407,10 @@ impl TclClient {
             text(&data, "cloud_region"),
         );
         if !valid_region(&region) {
-            return Err("TCL's cloud answered an unexpected region".into());
+            return Err(("TCL's cloud answered an unexpected region".into(), false));
         }
         if !absolute_http(&cloud_url) || !absolute_http(&device_url) {
-            return Err("TCL's cloud answered an unexpected address".into());
+            return Err(("TCL's cloud answered an unexpected address".into(), false));
         }
         let (status, v) = self
             .post(
@@ -366,7 +418,8 @@ impl TclClient {
                 &json_type,
                 json!({ "ssoToken": base.token, "userId": base.sso, "appId": APP_ID }).to_string(),
             )
-            .await?;
+            .await
+            .map_err(|e| (e, false))?;
         let data = v.get("data").cloned().unwrap_or(Value::Null);
         let (saas, cognito_token, cognito_id) = (
             text(&data, "saasToken"),
@@ -378,7 +431,7 @@ impl TclClient {
             || cognito_token.is_empty()
             || cognito_id.is_empty()
         {
-            return Err(refused(status, &v));
+            return Err((refused(status, &v), true));
         }
         let cognito = self
             .endpoints
@@ -399,7 +452,8 @@ impl TclClient {
                     "Logins": { "cognito-identity.amazonaws.com": cognito_token } })
                 .to_string(),
             )
-            .await?;
+            .await
+            .map_err(|e| (e, false))?;
         let c = v.get("Credentials").cloned().unwrap_or(Value::Null);
         let creds = AwsCredentials {
             access_key: text(&c, "AccessKeyId"),
@@ -407,8 +461,9 @@ impl TclClient {
             session_token: Some(text(&c, "SessionToken")).filter(|t| !t.is_empty()),
         };
         if status != 200 || creds.access_key.is_empty() || creds.secret.is_empty() {
-            return Err(format!(
-                "AWS Cognito refused TCL's identity (HTTP {status})"
+            return Err((
+                format!("AWS Cognito refused TCL's identity (HTTP {status})"),
+                false,
             ));
         }
         let expires_ms = c
