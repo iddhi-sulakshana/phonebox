@@ -47,7 +47,7 @@ fn hmac(key: &[u8], message: &str) -> Vec<u8> {
 }
 
 /// RFC 3986 encoding: only the unreserved characters stay.
-fn uri_encode(text: &str) -> String {
+pub(crate) fn uri_encode(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for b in text.bytes() {
         if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {

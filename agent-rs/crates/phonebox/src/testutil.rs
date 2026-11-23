@@ -9,6 +9,8 @@ use std::sync::Arc;
 pub(crate) struct Req {
     pub method: String,
     pub path: String,
+    /// The raw query string, empty when there is none.
+    pub query: String,
     pub headers: axum::http::HeaderMap,
     pub body: String,
 }
@@ -67,6 +69,7 @@ impl FakeHttp {
                 let reply = handler(Req {
                     method: parts.method.to_string(),
                     path: parts.uri.path().to_string(),
+                    query: parts.uri.query().unwrap_or("").to_string(),
                     headers: parts.headers,
                     body: String::from_utf8_lossy(&body).into_owned(),
                 })
