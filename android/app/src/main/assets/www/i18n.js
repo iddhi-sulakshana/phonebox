@@ -125,6 +125,9 @@
       'q.tc.onPace': 'On pace',
       'q.tc.overusing': 'Overusing',
       'q.tc.underusing': 'Underusing',
+      'q.tc.usersTotal': 'Top users · total',
+      'q.tc.input': 'Input, cache included',
+      'q.tc.output': 'Output',
 
       // Widgets
       'w.loading': 'Loading…',
@@ -889,6 +892,9 @@
       'q.tc.onPace': 'Normal hızda',
       'q.tc.overusing': 'Fazla kullanım',
       'q.tc.underusing': 'Az kullanım',
+      'q.tc.usersTotal': 'En çok kullananlar · toplam',
+      'q.tc.input': 'Giriş, önbellek dahil',
+      'q.tc.output': 'Çıkış',
 
       'w.loading': 'Yükleniyor…',
       'w.dictate.tap': 'Dikte etmek için dokunun',
@@ -1286,6 +1292,9 @@
       'q.tc.onPace': 'Im Plan',
       'q.tc.overusing': 'Zu viel genutzt',
       'q.tc.underusing': 'Zu wenig genutzt',
+      'q.tc.usersTotal': 'Top-Nutzer · gesamt',
+      'q.tc.input': 'Eingabe inkl. Cache',
+      'q.tc.output': 'Ausgabe',
 
       'w.loading': 'Laden…',
       'w.dictate.tap': 'Zum Diktieren tippen',
@@ -1683,6 +1692,9 @@
       'q.tc.onPace': 'Dans les temps',
       'q.tc.overusing': 'Surconsommation',
       'q.tc.underusing': 'Sous-utilisation',
+      'q.tc.usersTotal': 'Principaux utilisateurs · total',
+      'q.tc.input': 'Entrée, cache compris',
+      'q.tc.output': 'Sortie',
 
       'w.loading': 'Chargement…',
       'w.dictate.tap': 'Touchez pour dicter',
@@ -2080,6 +2092,9 @@
       'q.tc.onPace': 'A buen ritmo',
       'q.tc.overusing': 'Uso excesivo',
       'q.tc.underusing': 'Uso bajo',
+      'q.tc.usersTotal': 'Usuarios principales · total',
+      'q.tc.input': 'Entrada, caché incluida',
+      'q.tc.output': 'Salida',
 
       'w.loading': 'Cargando…',
       'w.dictate.tap': 'Toca para dictar',
@@ -2477,6 +2492,9 @@
       'q.tc.onPace': 'In linea',
       'q.tc.overusing': 'Uso eccessivo',
       'q.tc.underusing': 'Uso scarso',
+      'q.tc.usersTotal': 'Utenti principali · totale',
+      'q.tc.input': 'Entrata, cache inclusa',
+      'q.tc.output': 'Uscita',
 
       'w.loading': 'Caricamento…',
       'w.dictate.tap': 'Tocca per dettare',
@@ -2874,6 +2892,9 @@
       'q.tc.onPace': 'No ritmo',
       'q.tc.overusing': 'Uso excessivo',
       'q.tc.underusing': 'Pouco uso',
+      'q.tc.usersTotal': 'Principais utilizadores · total',
+      'q.tc.input': 'Entrada, cache incluída',
+      'q.tc.output': 'Saída',
 
       'w.loading': 'A carregar…',
       'w.dictate.tap': 'Toque para ditar',
@@ -3271,6 +3292,9 @@
       'q.tc.onPace': 'Op schema',
       'q.tc.overusing': 'Te veel gebruikt',
       'q.tc.underusing': 'Te weinig gebruikt',
+      'q.tc.usersTotal': 'Topgebruikers · totaal',
+      'q.tc.input': 'Invoer, inclusief cache',
+      'q.tc.output': 'Uitvoer',
 
       'w.loading': 'Laden…',
       'w.dictate.tap': 'Tik om te dicteren',
@@ -3668,6 +3692,9 @@
       'q.tc.onPace': 'Zgodnie z tempem',
       'q.tc.overusing': 'Nadmierne zużycie',
       'q.tc.underusing': 'Niskie zużycie',
+      'q.tc.usersTotal': 'Najaktywniejsi użytkownicy · łącznie',
+      'q.tc.input': 'Wejście z pamięcią podręczną',
+      'q.tc.output': 'Wyjście',
 
       'w.loading': 'Ładowanie…',
       'w.dictate.tap': 'Dotknij, aby dyktować',
@@ -4065,6 +4092,9 @@
       'q.tc.onPace': 'В графике',
       'q.tc.overusing': 'Перерасход',
       'q.tc.underusing': 'Недоиспользование',
+      'q.tc.usersTotal': 'Топ пользователей · всего',
+      'q.tc.input': 'Вход с кэшем',
+      'q.tc.output': 'Выход',
 
       'w.loading': 'Загрузка…',
       'w.dictate.tap': 'Нажмите, чтобы диктовать',
@@ -4456,6 +4486,9 @@
       'q.tc.onPace': 'Σε κανονικό ρυθμό',
       'q.tc.overusing': 'Υπερβολική χρήση',
       'q.tc.underusing': 'Λίγη χρήση',
+      'q.tc.usersTotal': 'Κορυφαίοι χρήστες · σύνολο',
+      'q.tc.input': 'Είσοδος μαζί με την cache',
+      'q.tc.output': 'Έξοδος',
       'w.loading': 'Φόρτωση…',
       'w.dictate.tap': 'Πάτα για υπαγόρευση',
       'w.dictate.listening': 'Ακούω…',
@@ -5246,6 +5279,9 @@
       'q.tc.onPace': 'Đúng tiến độ',
       'q.tc.overusing': 'Dùng quá mức',
       'q.tc.underusing': 'Dùng chưa hết',
+      'q.tc.usersTotal': 'Người dùng nhiều nhất · tổng',
+      'q.tc.input': 'Đầu vào, gồm bộ nhớ đệm',
+      'q.tc.output': 'Đầu ra',
 
       'w.loading': 'Đang tải…',
       'w.dictate.tap': 'Chạm để đọc chính tả',
@@ -6007,6 +6043,9 @@
       'q.tc.onPace': '进度正常',
       'q.tc.overusing': '用量过高',
       'q.tc.underusing': '用量偏低',
+      'q.tc.usersTotal': '主要用户 · 总计',
+      'q.tc.input': '输入（含缓存）',
+      'q.tc.output': '输出',
 
       'w.loading': '加载中…',
       'w.dictate.tap': '点按开始听写',

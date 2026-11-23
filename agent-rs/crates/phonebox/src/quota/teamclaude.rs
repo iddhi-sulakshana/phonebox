@@ -18,6 +18,8 @@ pub const RETRY: Duration = Duration::from_secs(30);
 const MAX_POINTS: usize = 96;
 /// Users listed by name; the rest are added up.
 const TOP: usize = 5;
+/// The lifetime totals (`GET /teamclaude/status`, some 70 kB on a real team) move slowly: read every five minutes.
+const STATUS_EVERY_MS: i64 = 5 * 60_000;
 /// The most hourly buckets read from a reply (a month): the server's count sizes a buffer.
 const MAX_BUCKETS: usize = 24 * 31;
 const SET_ADDRESS: &str = "Set the TeamClaude address in Settings › TeamClaude";
@@ -171,14 +173,22 @@ pub struct TeamView {
     pub error: Option<String>,
     /// the last 24 hours; None until the usage series has arrived
     pub tokens: Option<TokenTotals>,
-    /// tokens per hour, oldest first
+    /// tokens per hour, oldest first: in all, input (cache included) and output
     pub hourly: Vec<u64>,
+    pub hourly_input: Vec<u64>,
+    pub hourly_output: Vec<u64>,
     pub bucket_ms: Option<i64>,
     /// the end of the newest hour
     pub end: Option<i64>,
+    /// the busiest users of the last 24 hours, and of all time (TeamClaude's lifetime counters)
     pub users: Vec<TeamUser>,
     pub others: Option<TeamOthers>,
+    pub total_users: Vec<TeamUser>,
+    pub total_others: Option<TeamOthers>,
     pub forecast: Option<TeamForecast>,
+    /// when the lifetime totals were last asked for
+    #[serde(skip)]
+    pub totals_at: Option<i64>,
 }
 
 impl TeamView {
@@ -188,6 +198,52 @@ impl TeamView {
             ..Default::default()
         }
     }
+}
+
+/// The busiest five (share of everyone's tokens) and the rest added up; users with nothing are left out.
+fn rank(mut users: Vec<(String, u64)>) -> (Vec<TeamUser>, Option<TeamOthers>) {
+    users.retain(|(_, t)| *t > 0);
+    let total: u64 = users.iter().map(|(_, t)| t).sum();
+    users.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    let rest = users.split_off(users.len().min(TOP));
+    let top = users
+        .into_iter()
+        .map(|(name, tokens)| TeamUser {
+            share: if total == 0 {
+                0.0
+            } else {
+                tokens as f64 / total as f64
+            },
+            name,
+            tokens,
+        })
+        .collect();
+    let others = (!rest.is_empty()).then(|| TeamOthers {
+        count: rest.len(),
+        tokens: rest.iter().map(|(_, t)| t).sum(),
+    });
+    (top, others)
+}
+
+/// All-time busiest users from TeamClaude's status: each client key's lifetime input (cache included) + output.
+pub fn top_totals(status: &Value) -> (Vec<TeamUser>, Option<TeamOthers>) {
+    let users = status
+        .get("clients")
+        .and_then(Value::as_object)
+        .map(|clients| {
+            clients
+                .iter()
+                .map(|(name, c)| {
+                    let n = |k: &str| c.get(k).and_then(Value::as_u64).unwrap_or(0);
+                    (
+                        name.clone(),
+                        n("inputTokens").saturating_add(n("outputTokens")),
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    rank(users)
 }
 
 fn numbers(v: Option<&Value>) -> Vec<u64> {
@@ -255,7 +311,8 @@ pub fn summarize(series: Option<&Value>, forecast: Option<&Value>, now: i64) -> 
         .get("buckets")
         .and_then(Value::as_u64)
         .map_or(0, |n| n.min(MAX_BUCKETS as u64) as usize);
-    let mut hourly = vec![0u64; buckets];
+    let mut hourly_input = vec![0u64; buckets];
+    let mut hourly_output = vec![0u64; buckets];
     let mut users: Vec<(String, u64)> = Vec::new();
     if let Some(clients) = series.get("clients").and_then(Value::as_object) {
         for (name, c) in clients {
@@ -265,45 +322,33 @@ pub fn summarize(series: Option<&Value>, forecast: Option<&Value>, now: i64) -> 
                 numbers(c.get("cacheTokens")),
             );
             let len = input.len().max(output.len());
-            if hourly.len() < len {
-                hourly.resize(len, 0);
+            if hourly_input.len() < len {
+                hourly_input.resize(len, 0);
+                hourly_output.resize(len, 0);
             }
-            for (i, slot) in hourly.iter_mut().enumerate().take(len) {
-                *slot += input.get(i).copied().unwrap_or(0) + output.get(i).copied().unwrap_or(0);
+            for (slot, n) in hourly_input.iter_mut().zip(&input) {
+                *slot += n;
+            }
+            for (slot, n) in hourly_output.iter_mut().zip(&output) {
+                *slot += n;
             }
             let (i, o) = (input.iter().sum::<u64>(), output.iter().sum::<u64>());
             totals.input += i;
             totals.output += o;
             totals.cache += cache.iter().sum::<u64>();
-            if i + o > 0 {
-                users.push((name.clone(), i + o));
-            }
+            users.push((name.clone(), i + o));
         }
     }
     totals.total = totals.input + totals.output;
-    users.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
-    let share = |t: u64| {
-        if totals.total == 0 {
-            0.0
-        } else {
-            t as f64 / totals.total as f64
-        }
-    };
-    let rest = users.split_off(users.len().min(TOP));
-    view.users = users
-        .into_iter()
-        .map(|(name, tokens)| TeamUser {
-            share: share(tokens),
-            name,
-            tokens,
-        })
-        .collect();
-    view.others = (!rest.is_empty()).then(|| TeamOthers {
-        count: rest.len(),
-        tokens: rest.iter().map(|(_, t)| t).sum(),
-    });
+    (view.users, view.others) = rank(users);
     view.tokens = Some(totals);
-    view.hourly = hourly;
+    view.hourly = hourly_input
+        .iter()
+        .zip(&hourly_output)
+        .map(|(i, o)| i + o)
+        .collect();
+    view.hourly_input = hourly_input;
+    view.hourly_output = hourly_output;
     view.bucket_ms = series.get("bucketMs").and_then(Value::as_i64);
     view.end = series.get("end").and_then(Value::as_i64);
     view
@@ -384,10 +429,29 @@ impl QuotaMonitor {
                 body: None,
             })
         };
-        let (series, forecast) =
-            tokio::join!(get("/teamclaude/usage/series"), get("/teamclaude/forecast"));
+        let status_due = self
+            .state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .teamclaude
+            .as_ref()
+            .filter(|v| v.host == target.host)
+            .and_then(|v| v.totals_at)
+            .is_none_or(|at| now - at >= STATUS_EVERY_MS);
+        let status = async {
+            match status_due {
+                true => Some(get("/teamclaude/status").await),
+                false => None,
+            }
+        };
+        let (series, forecast, status) = tokio::join!(
+            get("/teamclaude/usage/series"),
+            get("/teamclaude/forecast"),
+            status
+        );
         let series = read_reply(series, &target.host);
         let forecast = read_reply(forecast, &target.host);
+        let status = status.map(|r| read_reply(r, &target.host));
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
         let last = state.teamclaude.take().filter(|v| v.host == target.host);
         let mut view = summarize(
@@ -401,6 +465,8 @@ impl QuotaMonitor {
         {
             view.tokens = last.tokens.clone();
             view.hourly = last.hourly.clone();
+            view.hourly_input = last.hourly_input.clone();
+            view.hourly_output = last.hourly_output.clone();
             view.bucket_ms = last.bucket_ms;
             view.end = last.end;
             view.users = last.users.clone();
@@ -409,12 +475,28 @@ impl QuotaMonitor {
         if forecast.is_err() {
             view.forecast = last.as_ref().and_then(|l| l.forecast.clone());
         }
+        // the lifetime totals: new when asked for and given, else the last ones (asked for again next time on a failure)
+        match &status {
+            Some(Ok(Some(v))) => {
+                (view.total_users, view.total_others) = top_totals(v);
+                view.totals_at = Some(now);
+            }
+            Some(Ok(None)) => view.totals_at = Some(now),
+            Some(Err(_)) | None => {
+                if let Some(last) = &last {
+                    view.total_users = last.total_users.clone();
+                    view.total_others = last.total_others.clone();
+                    view.totals_at = last.totals_at;
+                }
+            }
+        }
         // neither route there: not a TeamClaude server (or a wrong prefix)
         let missing = matches!((&series, &forecast), (Ok(None), Ok(None)));
         let error = series
             .as_ref()
             .err()
             .or(forecast.as_ref().err())
+            .or(status.as_ref().and_then(|s| s.as_ref().err()))
             .cloned()
             .or_else(|| missing.then(|| format!("No TeamClaude at {}", target.host)));
         if (series.is_err() && forecast.is_err()) || missing {

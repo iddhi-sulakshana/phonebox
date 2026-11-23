@@ -1,6 +1,7 @@
-// The AI quotas widget's TeamClaude card: the day's tokens with hourly bars, the weekly forecast (solid past, dashed
-// projection, the dry line), the top five users and the rest; an error keeps the numbers; with paging the card has a
-// page of its own.
+// The AI quotas widget's TeamClaude card: the day's tokens as TeamClaude's two line panels (input with the cache, and
+// output, each on its own scale with its busiest hour marked) over the weekly forecast (solid past, dashed projection,
+// the dry line); beside them the top five users of the day and of all time; an error keeps the numbers; with paging
+// the card has a page of its own.
 const { test, expect } = require('@playwright/test');
 
 const HOUR = 3_600_000;
@@ -20,11 +21,15 @@ function sample(extra = {}) {
       updatedAt: END - 30_000,
       error: null,
       tokens: { total: 1_650_000_000, input: 1_640_000_000, output: 10_000_000, cache: 1_500_000_000 },
-      hourly: Array.from({ length: 24 }, (_, i) => (i + 1) * 3_000_000),
+      hourly: Array.from({ length: 24 }, (_, i) => (i + 1) * 3_030_000),
+      hourlyInput: Array.from({ length: 24 }, (_, i) => (i === 9 ? 90_000_000 : (i + 1) * 3_000_000)),
+      hourlyOutput: Array.from({ length: 24 }, (_, i) => (i + 1) * 30_000),
       bucketMs: HOUR,
       end: END,
       users: [user('alice', 900_000_000), user('bob', 300_000_000), user('carol', 200_000_000), user('dave', 120_000_000), user('erin', 90_000_000)],
       others: { count: 2, tokens: 40_000_000 },
+      totalUsers: [user('bob', 9_000_000_000), user('alice', 8_000_000_000), user('frank', 3_000_000_000), user('carol', 2_000_000_000), user('erin', 1_000_000_000)],
+      totalOthers: { count: 4, tokens: 500_000_000 },
       forecast: {
         verdict: 'on-pace', reason: null, confidence: 'high', pace: 0.767, threshold: 0.995, poolDryAt: null, unusedPct: 0.1,
         generatedAt: END,
@@ -63,13 +68,42 @@ test('the TeamClaude card shows the day, the forecast and the top users', async 
   await expect(card.locator('.q-upd')).toContainText('tc.example.com');
   await expect(card.locator('.q-tc-big')).toHaveText('1.6B');
   await expect(card.locator('.q-tc-tokens .q-tc-sub')).toHaveText('In 1.6B · Out 10.0M');
-  await expect(card.locator('.q-tc-bars rect')).toHaveCount(24);
+  // the graphs one under another: the tokens over the weekly pool, both in the left column
+  const tokensBox = await card.locator('.q-tc-tokens').boundingBox();
+  const poolBox = await card.locator('.q-tc-fc').boundingBox();
+  expect(tokensBox.y + tokensBox.height).toBeLessThanOrEqual(poolBox.y + 1);
+  expect(Math.abs(tokensBox.x - poolBox.x)).toBeLessThan(2);
+  // TeamClaude's two token panels: input (cache included) and output, each a line over its area with its busiest hour
+  const panels = card.locator('.q-tc-panel');
+  await expect(panels).toHaveCount(2);
+  await expect(panels.nth(0).locator('.q-tc-phead')).toHaveText('Input, cache included');
+  await expect(panels.nth(1).locator('.q-tc-phead')).toHaveText('Output');
+  await expect(card.locator('.q-tc-panel path.line')).toHaveCount(2);
+  await expect(card.locator('.q-tc-panel path.area')).toHaveCount(2);
+  await expect(panels.nth(0).locator('.q-tc-peak')).toHaveText('90.0M');
+  await expect(panels.nth(1).locator('.q-tc-peak')).toHaveText('720.0k');
+  await expect(card.locator('.q-tc-ticks span')).toHaveCount(4);
   await expect(card.locator('.q-tc-chart path.past')).toHaveCount(1);
   await expect(card.locator('.q-tc-chart path.proj')).toHaveCount(1);
   await expect(card.locator('.q-tc-chart line.thr')).toHaveCount(1);
   expect(await card.locator('.q-tc-chart path.proj').evaluate((e) => getComputedStyle(e).strokeDasharray)).not.toBe('none');
   await expect(card.locator('.q-tc-fc .q-tc-sub')).toHaveText('39% used · 0.1% unused at refill');
-  const rows = card.locator('.q-tc-user');
+  const lists = card.locator('.q-tc-list');
+  await expect(lists).toHaveCount(2);
+  await expect(lists.nth(0).locator('.q-tc-lbl')).toHaveText('Top users · 24 h');
+  await expect(lists.nth(1).locator('.q-tc-lbl')).toHaveText('Top users · total');
+  await expect(lists.nth(1).locator('.q-tc-user')).toHaveCount(6);
+  await expect(lists.nth(1).locator('.q-tc-user').nth(0).locator('.q-tc-uname')).toHaveText('bob');
+  await expect(lists.nth(1).locator('.q-tc-user').nth(0).locator('.q-tc-uval')).toHaveText('9.0B');
+  await expect(lists.nth(1).locator('.q-tc-user').nth(5)).toContainText('+ 4 others');
+  // every bar starts at the same place and has the same track, in both lists
+  const tracks = await card.locator('.q-tc-utrack').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return [r.left, r.width]; }));
+  expect(tracks.length).toBe(12);
+  for (const [left, w] of tracks) {
+    expect(Math.abs(left - tracks[0][0])).toBeLessThan(1);
+    expect(Math.abs(w - tracks[0][1])).toBeLessThan(1);
+  }
+  const rows = lists.nth(0).locator('.q-tc-user');
   await expect(rows).toHaveCount(6);
   await expect(rows.nth(0).locator('.q-tc-uname')).toHaveText('alice');
   await expect(rows.nth(0).locator('.q-tc-uval')).toHaveText('900.0M');
@@ -89,7 +123,7 @@ test('an error keeps the last numbers on the card', async ({ page }) => {
   const card = page.locator('.w-quotas .q-team');
   await expect(card.locator('.q-err')).toHaveText('TeamClaude refused the key (HTTP 401)');
   await expect(card.locator('.q-tc-big')).toHaveText('1.6B');
-  await expect(card.locator('.q-tc-user')).toHaveCount(6);
+  await expect(card.locator('.q-tc-list').nth(0).locator('.q-tc-user')).toHaveCount(6);
 });
 
 test('no users and no forecast say so', async ({ page }) => {

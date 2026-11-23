@@ -521,16 +521,45 @@ W.quotas = {
     // ------------------------------------------------ TeamClaude: the team pool (tokens, forecast, top users)
     const big = (n) => n == null ? '—' : n >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(n);
 
-    /** The day's tokens per hour as bars, oldest first (numbers only). */
-    const teamBars = (vals) => {
-      const box = h('div', 'q-tc-bars');
-      if (!vals.length) return box;
-      const max = Math.max(1, ...vals);
-      const w = 100 / vals.length;
-      box.innerHTML = `<svg viewBox="0 0 100 30" preserveAspectRatio="none">${vals.map((v, i) => {
-        const bh = v > 0 ? Math.max(1.2, (v / max) * 30) : 0.5;
-        return `<rect${i === vals.length - 1 ? ' class="now"' : ''} x="${(i * w + w * 0.14).toFixed(2)}" y="${(30 - bh).toFixed(2)}" width="${(w * 0.72).toFixed(2)}" height="${bh.toFixed(2)}"/>`;
-      }).join('')}</svg>`;
+    /** One of TeamClaude's token panels: the day's hours as a line over its area on the panel's own scale, the busiest
+     *  hour marked with its figure (numbers only in the SVG). */
+    const teamPanel = (label, vals, cls) => {
+      const panel = h('div', 'q-tc-panel ' + cls, h('div', 'q-tc-phead', h('i'), label));
+      const plot = h('div', 'q-tc-plot');
+      panel.appendChild(plot);
+      if (vals.length < 2) return panel;
+      const max = Math.max(...vals);
+      const X = (i) => ((i / (vals.length - 1)) * 100).toFixed(2);
+      const Y = (v) => (30 - (max > 0 ? v / max : 0) * 27).toFixed(2);
+      const line = vals.map((v, i) => `${i ? 'L' : 'M'}${X(i)},${Y(v)}`).join('');
+      plot.innerHTML = `<svg viewBox="0 0 100 30" preserveAspectRatio="none"><path class="area" d="${line}L100,30L0,30Z"/><path class="line" d="${line}"/></svg>`;
+      if (max > 0) {
+        const at = vals.indexOf(max);
+        const peak = h('div', 'q-tc-peak' + (at > (vals.length - 1) * 0.6 ? ' flip' : ''), h('span', null, big(max)));
+        peak.style.left = `${X(at)}%`;
+        plot.appendChild(peak);
+      }
+      return panel;
+    };
+
+    /** Clock times under the panels: the start of the day shown, two points between, and its end. */
+    const teamTicks = (tc) => {
+      const n = (tc.hourlyInput || []).length;
+      if (!n || !tc.end || !tc.bucketMs) return null;
+      return h('div', 'q-tc-ticks', ...[0, Math.round(n / 3), Math.round((2 * n) / 3), n].map((i) => h('span', null, fmtHM(new Date(tc.end - (n - i) * tc.bucketMs)))));
+    };
+
+    /** A ranked list: name, a bar on one shared track (the busiest is full), the figure; then the rest added up. */
+    const teamList = (label, list, others) => {
+      const box = h('div', 'q-tc-sec q-tc-list', h('div', 'q-tc-lbl', label));
+      if (!list.length) box.appendChild(h('div', 'q-tc-none', t('q.tc.noUsers')));
+      const top = Math.max(1, list[0]?.tokens || 1);
+      for (const u of list) {
+        const bar = h('span', 'q-tc-ubar');
+        bar.style.width = `${Math.max(3, (u.tokens / top) * 100)}%`;
+        box.appendChild(h('div', 'q-tc-user', h('span', 'q-tc-uname', u.name), h('span', 'q-tc-utrack', bar), h('span', 'q-tc-uval', big(u.tokens))));
+      }
+      if (others) box.appendChild(h('div', 'q-tc-user q-tc-others', h('span', 'q-tc-uname', t('q.tc.others', { n: others.count })), h('span', 'q-tc-utrack'), h('span', 'q-tc-uval', big(others.tokens))));
       return box;
     };
 
@@ -580,24 +609,21 @@ W.quotas = {
         verdict ? h('span', 'q-plan q-tc-verdict ' + verdict[0], `${t(verdict[1])} · ${(f.pace || 0).toFixed(2)}×`) : null,
         h('span', 'q-upd', [tc.host, age].filter(Boolean).join(' · '))));
       const tok = tc.tokens;
-      const users = h('div', 'q-tc-sec q-tc-users', h('div', 'q-tc-lbl', t('q.tc.users')));
-      const list = tc.users || [];
-      if (!list.length) users.appendChild(h('div', 'q-tc-none', t('q.tc.noUsers')));
-      const top = Math.max(1, list[0]?.tokens || 1);
-      for (const u of list) {
-        const bar = h('span', 'q-tc-ubar');
-        bar.style.width = `${Math.max(3, (u.tokens / top) * 100)}%`;
-        users.appendChild(h('div', 'q-tc-user', h('span', 'q-tc-uname', u.name), h('span', 'q-tc-utrack', bar), h('span', 'q-tc-uval', big(u.tokens))));
-      }
-      if (tc.others) users.appendChild(h('div', 'q-tc-user q-tc-others', h('span', 'q-tc-uname', t('q.tc.others', { n: tc.others.count })), h('span', 'q-tc-utrack'), h('span', 'q-tc-uval', big(tc.others.tokens))));
+      // left: the graphs one under another (the day's tokens over the weekly pool); right: the day's and all-time top users
       card.appendChild(h('div', 'q-tc-body',
-        h('div', 'q-tc-sec q-tc-tokens',
-          h('div', 'q-tc-lbl', t('q.tc.tokens')),
-          h('div', 'q-tc-big', big(tok?.total)),
-          tok ? h('div', 'q-tc-sub', t('q.tc.split', { in: big(tok.input), out: big(tok.output) })) : null,
-          teamBars(tc.hourly || [])),
-        h('div', 'q-tc-sec q-tc-fc', h('div', 'q-tc-lbl', t('q.tc.pool')), teamChart(f), h('div', 'q-tc-sub', teamForecastLine(f))),
-        users));
+        h('div', 'q-tc-graphs',
+          h('div', 'q-tc-sec q-tc-tokens',
+            h('div', 'q-tc-top',
+              h('span', 'q-tc-lbl', t('q.tc.tokens')),
+              h('span', 'q-tc-big', big(tok?.total)),
+              tok ? h('span', 'q-tc-sub', t('q.tc.split', { in: big(tok.input), out: big(tok.output) })) : null),
+            teamPanel(t('q.tc.input'), tc.hourlyInput || [], 'in'),
+            teamPanel(t('q.tc.output'), tc.hourlyOutput || [], 'out'),
+            teamTicks(tc)),
+          h('div', 'q-tc-sec q-tc-fc', h('div', 'q-tc-lbl', t('q.tc.pool')), teamChart(f), h('div', 'q-tc-sub', teamForecastLine(f)))),
+        h('div', 'q-tc-lists',
+          teamList(t('q.tc.users'), tc.users || [], tc.others),
+          tc.totalUsers?.length ? teamList(t('q.tc.usersTotal'), tc.totalUsers, tc.totalOthers) : null)));
       if (tc.error) card.appendChild(h('div', 'q-foot', h('span'), h('span', 'q-err', tc.error)));
       return card;
     };

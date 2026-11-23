@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **The TeamClaude card, redrawn.** The graphs now stand one under another: the day's tokens as TeamClaude's own two
+  line panels (input with the cache, and output, each on its own scale with its busiest hour marked and the hours
+  along the bottom), then the pool's weekly forecast. Beside them, the top users of the last 24 hours and, new, of all
+  time (TeamClaude's lifetime counters, read every five minutes). The users' bars now line up on one track.
+
 ## 1.0.1 — 2026-11-23
 
 - **TeamClaude in the AI quotas widget.** Pick TeamClaude among a quotas widget's providers to see your TeamClaude

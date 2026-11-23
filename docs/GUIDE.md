@@ -124,8 +124,9 @@ through `GetUserStatus`; unavailable measurements are skipped, and weekly limits
 failures retain the last measurements with an error.
 
 **TeamClaude** shows the team pool of a [TeamClaude](https://github.com/KarpelesLab/teamclaude) proxy instead of one
-account: the tokens of the last 24 hours with an hourly chart, the pool's weekly use with its projection to the next
-refills (the dashed line) under the dry line, and the top five users. Switch it on by ticking **TeamClaude** among an
+account: the tokens of the last 24 hours as TeamClaude's two line panels (input with the cache, and output), the
+pool's weekly use with its projection to the next refills (the dashed line) under the dry line, and the top five users
+of the last 24 hours and of all time. Switch it on by ticking **TeamClaude** among an
 AI quotas widget's providers (or under **Settings › AI quotas › Tracked AI services** for widgets without their own
 list). The agent finds the server and key by itself when Claude Code goes through TeamClaude (`ANTHROPIC_BASE_URL` in
 `~/.claude/settings.json`); otherwise enter them under **Settings › TeamClaude**. A read-only key (`"role":

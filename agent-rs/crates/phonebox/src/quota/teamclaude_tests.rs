@@ -193,6 +193,19 @@ fn series(users: &[(&str, u64, u64, u64)]) -> Value {
             "clients": clients })
 }
 
+/// TeamClaude's status: lifetime counters per client key (input counts the cache).
+fn status(users: &[(&str, u64, u64)]) -> Value {
+    let mut clients = serde_json::Map::new();
+    for (name, input, output) in users {
+        clients.insert(
+            (*name).into(),
+            json!({ "requests": 3, "connections": 1, "inputTokens": input, "outputTokens": output,
+                    "cacheTokens": input / 2, "lastUsed": "2026-11-22T10:00:00Z", "windows": {}, "mix": [] }),
+        );
+    }
+    json!({ "clients": clients, "accounts": [], "server": { "uptime": 1 } })
+}
+
 fn forecast(points: usize) -> Value {
     let past: Vec<Value> = (0..points)
         .map(|i| {
@@ -235,6 +248,45 @@ fn the_day_is_added_up_across_users() {
     assert_eq!(v.bucket_ms, Some(3_600_000));
     assert_eq!(v.end, Some(1_795_364_100_000));
     assert_eq!(v.updated_at, Some(7));
+}
+
+#[test]
+fn the_hours_split_into_input_and_output() {
+    let v = summarize(
+        Some(&series(&[("alice", 1000, 100, 900), ("bob", 500, 50, 400)])),
+        None,
+        0,
+    );
+    assert_eq!(v.hourly_input.len(), 24);
+    assert_eq!(v.hourly_output.len(), 24);
+    assert_eq!(
+        (v.hourly_input[23], v.hourly_output[23]),
+        (500 + 250, 50 + 25)
+    );
+    assert_eq!(v.hourly_input.iter().sum::<u64>(), 1500);
+    assert_eq!(v.hourly_output.iter().sum::<u64>(), 150);
+}
+
+#[test]
+fn the_lifetime_top_five_come_from_the_status() {
+    let s = status(&[
+        ("gus", 5, 5),
+        ("alice", 7000, 100),
+        ("bob", 6000, 0),
+        ("carol", 5000, 0),
+        ("dave", 4000, 0),
+        ("erin", 3000, 0),
+        ("frank", 20, 0),
+        ("idle", 0, 0),
+    ]);
+    let (users, others) = top_totals(&s);
+    let names: Vec<&str> = users.iter().map(|u| u.name.as_str()).collect();
+    assert_eq!(names, ["alice", "bob", "carol", "dave", "erin"]);
+    assert_eq!(users[0].tokens, 7100);
+    assert!((users[0].share - 7100.0 / 25130.0).abs() < 1e-9);
+    let others = others.unwrap();
+    assert_eq!((others.count, others.tokens), (2, 30));
+    assert_eq!(top_totals(&json!({})), (vec![], None));
 }
 
 #[test]
@@ -362,6 +414,7 @@ async fn both_routes_are_asked_with_the_key_in_x_api_key() {
     let (http, seen) = fake(|path| match path {
         "/teamclaude/usage/series" => (200, series(&[("alice", 10, 1, 5)]).to_string()),
         "/teamclaude/forecast" => (200, forecast(4).to_string()),
+        "/teamclaude/status" => (200, status(&[("alice", 900, 100)]).to_string()),
         _ => (404, String::new()),
     });
     let m = monitor(http, &dir);
@@ -372,6 +425,7 @@ async fn both_routes_are_asked_with_the_key_in_x_api_key() {
         urls,
         [
             "https://tc.example.com/teamclaude/forecast",
+            "https://tc.example.com/teamclaude/status",
             "https://tc.example.com/teamclaude/usage/series"
         ]
     );
@@ -525,7 +579,7 @@ async fn a_keyless_local_server_gets_no_key_header() {
     let local = resolve(Some(&cfg("http://localhost:3456", "")), None).unwrap();
     assert!(m.refresh_teamclaude(&local, 1).await);
     let seen = seen.lock().unwrap();
-    assert_eq!(seen.len(), 2);
+    assert_eq!(seen.len(), 3, "the series, the forecast and the status");
     for r in seen.iter() {
         assert!(
             !r.headers
@@ -563,4 +617,37 @@ async fn a_widget_without_a_usable_server_shows_why_without_asking() {
     let v = m.teamclaude().expect("the card says why");
     assert!(v.error.unwrap().contains("Settings › TeamClaude"));
     assert_eq!(v.tokens, None);
+}
+
+// the status is 70 kB on a real team; the lifetime totals move slowly, so it is read every five minutes
+#[tokio::test]
+async fn the_status_is_read_every_five_minutes() {
+    let dir = tempfile::tempdir().unwrap();
+    let (http, seen) = fake(|path| match path {
+        "/teamclaude/usage/series" => (200, series(&[("alice", 10, 1, 5)]).to_string()),
+        "/teamclaude/forecast" => (200, forecast(4).to_string()),
+        "/teamclaude/status" => (
+            200,
+            status(&[("alice", 900, 100), ("bob", 50, 0)]).to_string(),
+        ),
+        _ => (404, String::new()),
+    });
+    let m = monitor(http, &dir);
+    let asked = |seen: &Seen| {
+        seen.lock()
+            .unwrap()
+            .iter()
+            .filter(|r| r.url.ends_with("/teamclaude/status"))
+            .count()
+    };
+    assert!(m.refresh_teamclaude(&target(), 0).await);
+    assert_eq!(asked(&seen), 1);
+    assert_eq!(m.teamclaude().unwrap().total_users.len(), 2);
+    assert!(m.refresh_teamclaude(&target(), 60_000).await);
+    assert_eq!(asked(&seen), 1, "a minute later: not again");
+    let v = m.teamclaude().unwrap();
+    assert_eq!(v.total_users[0].name, "alice", "the last totals stay");
+    assert_eq!(v.total_users[0].tokens, 1000);
+    assert!(m.refresh_teamclaude(&target(), 300_000).await);
+    assert_eq!(asked(&seen), 2, "five minutes later: again");
 }
